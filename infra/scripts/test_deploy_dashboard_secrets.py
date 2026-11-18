@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import stat
 import subprocess
+from typing import Any
 from pathlib import Path
 
 import pytest
@@ -56,7 +57,7 @@ def sandbox(tmp_path: Path) -> dict[str, Path | dict[str, str]]:
     return {"state": state, "env": env, "log": tmp_path / "docker.log"}
 
 
-def deploy(sb: dict[str, Path | dict[str, str]]) -> subprocess.CompletedProcess[str]:
+def deploy(sb: dict[str, Any]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         ["bash", str(DEPLOY / "deploy.sh"), "ghcr.io/example/vva-dashboard", VERSION],  # noqa: S607
         env=sb["env"],
@@ -66,7 +67,7 @@ def deploy(sb: dict[str, Path | dict[str, str]]) -> subprocess.CompletedProcess[
     )
 
 
-def test_session_key_created_600_and_kept_between_deploys(sandbox) -> None:
+def test_session_key_created_600_and_kept_between_deploys(sandbox: dict[str, Any]) -> None:
     res = deploy(sandbox)
     assert res.returncode == 0, res.stdout + res.stderr
     key_file = sandbox["state"] / "session_key"
@@ -80,7 +81,7 @@ def test_session_key_created_600_and_kept_between_deploys(sandbox) -> None:
     assert key_file.read_text().strip() == first
 
 
-def test_no_hash_file_keeps_login_closed_at_deploy(sandbox) -> None:
+def test_no_hash_file_keeps_login_closed_at_deploy(sandbox: dict[str, Any]) -> None:
     res = deploy(sandbox)
     assert res.returncode == 0, res.stdout + res.stderr
     log = sandbox["log"].read_text()
@@ -88,7 +89,7 @@ def test_no_hash_file_keeps_login_closed_at_deploy(sandbox) -> None:
     assert "SESSION_KEY:<unset>" not in log
 
 
-def test_hash_file_is_passed_to_container_env(sandbox) -> None:
+def test_hash_file_is_passed_to_container_env(sandbox: dict[str, Any]) -> None:
     encoded = "pbkdf2_sha256:600000:00112233:44556677"  # faux, jamais vérifié ici
     (sandbox["state"] / "dashboard_password_hash").write_text(encoded + "\n")
     res = deploy(sandbox)
