@@ -16,7 +16,7 @@ déploient que A ; #15 et #16 sont bloqués parce qu'une règle interdisait de v
 fichiers Claude, alors que ces fichiers sont le code source de A.
 
 ## Options
-1. **Deux dépôts** : un nouveau dépôt pour A (nom provisoire `agent-factory`), et
+1. **Deux dépôts** : un nouveau dépôt pour A (`chebihiF/agent-factory`), et
    `viral-video-agents` qui garde B. Frontière nette, A réutilisable dans d'autres projets,
    tableau de B centré sur le produit. Coût : une migration (2 à 3 tickets), deux CI, droit de
    push du bot à étendre.
@@ -29,7 +29,7 @@ fichiers Claude, alors que ces fichiers sont le code source de A.
 **Option 1 : deux dépôts.**
 
 ### Répartition des dossiers
-| Va dans A (`agent-factory`) | Reste dans B (`viral-video-agents`) |
+| Va dans A (`chebihiF/agent-factory`) | Reste dans B (`viral-video-agents`) |
 |---|---|
 | `apps/dashboard`, `tools/telemetry` | `apps/gpu-worker`, `apps/media-service` |
 | contrats `agent-event`, `ingest-api`, `token-usage`, `dashboard-routes`, `progress` | contrats `storyboard`, `classification`, `gpu-job`, `montage-job` et leurs exemples |
@@ -76,7 +76,11 @@ tout autre dépôt, la règle reste entière : aucun fichier Claude commité (ga
 - − Une migration à faire (2 à 3 tickets dans les 20 % de A), deux CI à maintenir.
 - − Deux journaux et deux ensembles de règles locales à garder cohérents.
 
+## Suivi
+- Fait le 2026-11-18 : dépôt public `chebihiF/agent-factory` créé (public : CI illimitée et protection
+  de `main` gratuites), bot `infinitySoftMA` collaborateur en écriture.
+
 ## Attend l'utilisateur
-- Créer le dépôt de A (nom à confirmer, `agent-factory` proposé) et y donner au bot
-  `infinitySoftMA` le même droit de push que dans `viral-video-agents`.
-- Mettre à jour la règle globale « aucun fichier Claude commité » avec l'exception limitée à A.
+- Mettre à jour les règles globales : exception « fichiers Claude commités autorisés dans
+  `chebihiF/agent-factory` uniquement », et droit de push du bot étendu à ce dépôt (mêmes limites
+  que pour `viral-video-agents`).
