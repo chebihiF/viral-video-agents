@@ -17,6 +17,15 @@ export IMAGE
 "$HERE/ensure-token.sh" "$STATE_DIR"
 INGEST_TOKEN="$(cat "$STATE_DIR/ingest_token")"
 export INGEST_TOKEN
+# Clé de session : générée une seule fois (conservée entre deux déploiements), jamais dans le dépôt.
+if [ ! -s "$STATE_DIR/session_key" ]; then
+  ( umask 077; openssl rand -hex 32 > "$STATE_DIR/session_key.tmp" && mv "$STATE_DIR/session_key.tmp" "$STATE_DIR/session_key" )
+fi
+chmod 600 "$STATE_DIR/session_key"
+DASHBOARD_SESSION_KEY="$(cat "$STATE_DIR/session_key")"
+# Hash du mot de passe : posé par infra/scripts/set-dashboard-password.sh ; absent => /login reste en 503.
+DASHBOARD_PASSWORD_HASH="$(cat "$STATE_DIR/dashboard_password_hash" 2>/dev/null || true)"
+export DASHBOARD_SESSION_KEY DASHBOARD_PASSWORD_HASH
 
 up() {
   IMAGE_TAG="$1" docker compose -f "$HERE/compose.yaml" --project-directory "$STATE_DIR" \
