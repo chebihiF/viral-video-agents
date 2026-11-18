@@ -4,10 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Tokens — Agents Dashboard</title>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="stylesheet" href="/static/nav.css">
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
     body { margin: 0 auto; max-width: 48rem; padding: 2rem 1rem 4rem; }
-    header a { font-size: .9rem; opacity: .7; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
     th, td { padding: .4rem .6rem; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
     th { text-align: left; font-weight: 600; }
@@ -17,7 +18,7 @@
 </head>
 <body>
   <header>
-    <a href="/">Agents Dashboard</a>
+    {% with active="/tokens" %}{% include "_nav.html" %}{% endwith %}
     <h1>Tokens</h1>
   </header>
   {% if not report.by_agent and not report.by_model %}

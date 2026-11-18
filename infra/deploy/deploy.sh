@@ -83,7 +83,7 @@ smoke() {
     out="$(curl -fsS --max-time 5 "https://$DASHBOARD_HOST/healthz" 2>/dev/null || true)"
     case "$out" in
       *"\"version\":\"$want\""*)
-        page="$(curl -fsS --max-time 5 "https://$DASHBOARD_HOST/" 2>/dev/null || true)"
+        page="$(curl -fsSL --max-time 5 "https://$DASHBOARD_HOST/" 2>/dev/null || true)"
         case "$page" in *"Agents Dashboard"*) return 0 ;; esac ;;
     esac
     sleep 3
@@ -177,9 +177,10 @@ fi
 echo "::error::Smoke test KO pour $VERSION"
 if [ -z "$prev" ]; then
   echo "::error::Pas de version précédente connue : rollback impossible"
-elif start_slot "$rollback_slot" "$prev" missing && slot_healthy "$rollback_slot" "$prev" && smoke "$prev"; then
+elif start_slot "$rollback_slot" "$prev" missing && slot_healthy "$rollback_slot" "$prev" \
+  && drop_slot "$new" && smoke "$prev"; then
+  # Le nouveau slot est retiré AVANT le smoke : sinon Traefik sert encore les deux versions (#63).
   echo "$rollback_slot" > "$STATE_DIR/slot"
-  drop_slot "$new"
   echo "Rollback OK"
 else
   rm -f "$STATE_DIR/slot" # état incertain : on ne laisse pas un indice vers un slot cassé

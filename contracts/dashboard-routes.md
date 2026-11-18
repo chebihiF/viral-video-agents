@@ -33,6 +33,7 @@ personnelle dans le cookie. Le cookie `Secure` impose HTTPS (Traefik en prod).
 | Route | Accès | Réponses |
 |---|---|---|
 | `GET /healthz` | public | 200 `{"status": "ok", "version": "<APP_VERSION>"}` — aucune donnée d'événement |
+| `GET /` | public | 303 vers `/progress` avec session valide, sinon vers `/login` (jamais mis en cache) |
 | `GET /login` | public | 200 formulaire (champ `password`) |
 | `POST /login` | public, limité | voir ci-dessous |
 | `GET /activity` | session | 200 page ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
@@ -41,6 +42,7 @@ personnelle dans le cookie. Le cookie `Secure` impose HTTPS (Traefik en prod).
 | `GET /stream` | session | 200 `text/event-stream` ; **401** sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
 | `GET /static/live.js` | public | client temps réel (`EventSource`), sans dépendance ni CDN |
 | `GET /static/tokens.css` | public | feuille de style du design system |
+| `GET /static/nav.css` | public | style de la barre de navigation commune (Suivi, Activité, Tokens, Contrôles, Interactions ; `aria-current="page"` sur la page active) |
 | `GET /progress` | session | 200 page « Suivi du projet » ; 303 vers `/login` sans session valide (aucune lecture GitHub ni base) |
 | `GET /api/v1/progress` | session | 200 JSON conforme à [`progress.schema.json`](progress.schema.json) ; 401 sans session valide |
 | `GET /static/progress.js` | public | rafraîchissement de `/progress` (JS natif, sans CDN) |
