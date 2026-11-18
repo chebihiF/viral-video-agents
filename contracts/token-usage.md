@@ -85,5 +85,7 @@ totaux ne doublent pas. Deux points d'une même série au même intervalle serai
 
 ## Page `/tokens`
 
+Accès : session (303 vers `/login` sinon).
+
 Totaux de tokens (tous types confondus) par agent et par modèle, sur 24 h et 7 jours
 glissants. Ni identifiant de session ni attribut personnel n'y est affiché.
