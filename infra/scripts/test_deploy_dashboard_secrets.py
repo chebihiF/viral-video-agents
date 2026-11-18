@@ -24,6 +24,8 @@ FAKE_DOCKER = """#!/usr/bin/env bash
   echo "SESSION_KEY:${DASHBOARD_SESSION_KEY-<unset>}"
   echo "PASSWORD_HASH:${DASHBOARD_PASSWORD_HASH-<unset>}"
 } >> "$FAKE_LOG"
+# healthz dans le conteneur (blue/green, #25) : renvoie la version attendue
+case "$*" in *" exec "*) echo '{"version":"'"$IMAGE_TAG"'"}' ;; esac
 exit 0
 """
 # Répond à /healthz (version) et à / (titre) avec la même ligne : suffit au smoke test.
@@ -53,6 +55,7 @@ def sandbox(tmp_path: Path) -> dict[str, Path | dict[str, str]]:
         "VVA_STATE_DIR": str(state),
         "FAKE_LOG": str(tmp_path / "docker.log"),
         "FAKE_VERSION": VERSION,
+        "VVA_PROBE": "0",
     }
     return {"state": state, "env": env, "log": tmp_path / "docker.log"}
 

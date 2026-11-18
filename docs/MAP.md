@@ -17,6 +17,7 @@
 - `apps/dashboard/src/dashboard/__init__.py` — Agents Dashboard.
 - `apps/dashboard/src/dashboard/activity.py` — GET /activity : 100 derniers événements d'agents (contrat : contracts/dashboard-routes.md)
 - `apps/dashboard/src/dashboard/auth.py` — Connexion au dashboard (contrat : contracts/dashboard-routes.md).
+- `apps/dashboard/src/dashboard/controls.py` — Pause des agents et plafond de tokens (contrat : contracts/control-api.md).
 - `apps/dashboard/src/dashboard/db.py` — Persistance SQLite des événements d'agents et des tokens (stdlib `sqlite3`).
 - `apps/dashboard/src/dashboard/ingest.py` — POST /api/v1/events : ingestion authentifiée (contrat : contracts/ingest-api.md).
 - `apps/dashboard/src/dashboard/interactions.py` — GET /interactions : sessions, sous-agents et durée (contrat : contracts/dashboard-routes.m
@@ -28,6 +29,7 @@
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/templates/activity.html`
+- `apps/dashboard/src/dashboard/templates/controls.html`
 - `apps/dashboard/src/dashboard/templates/index.html`
 - `apps/dashboard/src/dashboard/templates/interactions.html`
 - `apps/dashboard/src/dashboard/templates/login.html`
@@ -37,6 +39,7 @@
 - `apps/dashboard/tests/test_activity.py` — Liste d'activité des agents (#5) : 100 derniers événements, vues tableau + flux.
 - `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
 - `apps/dashboard/tests/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
+- `apps/dashboard/tests/test_controls.py` — Contrôles pause et plafond de tokens (#8) : /controls, POST protégés (CSRF), /api/v1/contr
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
@@ -63,6 +66,7 @@
 - `contracts/README.md` — contracts
 - `contracts/agent-event.schema.json` — données JSON
 - `contracts/classification.schema.json` — données JSON
+- `contracts/control-api.md` — Contrôles : pause des agents et plafond de tokens (#8)
 - `contracts/dashboard-routes.md` — Routes du dashboard
 - `contracts/examples/classification.adouci.json` — données JSON
 - `contracts/examples/classification.bloque.json` — données JSON
@@ -99,7 +103,7 @@
 - `evals/test_classification_eval.py` — Tests hors GPU de l'éval de classification (#35) : contrat, cas, dry-run, seuils.
 - `evals/test_storyboard_eval.py` — Tests de l'éval storyboard : jamais d'appel Ollama (réseau bloqué).
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
-- `infra/deploy/deploy.sh` — Déploie le dashboard, vérifie /healthz en HTTPS, revient à la version précédente si échec.
+- `infra/deploy/deploy.sh` — Déploie le dashboard sans coupure (blue/green derrière Traefik), vérifie /healthz en HTTPS
 - `infra/deploy/ensure-token.sh` — Crée $STATE_DIR/ingest_token (600) s'il n'existe pas, sans jamais l'afficher.
 - `infra/deploy/proxy.env.example` — Copié en /opt/vva/proxy.env sur le VPS (Traefik du projet Docker « n8n » : réseau n8n_defa
 - `infra/runner/README.md` — Runner auto-hébergé `vps-deploy` (VPS Hostinger)
@@ -111,6 +115,7 @@
 - `infra/scripts/quiet.sh` — Exécute une commande ; n'affiche sa sortie (40 dernières lignes) qu'en cas d'échec.
 - `infra/scripts/set-dashboard-password.sh` — Définit le mot de passe du dashboard (à lancer par le parent, sur le Mac).
 - `infra/scripts/test_bootstrap_worktree.py` — bootstrap_worktree.sh copie .claude/ sans worktrees/ ni telemetry/ et sans écraser.
+- `infra/scripts/test_deploy_bluegreen.py` — deploy.sh blue/green (#25) : faux docker/curl dans le PATH, appels enregistrés, aucun vrai
 - `infra/scripts/test_deploy_dashboard_secrets.py` — deploy.sh + compose.yaml (#30) : clé de session stable, hash transmis, /login fermé par dé
 - `infra/scripts/test_next_version.py`
 - `infra/scripts/test_no_claude_tracked.py` — Garde-fou : aucun chemin .claude/ ni CLAUDE.md ne doit être suivi par git.
@@ -123,6 +128,8 @@
 - `pyproject.toml`
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
+- `tools/telemetry/pretool_gate.py` — Hook Claude Code PreToolUse : bloque les outils tant que les agents sont en pause (#8).
 - `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).
 - `tools/telemetry/tests/test_emit.py` — Émetteur de hooks : stdin JSON -> ligne JSONL minimale (#4).
+- `tools/telemetry/tests/test_gate.py` — Hook PreToolUse pretool_gate.py (#8) : code 2 si pause, échec sûr (cache 5 min).
 - `tools/telemetry/tests/test_ship.py` — Expéditeur : JSONL -> POST /api/v1/events par lots, sans perte ni doublon (#4).

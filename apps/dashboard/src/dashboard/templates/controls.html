@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Contrôles — Agents Dashboard</title>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <style>
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: var(--font-size-body); }
+    main { display: grid; gap: var(--space-5); padding: var(--space-5); max-width: 720px; margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+    h1 { font-size: var(--font-size-title); margin: 0; }
+    h2 { font-size: var(--font-size-heading); margin: 0 0 var(--space-3); }
+    .panel { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); }
+    nav { display: flex; gap: var(--space-4); font-size: var(--font-size-small); }
+    nav a { color: var(--color-accent); font-weight: 600; }
+    nav a[aria-current="page"] { color: var(--color-text); text-decoration: none; }
+    .muted { color: var(--color-text-muted); }
+    .banner { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid; font-weight: 600; }
+    .banner-ok { background: var(--color-ok-bg); border-color: var(--color-ok); color: var(--color-ok); }
+    .banner-warn { background: var(--color-warn-bg); border-color: var(--color-warn); color: var(--color-warn); }
+    .banner-danger { background: var(--color-danger-bg); border-color: var(--color-danger); color: var(--color-danger); }
+    form { display: grid; gap: var(--space-3); margin: var(--space-3) 0 0; }
+    label { font-size: var(--font-size-label); color: var(--color-text-muted); }
+    input[type="number"] { min-height: 36px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font: inherit; font-variant-numeric: tabular-nums; }
+    button { min-height: 36px; border: 0; border-radius: var(--radius-md); background: var(--color-accent); color: var(--color-on-accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0 var(--space-4); }
+    button.danger { background: var(--color-danger); color: var(--color-surface); }
+    meter { width: 100%; height: 16px; }
+    .num { font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Contrôles</h1>
+      <nav aria-label="Vues">
+        <a href="/activity">Activité</a>
+        <a href="/interactions">Interactions</a>
+        <a href="/controls" aria-current="page">Contrôles</a>
+      </nav>
+    </header>
+    {% if error_at %}
+    <div class="banner banner-danger" role="alert">
+      <strong>Erreur :</strong> l'état des agents est indisponible (tentative à <time>{{ error_at }}</time> UTC).
+      Aucune action n'est possible. <a href="/controls">Réessayer</a>
+    </div>
+    {% else %}
+    {% if message %}<div class="banner banner-danger" role="alert">{{ message }}</div>{% endif %}
+    {% if state.paused and state.reason == "plafond" %}
+    <div class="banner banner-danger" role="alert">
+      ▲ Plafond atteint : {{ state.tokens_24h | thousands }} / {{ state.cap_tokens | thousands }} tokens sur 24 h. Agents en pause (motif : plafond).
+    </div>
+    {% elif state.paused %}
+    <div class="banner banner-warn" role="status">❚❚ Agents en pause (motif : manuel).</div>
+    {% else %}
+    <div class="banner banner-ok" role="status">● Agents actifs.</div>
+    {% endif %}
+
+    <section class="panel" aria-labelledby="pause-title">
+      <h2 id="pause-title">Pause</h2>
+      <p class="muted">Les agents s'arrêtent à leur prochain appel d'outil, et repartent au suivant après la reprise.</p>
+      {% if state.paused %}
+      <form method="post" action="/controls/resume">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit">Reprendre les agents</button>
+      </form>
+      {% else %}
+      <form method="post" action="/controls/pause">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="danger">Mettre en pause</button>
+      </form>
+      {% endif %}
+    </section>
+
+    <section class="panel" aria-labelledby="cap-title">
+      <h2 id="cap-title">Plafond de tokens</h2>
+      <p class="num">
+        <label for="usage">Consommation sur 24 h glissantes</label><br>
+        <meter id="usage" min="0" max="{{ state.cap_tokens }}" value="{{ [state.tokens_24h, state.cap_tokens] | min }}">{{ state.tokens_24h | thousands }}</meter><br>
+        {{ state.tokens_24h | thousands }} / {{ state.cap_tokens | thousands }} tokens
+      </p>
+      <form method="post" action="/controls/cap">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label for="cap_tokens">Plafond (tokens sur 24 h, tous agents)</label>
+        <input id="cap_tokens" name="cap_tokens" type="number" inputmode="numeric" min="1" step="1" value="{{ state.cap_tokens }}" required>
+        <button type="submit">Enregistrer le plafond</button>
+      </form>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>
