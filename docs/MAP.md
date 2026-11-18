@@ -47,16 +47,34 @@
 - `apps/dashboard/tests/test_tokens.py` — Page /tokens : totaux par agent et par modèle sur 24 h et 7 jours (#7).
 - `apps/gpu-worker/README.md` — gpu-worker
 - `apps/gpu-worker/comfy_run.py` — Lance un workflow ComfyUI (format API) et attend le résultat.
+- `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
+- `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
 - `apps/media-service/README.md` — media-service
+- `apps/media-service/pyproject.toml`
+- `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
+- `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres SRT incrustés.
+- `apps/media-service/tests/__init__.py`
+- `apps/media-service/tests/test_contract_montage_job.py` — Contrat contracts/montage-job.schema.json : entrée du media-service (#34).
+- `apps/media-service/tests/test_montage.py` — Montage FFmpeg (#34) : clips et voix synthétiques générés par le test (lavfi).
+- `apps/media-service/tests/test_montage_edge_cases.py` — Cas limites du montage (#34) : unicode arabe, plan unique, 0 plan, double exécution.
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
 - `contracts/README.md` — contracts
 - `contracts/agent-event.schema.json` — données JSON
+- `contracts/classification.schema.json` — données JSON
 - `contracts/dashboard-routes.md` — Routes du dashboard
+- `contracts/examples/classification.adouci.json` — données JSON
+- `contracts/examples/classification.bloque.json` — données JSON
+- `contracts/examples/classification.libre.json` — données JSON
+- `contracts/examples/gpu-job.invalid.json` — données JSON
+- `contracts/examples/gpu-job.valid.json` — données JSON
+- `contracts/examples/montage-job.valid.json` — données JSON
 - `contracts/examples/storyboard.invalid.json` — données JSON
 - `contracts/examples/storyboard.valid.json` — données JSON
+- `contracts/gpu-job.schema.json` — données JSON
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
+- `contracts/montage-job.schema.json` — données JSON
 - `contracts/progress.schema.json` — données JSON
 - `contracts/storyboard.schema.json` — données JSON
 - `contracts/token-usage.md` — Métriques de tokens (OTLP/HTTP JSON)
@@ -68,11 +86,15 @@
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `evals/README.md` — evals
+- `evals/cases/classification.jsonl`
+- `evals/cases/classification.recorded.jsonl`
 - `evals/cases/storyboard.jsonl`
 - `evals/cases/storyboard.recorded.jsonl`
 - `evals/cases/storyboard.test.schema.json` — données JSON
+- `evals/classification_eval.py` — Éval de la classification de sécurité enfant (libre / adouci / bloque).
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
 - `evals/storyboard_eval.py` — Éval du prompt storyboard : taux de sorties JSON conformes à contracts/storyboard.schema.j
+- `evals/test_classification_eval.py` — Tests hors GPU de l'éval de classification (#35) : contrat, cas, dry-run, seuils.
 - `evals/test_storyboard_eval.py` — Tests de l'éval storyboard : jamais d'appel Ollama (réseau bloqué).
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 - `infra/deploy/deploy.sh` — Déploie le dashboard, vérifie /healthz en HTTPS, revient à la version précédente si échec.
@@ -94,6 +116,7 @@
 - `infra/scripts/test_set_dashboard_password.py` — set-dashboard-password.sh (#30) : hash vérifiable, mot de passe jamais écrit ni affiché.
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
+- `prompts/classification.v1.md` — classification.v1
 - `prompts/storyboard.v1.md`
 - `pyproject.toml`
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)

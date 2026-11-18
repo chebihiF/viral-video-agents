@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/montage-job.schema.json",
+  "title": "MontageJob",
+  "description": "Entrée du media-service : clips animés + voix off par plan, à assembler en un MP4 vertical 1080x1920 sous-titré. Contrat local au media-service.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plans", "output_path"],
+  "properties": {
+    "schema_version": {
+      "description": "Version du contrat ; changement incompatible = nouvelle version.",
+      "type": "string",
+      "const": "1.0"
+    },
+    "plans": {
+      "description": "Plans dans l'ordre de montage ; la durée d'un plan est celle de sa voix.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Plan" }
+    },
+    "output_path": {
+      "description": "Chemin du MP4 produit (H.264 + AAC, 1080x1920, 24 i/s) ; le dossier parent doit exister. Le SRT est écrit à côté (même nom, extension .srt).",
+      "type": "string",
+      "pattern": "^[^\\u0000]+\\.mp4$"
+    }
+  },
+  "$defs": {
+    "Plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["clip_path", "audio_path", "narration_fr"],
+      "properties": {
+        "clip_path": {
+          "description": "Clip vidéo du plan (bouclé s'il est plus court que la voix, coupé s'il est plus long).",
+          "type": "string",
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000]+$"
+        },
+        "audio_path": {
+          "description": "Voix off du plan ; sa durée (ffprobe) fixe celle du plan.",
+          "type": "string",
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000]+$"
+        },
+        "narration_fr": {
+          "description": "Texte de la voix off, affiché en sous-titre (une ligne SRT par plan).",
+          "type": "string",
+          "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000]+$"
+        }
+      }
+    }
+  }
+}

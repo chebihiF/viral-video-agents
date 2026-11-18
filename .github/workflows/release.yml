@@ -2,6 +2,7 @@ name: release
 on:
   push:
     branches: [main]
+  workflow_dispatch:  # redéploie main (ex. après set-dashboard-password.sh), sans nouveau merge
 permissions:
   contents: read
 concurrency:

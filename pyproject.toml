@@ -5,14 +5,16 @@ description = "Monorepo — appli familiale de vidéos animées générées par 
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
-members = ["apps/dashboard"]
+members = ["apps/dashboard", "apps/media-service"]
 
 [tool.uv.sources]
 dashboard = { workspace = true }
+media-service = { workspace = true }
 
 [dependency-groups]
 dev = [
   "dashboard",
+  "media-service",
   "ruff>=0.8",
   "mypy>=1.13",
   "pytest>=8.3",
@@ -35,7 +37,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
 ignore = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["dashboard", "next_version", "hook_emit", "ship"]
+known-first-party = ["dashboard", "media_service", "next_version", "hook_emit", "ship"]
 
 [tool.ruff.lint.per-file-ignores]
 "apps/gpu-worker/*" = ["S310", "S110", "E501"]
@@ -44,10 +46,11 @@ known-first-party = ["dashboard", "next_version", "hook_emit", "ship"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["apps/dashboard/src", "infra/scripts", "tools/telemetry"]
+files = ["apps/dashboard/src", "apps/media-service/src", "infra/scripts", "tools/telemetry", "evals/classification_eval.py", "evals/test_classification_eval.py",
+  "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/dashboard/tests", "infra/scripts", "tools/telemetry/tests", "evals"]
-pythonpath = ["infra/scripts", "tools/telemetry", "evals"]
+testpaths = ["apps/dashboard/tests", "apps/media-service/tests", "infra/scripts", "tools/telemetry/tests", "evals", "apps/gpu-worker/tests"]
+pythonpath = ["infra/scripts", "tools/telemetry", "evals", "apps/gpu-worker"]
 filterwarnings = ["ignore::DeprecationWarning"]
 addopts = "-q --no-header -p no:cacheprovider"
