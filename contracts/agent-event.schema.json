@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/agent-event.schema.json",
+  "title": "AgentEvent",
+  "description": "Événement de hook d'agent envoyé par le Mac au dashboard. Métadonnées uniquement : aucun prompt, aucune sortie d'outil, aucune donnée d'enfant.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["event_id", "ts", "hook_event_name", "session_id"],
+  "properties": {
+    "event_id": {
+      "description": "Identifiant unique de l'événement (clé d'idempotence), ex. UUID.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "ts": {
+      "description": "Horodatage ISO 8601 avec fuseau.",
+      "type": "string",
+      "format": "date-time"
+    },
+    "hook_event_name": {
+      "description": "Nom du hook, ex. PreToolUse, PostToolUse, SubagentStop.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "session_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "agent_type": {
+      "type": ["string", "null"],
+      "maxLength": 128
+    },
+    "agent_id": {
+      "type": ["string", "null"],
+      "maxLength": 128
+    },
+    "tool_name": {
+      "type": ["string", "null"],
+      "maxLength": 128
+    }
+  }
+}

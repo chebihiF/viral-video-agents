@@ -15,9 +15,13 @@
 - `apps/dashboard/Dockerfile`
 - `apps/dashboard/pyproject.toml`
 - `apps/dashboard/src/dashboard/__init__.py` — Agents Dashboard.
+- `apps/dashboard/src/dashboard/db.py` — Persistance SQLite des événements d'agents (stdlib `sqlite3`).
+- `apps/dashboard/src/dashboard/ingest.py` — POST /api/v1/events : ingestion authentifiée (contrat : contracts/ingest-api.md).
 - `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (Sprint 0 : page vide + santé).
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/templates/index.html`
+- `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
+- `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_main.py`
 - `apps/gpu-worker/README.md` — gpu-worker
 - `apps/gpu-worker/comfy_run.py` — Lance un workflow ComfyUI (format API) et attend le résultat.
@@ -26,6 +30,8 @@
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
 - `contracts/README.md` — contracts
+- `contracts/agent-event.schema.json` — données JSON
+- `contracts/ingest-api.md` — API d'ingestion des événements d'agents
 - `docs/ARCHITECTURE.md` — Architecture — Viral Video Agents
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
@@ -36,6 +42,7 @@
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 - `infra/deploy/deploy.sh` — Déploie le dashboard, vérifie /healthz en HTTPS, revient à la version précédente si échec.
+- `infra/deploy/ensure-token.sh` — Crée $STATE_DIR/ingest_token (600) s'il n'existe pas, sans jamais l'afficher.
 - `infra/deploy/proxy.env.example` — Copié en /opt/vva/proxy.env sur le VPS (Traefik du projet Docker « n8n » : réseau n8n_defa
 - `infra/runner/README.md` — Runner auto-hébergé `vps-deploy` (VPS Hostinger)
 - `infra/scripts/conftest.py`
