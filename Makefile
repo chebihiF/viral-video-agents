@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check build map run
+.PHONY: help sync lint fmt type test audit check build map run bootstrap
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -38,3 +38,6 @@ map: ## Régénère docs/MAP.md
 
 run: ## Dashboard en local sur :8000
 	$(UV) uvicorn dashboard.main:app --reload
+
+bootstrap: ## Copie .claude/ et CLAUDE.md du checkout principal (VVA_MAIN=chemin)
+	infra/scripts/bootstrap_worktree.sh
