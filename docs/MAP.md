@@ -15,11 +15,17 @@
 - `apps/dashboard/Dockerfile`
 - `apps/dashboard/pyproject.toml`
 - `apps/dashboard/src/dashboard/__init__.py` — Agents Dashboard.
+- `apps/dashboard/src/dashboard/activity.py` — GET /activity : 100 derniers événements d'agents (contrat : contracts/dashboard-routes.md)
+- `apps/dashboard/src/dashboard/auth.py` — Connexion au dashboard (contrat : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/db.py` — Persistance SQLite des événements d'agents (stdlib `sqlite3`).
 - `apps/dashboard/src/dashboard/ingest.py` — POST /api/v1/events : ingestion authentifiée (contrat : contracts/ingest-api.md).
-- `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (Sprint 0 : page vide + santé).
+- `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (routes : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/static/tokens.css`
+- `apps/dashboard/src/dashboard/templates/activity.html`
 - `apps/dashboard/src/dashboard/templates/index.html`
+- `apps/dashboard/src/dashboard/templates/login.html`
+- `apps/dashboard/tests/test_activity.py` — Liste d'activité des agents (#5) : 100 derniers événements, vues tableau + flux.
+- `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_main.py`
@@ -31,6 +37,7 @@
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
 - `contracts/README.md` — contracts
 - `contracts/agent-event.schema.json` — données JSON
+- `contracts/dashboard-routes.md` — Routes du dashboard
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
 - `docs/ARCHITECTURE.md` — Architecture — Viral Video Agents
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
