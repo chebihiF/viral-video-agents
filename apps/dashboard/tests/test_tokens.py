@@ -8,17 +8,33 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from dashboard import db, tokens
+from dashboard import auth, db, tokens
 from dashboard.main import app
 
 NOW = datetime(2026, 11, 18, 12, 0, tzinfo=UTC)
+PASSWORD = "mot-de-passe-de-test"  # noqa: S105 - valeur factice de test
 
 
 @pytest.fixture
 def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     path = tmp_path / "vva.db"
     monkeypatch.setenv("VVA_DB_PATH", str(path))
+    monkeypatch.setenv(auth.PASSWORD_HASH_ENV, auth.hash_password(PASSWORD, iterations=1_000))
+    monkeypatch.setenv(auth.SESSION_KEY_ENV, "s" * 48)
+    auth.LOGIN_LIMITER.reset()
     return path
+
+
+def logged_in() -> TestClient:
+    c = TestClient(app, base_url="https://testserver", follow_redirects=False)
+    assert c.post("/login", data={"password": PASSWORD}).status_code == 303
+    return c
+
+
+def test_tokens_page_requires_login(db_path: Path) -> None:
+    resp = TestClient(app, base_url="https://testserver", follow_redirects=False).get("/tokens")
+    assert resp.status_code == 303
+    assert resp.headers["location"] == "/login"
 
 
 def seed(rows: list[tuple[timedelta, str | None, str, str, int]]) -> None:
@@ -98,7 +114,7 @@ def test_tokens_page_shows_totals(db_path: Path) -> None:
                 ),
             ],
         )
-    resp = TestClient(app).get("/tokens")
+    resp = logged_in().get("/tokens")
     assert resp.status_code == 200
     text = resp.text
     for expected in (
@@ -117,7 +133,7 @@ def test_tokens_page_shows_totals(db_path: Path) -> None:
 
 
 def test_tokens_page_empty_state(db_path: Path) -> None:
-    resp = TestClient(app).get("/tokens")
+    resp = logged_in().get("/tokens")
     assert resp.status_code == 200
     assert "Aucune donnée" in resp.text
 
@@ -151,7 +167,7 @@ def test_agent_and_model_names_are_escaped_arabic_ok(db_path: Path) -> None:
                 ),
             ],
         )
-    text = TestClient(app).get("/tokens").text
+    text = logged_in().get("/tokens").text
     assert "<script>alert(1)" not in text
     assert "نموذج" in text
 
@@ -173,7 +189,7 @@ def test_tokens_page_excludes_old_rows(db_path: Path) -> None:
                 )
             ],
         )
-    text = TestClient(app).get("/tokens").text
+    text = logged_in().get("/tokens").text
     assert "old-agent" not in text
 
 
