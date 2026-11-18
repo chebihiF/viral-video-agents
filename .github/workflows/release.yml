@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE: ghcr.io/${{ github.repository_owner }}/vva-dashboard
+  IMAGE: ghcr.io/chebihif/vva-dashboard  # GHCR exige des minuscules
 
 jobs:
   version:
