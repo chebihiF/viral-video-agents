@@ -134,4 +134,5 @@
 - `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).
 - `tools/telemetry/tests/test_emit.py` — Émetteur de hooks : stdin JSON -> ligne JSONL minimale (#4).
 - `tools/telemetry/tests/test_gate.py` — Hook PreToolUse pretool_gate.py (#8) : code 2 si pause, échec sûr (cache 5 min).
+- `tools/telemetry/tests/test_py39.py` — Les scripts lancés par les hooks tournent sous le python3 du Mac (3.9) (#59).
 - `tools/telemetry/tests/test_ship.py` — Expéditeur : JSONL -> POST /api/v1/events par lots, sans perte ni doublon (#4).

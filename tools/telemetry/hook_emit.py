@@ -4,7 +4,7 @@
 Contrat de sortie : contracts/agent-event.schema.json. Seules des métadonnées sont
 écrites (jamais prompt, arguments ni sortie d'outil). Le hook ne bloque jamais :
 toute erreur, ou plus de ~0,8 s d'exécution, se termine en code 0 sans sortie.
-Stdlib uniquement.
+Stdlib uniquement ; compatible Python 3.9 (python3 du Mac, #59).
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ import os
 import signal
 import sys
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from types import FrameType
 from typing import Any
@@ -41,7 +41,7 @@ def build_event(hook: Any) -> dict[str, str | None] | None:
         return None
     event: dict[str, str | None] = {
         "event_id": str(uuid.uuid4()),
-        "ts": datetime.now(UTC).isoformat(),
+        "ts": datetime.now(timezone.utc).isoformat(),  # noqa: UP017 - pas de datetime.UTC en 3.9
     }
     for name, limit in REQUIRED.items():
         value = _text(hook.get(name), limit)

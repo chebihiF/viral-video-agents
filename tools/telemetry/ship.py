@@ -10,21 +10,29 @@ qu'après un 200/202. Réseau ou 5xx : on garde la file et on réessaie au proch
 passage. 3xx (jamais suivie) et 4xx hors 413/422 : configuration à corriger, file
 gardée. 413/422 sur un lot : renvoi événement par événement ; les refusés sont
 isolés dans `<fichier>.rejected`. Le serveur déduplique par event_id.
-Stdlib uniquement.
+
+Ancien format (#59) : une ligne JSON sans `event_id`, `ts`, `hook_event_name` ni `session_id`
+(ex. `log_event.sh`) n'est jamais envoyée ; le fichier est archivé en
+`events.legacy-AAAAMMJJ.jsonl` et seules les lignes valides en attente sont reprises.
+`--background` (hook Stop) rend la main aussitôt et expédie dans un processus détaché.
+Stdlib uniquement ; compatible Python 3.9 (python3 du Mac).
 """
 
 from __future__ import annotations
 
+import contextlib
 import enum
 import fcntl
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from email.message import Message
 from pathlib import Path
 from typing import IO, Any
@@ -34,6 +42,8 @@ from hook_emit import target_file
 
 EXIT_OK, EXIT_RETRY, EXIT_CONFIG = 0, 1, 2
 BATCH_MAX = 100
+BACKGROUND_TIMEOUT_S = 3.0
+REQUIRED_FIELDS = ("event_id", "ts", "hook_event_name", "session_id")
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 REJECTABLE = frozenset({413, 422})
 
@@ -206,7 +216,7 @@ def next_batch(cfg: Config, cursor: Cursor, lines: list[Line]) -> tuple[list[Lin
 
 
 def send_one_by_one(cfg: Config, cursor: Cursor, batch: list[Line], events: list[Any]) -> Outcome:
-    for line, event in zip(batch, events, strict=True):
+    for line, event in zip(batch, events):  # noqa: B905 - zip(strict=) absent en 3.9
         outcome = post(cfg, [event])
         if outcome is Outcome.REJECTED:
             reject(cfg, line, "refusé par le serveur")
@@ -216,8 +226,62 @@ def send_one_by_one(cfg: Config, cursor: Cursor, batch: list[Line], events: list
     return Outcome.OK
 
 
+def is_legacy(line: Line) -> bool:
+    """JSON lisible mais sans les champs requis du contrat (ancien format)."""
+    event = parse(line)
+    if event is None:
+        return False
+    return not isinstance(event, dict) or any(name not in event for name in REQUIRED_FIELDS)
+
+
+def archive_path(events_file: Path) -> Path:
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d")  # noqa: UP017 - pas de datetime.UTC en 3.9
+    candidate = events_file.with_name(f"events.legacy-{stamp}.jsonl")
+    n = 1
+    while candidate.exists():
+        n += 1
+        candidate = events_file.with_name(f"events.legacy-{stamp}-{n}.jsonl")
+    return candidate
+
+
+def archive_legacy(events_file: Path, lines: list[Line]) -> bool:
+    """Archive le fichier s'il contient de l'ancien format ; reprend les lignes valides.
+
+    Copie d'abord l'archive, puis remplace events.jsonl par un fichier temporaire
+    renommé : un crash entre les deux laisse l'original intact (rien n'est perdu).
+    Limite acceptée : une ligne écrite par un hook entre la lecture et le renommage
+    finit dans l'archive seulement (fenêtre de l'ordre de la microseconde).
+    """
+    if not any(is_legacy(line) for line in lines):
+        return False
+    data = events_file.read_bytes()
+    archive = archive_path(events_file)
+    fd = open_private(archive, os.O_WRONLY | os.O_EXCL)
+    with os.fdopen(fd, "wb") as out:
+        out.write(data)
+        out.flush()
+        os.fsync(out.fileno())
+    keep = b"".join(line.raw for line in lines if not is_legacy(line))
+    keep += data[lines[-1].end :]
+    cursor_path(events_file).unlink(missing_ok=True)
+    if keep:
+        tmp = events_file.with_name(events_file.name + ".tmp")
+        fd = open_private(tmp, os.O_WRONLY | os.O_TRUNC)
+        with os.fdopen(fd, "wb") as out:
+            out.write(keep)
+        os.replace(tmp, events_file)
+    else:
+        events_file.unlink()
+    print(f"ship: ancien format archivé dans {archive.name}", file=sys.stderr)
+    return True
+
+
 def drain(cfg: Config) -> Outcome:
     cursor, lines = read_pending(cfg.events_file)
+    if archive_legacy(cfg.events_file, lines):
+        if not cfg.events_file.is_file():
+            return Outcome.OK
+        cursor, lines = read_pending(cfg.events_file)
     while lines:
         batch, events = next_batch(cfg, cursor, lines)
         lines = lines[len(batch) :]
@@ -269,13 +333,41 @@ def run(cfg: Config) -> int:
     return EXIT_OK
 
 
-def main() -> int:
+def config_from_env(background: bool = False) -> Config | None:
     url = os.environ.get("VVA_INGEST_URL", "")
     token = os.environ.get("VVA_INGEST_TOKEN", "")
     if not url or not token:
+        return None
+    timeout = BACKGROUND_TIMEOUT_S if background else Config.timeout
+    return Config(events_file=target_file(), url=url, token=token, timeout=timeout)
+
+
+def spawn_detached() -> int:
+    """Hook Stop : lance l'expédition dans un processus détaché et rend la main."""
+    if config_from_env(background=True) is None:
+        return EXIT_OK
+    with contextlib.suppress(OSError):
+        subprocess.Popen(  # noqa: S603 - interpréteur courant, script du dépôt
+            [sys.executable, str(Path(__file__).resolve()), "--detached"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    return EXIT_OK
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = sys.argv[1:] if argv is None else argv
+    if "--background" in args:
+        return spawn_detached()
+    cfg = config_from_env(background="--detached" in args)
+    if cfg is None:
+        if "--detached" in args:
+            return EXIT_OK
         print("ship: VVA_INGEST_URL et VVA_INGEST_TOKEN sont requis", file=sys.stderr)
         return EXIT_CONFIG
-    return run(Config(events_file=target_file(), url=url, token=token))
+    return run(cfg)
 
 
 if __name__ == "__main__":

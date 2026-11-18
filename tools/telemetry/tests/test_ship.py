@@ -9,8 +9,12 @@ import json
 import os
 import socket
 import stat
+import subprocess
+import sys
 import threading
+import time
 from collections.abc import Callable, Iterator
+from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
@@ -386,3 +390,140 @@ def test_unicode_darija_event_is_sent_intact(server: FakeIngest, events_file: Pa
     events_file.write_text(json.dumps(e, ensure_ascii=False) + "\n", encoding="utf-8")
     assert ship.run(config(events_file, server.url)) == ship.EXIT_OK
     assert server.batches[0][0]["agent_type"] == "وكيل-مطوّر"
+
+
+# #59 : ancien format (log_event.sh) -> archivage, jamais renvoyé
+LEGACY = {"ts": "2026-11-01 10:00:00", "agent": "dev-backend", "event": "start"}
+
+
+def write_raw(path: Path, *lines: str) -> None:
+    with path.open("a", encoding="utf-8") as fh:
+        fh.writelines(line + "\n" for line in lines)
+
+
+def archives(events_file: Path) -> list[Path]:
+    return sorted(events_file.parent.glob("events.legacy-*.jsonl"))
+
+
+def test_legacy_only_file_is_archived_and_never_sent(server: FakeIngest, events_file: Path) -> None:
+    write_raw(events_file, *(json.dumps(LEGACY) for _ in range(5)))
+    assert ship.run(config(events_file, server.url)) == ship.EXIT_OK
+    assert server.batches == []
+    assert not events_file.exists()
+    (archive,) = archives(events_file)
+    assert len(archive.read_text(encoding="utf-8").splitlines()) == 5
+    assert not ship.rejected_path(events_file).exists()
+    ship.run(config(events_file, server.url))
+    assert server.batches == []
+
+
+def test_archive_name_carries_the_date(server: FakeIngest, events_file: Path) -> None:
+    write_raw(events_file, json.dumps(LEGACY))
+    ship.run(config(events_file, server.url))
+    (archive,) = archives(events_file)
+    assert archive.name == f"events.legacy-{datetime.now(timezone.utc):%Y%m%d}.jsonl"  # noqa: UP017
+
+
+def test_mixed_file_keeps_only_conforming_lines(server: FakeIngest, events_file: Path) -> None:
+    write_raw(events_file, json.dumps(LEGACY), json.dumps(event(0)), json.dumps(LEGACY))
+    write_events(events_file, 1, 1)
+    assert ship.run(config(events_file, server.url)) == ship.EXIT_OK
+    assert sorted(server.received_ids()) == ["evt-0", "evt-1"]
+    assert len(archives(events_file)) == 1
+
+
+def test_second_archive_same_day_does_not_overwrite(server: FakeIngest, events_file: Path) -> None:
+    for _ in range(2):
+        write_raw(events_file, json.dumps(LEGACY))
+        ship.run(config(events_file, server.url))
+    assert len(archives(events_file)) == 2
+
+
+def test_json_without_required_fields_is_archived_and_garbage_kept(
+    server: FakeIngest, events_file: Path
+) -> None:
+    write_raw(events_file, "pas du json", "[1, 2]")
+    assert ship.run(config(events_file, server.url)) == ship.EXIT_OK
+    assert len(archives(events_file)) == 1
+    assert server.batches == []
+
+
+def test_archive_resets_the_cursor(server: FakeIngest, events_file: Path) -> None:
+    write_events(events_file, 0, 2)
+    ship.run(config(events_file, server.url))
+    write_raw(events_file, json.dumps(LEGACY))
+    ship.run(config(events_file, server.url))
+    write_events(events_file, 2, 1)
+    ship.run(config(events_file, server.url))
+    assert server.received_ids() == ["evt-0", "evt-1", "evt-2"]
+
+
+def test_partial_trailing_line_does_not_trigger_archive(
+    server: FakeIngest, events_file: Path
+) -> None:
+    write_events(events_file, 0, 1)
+    with events_file.open("a", encoding="utf-8") as fh:
+        fh.write('{"ts": "2026')
+    ship.run(config(events_file, server.url))
+    assert archives(events_file) == []
+    assert server.received_ids() == ["evt-0"]
+
+
+# #59 : --background pour un hook Stop
+def test_background_returns_at_once_and_ships_detached(
+    server: FakeIngest, events_file: Path
+) -> None:
+    write_events(events_file, 0, 3)
+    env = {
+        **os.environ,
+        "VVA_TELEMETRY_FILE": str(events_file),
+        "VVA_INGEST_URL": server.url,
+        "VVA_INGEST_TOKEN": TOKEN,
+    }
+    start = time.monotonic()
+    proc = subprocess.run(  # noqa: S603 - interpréteur courant, script du dépôt
+        [sys.executable, str(Path(ship.__file__)), "--background"],
+        input="{}",
+        capture_output=True,
+        text=True,
+        env=env,
+        timeout=10,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert proc.stdout == ""
+    assert time.monotonic() - start < 2
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline and len(server.received_ids()) < 3:
+        time.sleep(0.05)
+    assert server.received_ids() == ["evt-0", "evt-1", "evt-2"]
+
+
+def test_background_without_config_exits_zero_silently(tmp_path: Path) -> None:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("VVA_")}
+    proc = subprocess.run(  # noqa: S603 - interpréteur courant, script du dépôt
+        [sys.executable, str(Path(ship.__file__)), "--background"],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=tmp_path,
+        timeout=10,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert proc.stderr == ""
+
+
+def test_background_uses_a_short_timeout(
+    monkeypatch: pytest.MonkeyPatch, events_file: Path
+) -> None:
+    monkeypatch.setenv("VVA_TELEMETRY_FILE", str(events_file))
+    monkeypatch.setenv("VVA_INGEST_URL", "http://127.0.0.1:9/x")
+    monkeypatch.setenv("VVA_INGEST_TOKEN", TOKEN)
+    cfg = ship.config_from_env(background=True)
+    assert cfg is not None
+    assert cfg.timeout == ship.BACKGROUND_TIMEOUT_S
+    assert ship.BACKGROUND_TIMEOUT_S <= 3
+    regular = ship.config_from_env(background=False)
+    assert regular is not None
+    assert regular.timeout > ship.BACKGROUND_TIMEOUT_S

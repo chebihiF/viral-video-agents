@@ -32,6 +32,10 @@ jobs:
         run: uv run ruff check --output-format=github . && uv run ruff format --check .
       - name: mypy
         run: uv run mypy
+      - name: python3.9 pour les tests des hooks (#59)
+        run: |
+          uv python install 3.9
+          sudo ln -sf "$(uv python find --no-project 3.9)" /usr/local/bin/python3.9
       - name: pytest
         run: uv run pytest
       - name: docs/MAP.md à jour
