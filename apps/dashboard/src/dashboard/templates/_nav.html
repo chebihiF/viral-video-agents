@@ -1,0 +1,5 @@
+<nav aria-label="Navigation principale">
+  {% for href, label in [("/progress", "Suivi"), ("/activity", "Activité"), ("/tokens", "Tokens"), ("/controls", "Contrôles"), ("/interactions", "Interactions")] %}
+  <a href="{{ href }}"{% if href == active %} aria-current="page"{% endif %}>{{ label }}</a>
+  {% endfor %}
+</nav>
