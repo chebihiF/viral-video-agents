@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/storyboard.schema.json",
+  "title": "Storyboard",
+  "description": "Storyboard produit par le conteur à partir de la dictée de l'enfant ; entrée du pipeline (n8n, gpu-worker, media-service). Forme issue de evals/darija_storyboard.py.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "compris_fr", "recap_darija", "classification", "plans"],
+  "properties": {
+    "schema_version": {
+      "description": "Version du contrat ; changement incompatible = nouvelle version.",
+      "type": "string",
+      "const": "1.0"
+    },
+    "compris_fr": {
+      "description": "Ce que le conteur a compris de la dictée, en français simple.",
+      "type": "string",
+      "minLength": 1
+    },
+    "recap_darija": {
+      "description": "Récapitulatif très court en darija (lettres latines), relu par l'enfant.",
+      "type": "string",
+      "minLength": 1
+    },
+    "classification": {
+      "description": "Verdict de sûreté : libre (tel quel), adouci (reformulé pour un enfant), bloque (refusé, pas de rendu).",
+      "type": "string",
+      "enum": ["libre", "adouci", "bloque"]
+    },
+    "plans": {
+      "description": "Plans de la scène, dans l'ordre de montage.",
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/Plan" }
+    }
+  },
+  "$defs": {
+    "Plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["image_prompt", "motion_prompt", "narration_fr"],
+      "properties": {
+        "image_prompt": {
+          "description": "Description visuelle détaillée EN ANGLAIS (animation 3D mignonne, format vertical).",
+          "type": "string",
+          "minLength": 1
+        },
+        "motion_prompt": {
+          "description": "Mouvement à animer EN ANGLAIS (personnages + caméra).",
+          "type": "string",
+          "minLength": 1
+        },
+        "narration_fr": {
+          "description": "Phrase courte de voix off en français.",
+          "type": "string",
+          "minLength": 1
+        },
+        "duree_s": {
+          "description": "Durée du plan en secondes.",
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "default": 3
+        }
+      }
+    }
+  }
+}

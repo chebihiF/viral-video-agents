@@ -11,6 +11,9 @@ services:
     environment:
       # Jeton généré par deploy.sh dans /opt/vva/ingest_token (hors dépôt) ; absent => l'ingestion répond 503.
       INGEST_TOKEN: ${INGEST_TOKEN:-}
+      # Posés par deploy.sh (/opt/vva/session_key, /opt/vva/dashboard_password_hash) ; hash absent => /login répond 503.
+      DASHBOARD_SESSION_KEY: ${DASHBOARD_SESSION_KEY:-}
+      DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH:-}
       VVA_DB_PATH: /data/vva.db
     volumes:
       - vva-data:/data

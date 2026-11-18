@@ -36,6 +36,7 @@
 - `apps/dashboard/src/dashboard/tokens.py` — Totaux de tokens par agent et par modèle, sur 24 h et 7 jours glissants.
 - `apps/dashboard/tests/test_activity.py` — Liste d'activité des agents (#5) : 100 derniers événements, vues tableau + flux.
 - `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
+- `apps/dashboard/tests/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
@@ -53,8 +54,11 @@
 - `contracts/README.md` — contracts
 - `contracts/agent-event.schema.json` — données JSON
 - `contracts/dashboard-routes.md` — Routes du dashboard
+- `contracts/examples/storyboard.invalid.json` — données JSON
+- `contracts/examples/storyboard.valid.json` — données JSON
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
 - `contracts/progress.schema.json` — données JSON
+- `contracts/storyboard.schema.json` — données JSON
 - `contracts/token-usage.md` — Métriques de tokens (OTLP/HTTP JSON)
 - `docs/ARCHITECTURE.md` — Architecture — Viral Video Agents
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
@@ -76,10 +80,13 @@
 - `infra/scripts/next_version.py` — Calcule la prochaine version SemVer à partir des Conventional Commits.
 - `infra/scripts/pool.sh` — Pool de postes : un ticket = une branche neuve sur un poste libre.
 - `infra/scripts/quiet.sh` — Exécute une commande ; n'affiche sa sortie (40 dernières lignes) qu'en cas d'échec.
+- `infra/scripts/set-dashboard-password.sh` — Définit le mot de passe du dashboard (à lancer par le parent, sur le Mac).
 - `infra/scripts/test_bootstrap_worktree.py` — bootstrap_worktree.sh copie .claude/ sans worktrees/ ni telemetry/ et sans écraser.
+- `infra/scripts/test_deploy_dashboard_secrets.py` — deploy.sh + compose.yaml (#30) : clé de session stable, hash transmis, /login fermé par dé
 - `infra/scripts/test_next_version.py`
 - `infra/scripts/test_no_claude_tracked.py` — Garde-fou : aucun chemin .claude/ ni CLAUDE.md ne doit être suivi par git.
 - `infra/scripts/test_pool.py` — pool.sh : un ticket = une branche sur un poste libre du pool (#14).
+- `infra/scripts/test_set_dashboard_password.py` — set-dashboard-password.sh (#30) : hash vérifiable, mot de passe jamais écrit ni affiché.
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
 - `pyproject.toml`
