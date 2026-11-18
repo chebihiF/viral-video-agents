@@ -53,7 +53,11 @@
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
 - `contracts/README.md` — contracts
 - `contracts/agent-event.schema.json` — données JSON
+- `contracts/classification.schema.json` — données JSON
 - `contracts/dashboard-routes.md` — Routes du dashboard
+- `contracts/examples/classification.adouci.json` — données JSON
+- `contracts/examples/classification.bloque.json` — données JSON
+- `contracts/examples/classification.libre.json` — données JSON
 - `contracts/examples/storyboard.invalid.json` — données JSON
 - `contracts/examples/storyboard.valid.json` — données JSON
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
@@ -68,7 +72,11 @@
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `evals/README.md` — evals
+- `evals/cases/classification.jsonl`
+- `evals/cases/classification.recorded.jsonl`
+- `evals/classification_eval.py` — Éval de la classification de sécurité enfant (libre / adouci / bloque).
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
+- `evals/test_classification_eval.py` — Tests hors GPU de l'éval de classification (#35) : contrat, cas, dry-run, seuils.
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 - `infra/deploy/deploy.sh` — Déploie le dashboard, vérifie /healthz en HTTPS, revient à la version précédente si échec.
 - `infra/deploy/ensure-token.sh` — Crée $STATE_DIR/ingest_token (600) s'il n'existe pas, sans jamais l'afficher.
@@ -89,6 +97,7 @@
 - `infra/scripts/test_set_dashboard_password.py` — set-dashboard-password.sh (#30) : hash vérifiable, mot de passe jamais écrit ni affiché.
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
+- `prompts/classification.v1.md` — classification.v1
 - `pyproject.toml`
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
