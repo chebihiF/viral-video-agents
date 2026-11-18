@@ -64,7 +64,12 @@
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `evals/README.md` — evals
+- `evals/cases/storyboard.jsonl`
+- `evals/cases/storyboard.recorded.jsonl`
+- `evals/cases/storyboard.test.schema.json` — données JSON
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
+- `evals/storyboard_eval.py` — Éval du prompt storyboard : taux de sorties JSON conformes à contracts/storyboard.schema.j
+- `evals/test_storyboard_eval.py` — Tests de l'éval storyboard : jamais d'appel Ollama (réseau bloqué).
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 - `infra/deploy/deploy.sh` — Déploie le dashboard, vérifie /healthz en HTTPS, revient à la version précédente si échec.
 - `infra/deploy/ensure-token.sh` — Crée $STATE_DIR/ingest_token (600) s'il n'existe pas, sans jamais l'afficher.
@@ -85,6 +90,7 @@
 - `infra/scripts/test_set_dashboard_password.py` — set-dashboard-password.sh (#30) : hash vérifiable, mot de passe jamais écrit ni affiché.
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
+- `prompts/storyboard.v1.md`
 - `pyproject.toml`
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
