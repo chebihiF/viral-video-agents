@@ -38,9 +38,10 @@ app.include_router(controls_router)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
-    return TEMPLATES.TemplateResponse(request, "index.html", {"version": VERSION})
+@app.get("/", response_model=None)
+def index(request: Request) -> Response:
+    target = "/progress" if auth.is_authenticated(request) else "/login"
+    return RedirectResponse(target, status_code=303, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/tokens", response_class=HTMLResponse)

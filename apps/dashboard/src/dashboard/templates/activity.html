@@ -6,6 +6,7 @@
   <meta name="referrer" content="no-referrer">
   <title>Activité des agents — Agents Dashboard</title>
   <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="stylesheet" href="/static/nav.css">
   <style>
     body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: var(--font-size-body); }
     main { display: grid; gap: var(--space-5); padding: var(--space-5); max-width: 1280px; margin: 0 auto; }
@@ -24,9 +25,6 @@
     .muted { color: var(--color-text-muted); }
     ol { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--font-size-small); }
     li { padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle); display: grid; gap: var(--space-1); }
-    nav { display: flex; gap: var(--space-4); font-size: var(--font-size-small); }
-    nav a { color: var(--color-accent); font-weight: 600; }
-    nav a[aria-current="page"] { color: var(--color-text); text-decoration: none; }
     #live-status { margin: 0; font-size: var(--font-size-small); color: var(--color-text-muted); }
     [role="alert"] { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-danger); background: var(--color-danger-bg); color: var(--color-danger); }
     [role="alert"] a, .empty a { color: inherit; font-weight: 600; }
@@ -37,10 +35,7 @@
   <main{% if last_id is not none %} data-stream data-last-id="{{ last_id }}" data-refresh="#agents"{% endif %}>
     <header>
       <h1>Activité des agents</h1>
-      <nav aria-label="Vues">
-        <a href="/activity" aria-current="page">Activité</a>
-        <a href="/interactions">Interactions</a>
-      </nav>
+      {% with active="/activity" %}{% include "_nav.html" %}{% endwith %}
       <p id="live-status" role="status"></p>
     </header>
     {% if error_at %}

@@ -25,12 +25,13 @@
 - `apps/dashboard/src/dashboard/otlp.py` — POST /v1/metrics : tokens Claude Code en OTLP/HTTP JSON (contrat : contracts/token-usage.m
 - `apps/dashboard/src/dashboard/progress.py` — GET /progress et GET /api/v1/progress : avancement du projet et travail des agents (#26).
 - `apps/dashboard/src/dashboard/static/live.js` — Temps réel : flux SSE /stream (EventSource, reprise automatique par Last-Event-ID).
+- `apps/dashboard/src/dashboard/static/nav.css`
 - `apps/dashboard/src/dashboard/static/progress.js` — Actualisation de /progress toutes les 60 s (sans dépendance : ni CDN, ni bibliothèque).
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
+- `apps/dashboard/src/dashboard/templates/_nav.html`
 - `apps/dashboard/src/dashboard/templates/activity.html`
 - `apps/dashboard/src/dashboard/templates/controls.html`
-- `apps/dashboard/src/dashboard/templates/index.html`
 - `apps/dashboard/src/dashboard/templates/interactions.html`
 - `apps/dashboard/src/dashboard/templates/login.html`
 - `apps/dashboard/src/dashboard/templates/progress.html`
@@ -43,7 +44,7 @@
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
-- `apps/dashboard/tests/test_main.py`
+- `apps/dashboard/tests/test_main.py` — Accueil, redirections et navigation commune (#58).
 - `apps/dashboard/tests/test_otlp.py` — Réception OTLP/HTTP JSON des métriques de tokens (#7).
 - `apps/dashboard/tests/test_progress.py` — Suivi visuel du projet (#26) : /progress et /api/v1/progress. GitHub est toujours mocké.
 - `apps/dashboard/tests/test_stream.py` — Flux SSE /stream (#6) : session exigée, id croissant, reprise par Last-Event-ID.
