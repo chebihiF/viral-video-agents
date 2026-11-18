@@ -1,6 +1,6 @@
 # ADR-004 — Séparer l'usine d'agents (A) et l'application vidéo (B)
 
-- Statut : brouillon — décision du propriétaire du produit le 2026-11-18, à accepter après relecture
+- Statut : accepté par le propriétaire du produit — 2026-11-18
 - Liens : ADR-001 (architecture de B), ADR-002 (stack du dashboard), ADR-003 (mémoire des agents), #15, #16, #19, #21
 
 ## Contexte
@@ -80,7 +80,7 @@ tout autre dépôt, la règle reste entière : aucun fichier Claude commité (ga
 - Fait le 2026-11-18 : dépôt public `chebihiF/agent-factory` créé (public : CI illimitée et protection
   de `main` gratuites), bot `infinitySoftMA` collaborateur en écriture.
 
-## Attend l'utilisateur
+## Attend l'utilisateur (fait le 2026-11-18)
 - Mettre à jour les règles globales : exception « fichiers Claude commités autorisés dans
   `chebihiF/agent-factory` uniquement », et droit de push du bot étendu à ce dépôt (mêmes limites
   que pour `viral-video-agents`).
