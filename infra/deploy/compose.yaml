@@ -1,10 +1,17 @@
 # Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 # Variables fournies par deploy.sh et /opt/vva/proxy.env (propre au VPS, hors dépôt).
 name: vva
-services:
-  dashboard:
-    image: ${IMAGE}:${IMAGE_TAG}
+# Blue/green (#25) : deux services identiques, un seul actif en régime normal ; deploy.sh démarre
+# le slot inactif, vérifie qu'il est sain, puis arrête l'ancien. Même routeur et même service Traefik
+# (vva-dashboard) : Traefik répartit sur les conteneurs sains, donc aucune coupure pendant la bascule.
+# INVARIANT : un SEUL jeu de labels Traefik (ci-dessous, via l'ancre) : routeur, middleware et service
+# doivent être identiques entre les deux slots et entre versions, sinon Traefik voit des définitions
+# en conflit. Ne jamais mettre de labels propres à un slot.
+# Migrations de base : additives uniquement (les deux versions tournent en même temps sur /data).
+x-dashboard: &dashboard
+    image: ${IMAGE}:${IMAGE_TAG:-unused}
     restart: unless-stopped
+    stop_grace_period: 30s
     read_only: true
     tmpfs: [/tmp]
     security_opt: ["no-new-privileges:true"]
@@ -26,8 +33,15 @@ services:
       - traefik.http.routers.vva-dashboard.rule=Host(`${DASHBOARD_HOST}`)
       - traefik.http.routers.vva-dashboard.entrypoints=${TLS_ENTRYPOINT}
       - traefik.http.routers.vva-dashboard.tls=true
+      - traefik.http.routers.vva-dashboard.middlewares=vva-retry
+      - traefik.http.middlewares.vva-retry.retry.attempts=3
       - traefik.http.routers.vva-dashboard.tls.certresolver=${CERT_RESOLVER}
       - traefik.http.services.vva-dashboard.loadbalancer.server.port=8000
+services:
+  dashboard_blue:
+    <<: *dashboard
+  dashboard_green:
+    <<: *dashboard
 volumes:
   vva-data:
 networks:
