@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tokens — Agents Dashboard</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { margin: 0 auto; max-width: 48rem; padding: 2rem 1rem 4rem; }
+    header a { font-size: .9rem; opacity: .7; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
+    th, td { padding: .4rem .6rem; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+    th { text-align: left; font-weight: 600; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    footer { position: fixed; bottom: 1rem; font-size: .8rem; opacity: .6; }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/">Agents Dashboard</a>
+    <h1>Tokens</h1>
+  </header>
+  {% if not report.by_agent and not report.by_model %}
+  <p>Aucune donnée sur les 7 derniers jours.</p>
+  {% else %}
+  {% for title, column, rows in [("Par agent", "Agent", report.by_agent), ("Par modèle", "Modèle", report.by_model)] %}
+  <h2>{{ title }}</h2>
+  <table>
+    <thead><tr><th>{{ column }}</th><th class="num">24 h</th><th class="num">7 j</th></tr></thead>
+    <tbody>
+      {% for row in rows %}
+      <tr><td>{{ row.label }}</td><td class="num">{{ row.last_24h | thousands }}</td><td class="num">{{ row.last_7d | thousands }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endfor %}
+  <p><small>Tous types confondus (entrée, sortie, cache). « (fil principal) » : tokens hors sous-agent nommé.</small></p>
+  {% endif %}
+  <footer>v{{ version }}</footer>
+</body>
+</html>

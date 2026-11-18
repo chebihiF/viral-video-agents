@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/progress.schema.json",
+  "title": "Progress",
+  "description": "Réponse de GET /api/v1/progress : avancement du projet (GitHub, API publique sans jeton, cache 3 min) et travail des agents (table events). Aucune donnée d'enfant.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generated_at", "github_error_at", "totals", "epics", "sprint", "agents", "timeline"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "github_error_at": {
+      "description": "Heure de la dernière lecture GitHub en échec ; null si les données sont à jour. Les données renvoyées sont alors les dernières connues.",
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
+    "totals": { "$ref": "#/$defs/Totals" },
+    "epics": { "type": "array", "items": { "$ref": "#/$defs/Epic" } },
+    "sprint": { "$ref": "#/$defs/Sprint" },
+    "agents": { "type": "array", "items": { "$ref": "#/$defs/Agent" } },
+    "timeline": {
+      "description": "Livraisons (tags joints aux commits de `main`), plus récente en premier, 10 au plus.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/TimelineEntry" }
+    }
+  },
+  "$defs": {
+    "Counts": {
+      "description": "Tickets par statut : livré = fermé « completed » (« not planned » exclu) ; revue = PR ouverte dont le corps contient « Closes #n » ; en cours = label in-progress ; prêt = P0/P1 non bloqué ; backlog = le reste. Décisions, PR et tickets abandonnés exclus.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["delivered", "review", "in_progress", "ready", "backlog"],
+      "properties": {
+        "delivered": { "type": "integer", "minimum": 0 },
+        "review": { "type": "integer", "minimum": 0 },
+        "in_progress": { "type": "integer", "minimum": 0 },
+        "ready": { "type": "integer", "minimum": 0 },
+        "backlog": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "Totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["counts", "percent"],
+      "properties": {
+        "counts": { "$ref": "#/$defs/Counts" },
+        "percent": { "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "Epic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "counts", "percent"],
+      "properties": {
+        "id": { "description": "Numéro du ticket d'épique ; 0 = tickets sans épique.", "type": "integer", "minimum": 0 },
+        "title": { "type": "string" },
+        "counts": { "$ref": "#/$defs/Counts" },
+        "percent": { "description": "livrés × 100 ÷ total, arrondi vers le bas ; 0 si aucun ticket.", "type": "integer", "minimum": 0, "maximum": 100 }
+      }
+    },
+    "Sprint": {
+      "description": "Colonnes et sprint du Project : indisponibles tant que #9 n'est pas branché (available = false).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available", "title"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "title": { "type": ["string", "null"] }
+      }
+    },
+    "Agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "model", "issue", "step", "since", "active", "elapsed_s"],
+      "properties": {
+        "name": { "description": "agent_type de l'événement.", "type": "string" },
+        "model": { "description": "Modèle du rôle d'agent ; null si rôle inconnu.", "type": ["string", "null"] },
+        "issue": { "description": "Ticket en cours ; null tant que les événements ne le portent pas.", "type": ["integer", "null"] },
+        "step": {
+          "description": "Étape déduite du rôle (reviewer = review, qa, devops = deploy, dev-* = dev) ou de l'outil (pull_request = pr) ; null si inconnue.",
+          "enum": ["dev", "review", "qa", "pr", "deploy", null]
+        },
+        "since": { "description": "Dernier SubagentStart (ou premier événement connu).", "type": "string", "format": "date-time" },
+        "active": { "description": "Dernier événement différent de SubagentStop et reçu il y a moins de 30 min. Liste : agents actifs puis 5 inactifs au plus (un par rôle).", "type": "boolean" },
+        "elapsed_s": { "description": "Durée depuis `since` (jusqu'au dernier événement si inactif).", "type": "integer", "minimum": 0 }
+      }
+    },
+    "TimelineEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "title", "pr", "date"],
+      "properties": {
+        "version": { "type": "string" },
+        "title": { "type": "string" },
+        "pr": { "type": ["integer", "null"] },
+        "date": { "description": "Date du commit du tag ; null si le tag est hors des 50 derniers commits.", "type": ["string", "null"], "format": "date-time" }
+      }
+    }
+  }
+}

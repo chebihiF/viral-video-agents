@@ -1,0 +1,200 @@
+{% macro plural(n, one, many) %}{{ n }} {{ one if n == 1 else many }}{% endmacro %}
+{% macro summary(counts, pct) -%}
+{{ plural(counts.delivered, "livré", "livrés") }}, {{ counts.review }} en revue, {{ counts.in_progress }} en cours, {{ counts.ready }} {{ "prêt" if counts.ready < 2 else "prêts" }}, {{ counts.backlog }} en backlog, {{ pct }} pour cent
+{%- endmacro %}
+{% macro bar(title, counts, pct) %}
+{% set total = counts.delivered + counts.review + counts.in_progress + counts.ready + counts.backlog %}
+<li class="row">
+  <div class="row-head">
+    <strong>{{ title }}</strong>
+    <span class="figures">{{ pct }} % · {{ plural(counts.delivered, "livré", "livrés") }} / {{ total }}</span>
+  </div>
+  <div class="bar" role="img" aria-label="{{ title }} : {{ summary(counts, pct) }}">
+    {% for key, _label in statuses %}
+    {% if counts[key] %}<span class="seg seg-{{ key }}" style="--w: {{ counts[key] * 100 / total }}%; --i: {{ loop.index0 }}"></span>{% endif %}
+    {% endfor %}
+  </div>
+  <p class="counts">
+    {% for key, label in statuses %}<span class="count"><span class="swatch seg-{{ key }}" aria-hidden="true"></span>{{ label }} {{ counts[key] }}</span>{% if not loop.last %} · {% endif %}{% endfor %}
+  </p>
+</li>
+{% endmacro %}
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Suivi du projet — Agents Dashboard</title>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <style>
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: var(--font-size-body); }
+    main { padding: var(--space-5); max-width: 1280px; margin: 0 auto; }
+    #live { display: grid; gap: var(--space-5); }
+    h1 { font-size: var(--font-size-title); margin: 0; }
+    h2 { font-size: var(--font-size-heading); margin: 0 0 var(--space-3); }
+    p { margin: 0; }
+    .layout { display: grid; gap: var(--space-5); }
+    @media (min-width: 900px) { .layout { grid-template-columns: 3fr 2fr; align-items: start; } }
+    .stack { display: grid; gap: var(--space-5); min-width: 0; }
+    .panel { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); min-width: 0; }
+    .muted { color: var(--color-text-muted); }
+    code, time { font-family: var(--font-mono); font-size: var(--font-size-small); font-variant-numeric: tabular-nums; }
+    ul, ol { list-style: none; margin: 0; padding: 0; }
+    [role="alert"] { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-danger); background: var(--color-danger-bg); color: var(--color-danger); }
+    [role="alert"] a { color: inherit; font-weight: 600; }
+    .empty { text-align: center; padding: var(--space-5) var(--space-4); }
+    .soon { border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); color: var(--color-text-muted); }
+    .global { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-5); }
+    .ring { width: 120px; height: 120px; flex: none; }
+    .ring circle { fill: none; stroke-width: 12; }
+    .ring .track { stroke: var(--color-surface-2); }
+    .ring .value { stroke: var(--color-ok); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 60px 60px; animation: ring-grow 0.9s ease-out both; }
+    .ring text { fill: var(--color-text); font: 700 24px var(--font-sans); font-variant-numeric: tabular-nums; text-anchor: middle; dominant-baseline: central; }
+    .legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-3); font-size: var(--font-size-small); }
+    .legend li { display: flex; align-items: center; gap: var(--space-2); }
+    .swatch { display: inline-block; width: 20px; height: 12px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); }
+    .seg-delivered { background: linear-gradient(var(--color-ok), var(--color-ok)); }
+    .seg-review { background: repeating-linear-gradient(45deg, var(--color-info) 0 3px, var(--color-info-bg) 3px 6px); }
+    .seg-in_progress { background: radial-gradient(circle, var(--color-accent) 1.4px, transparent 1.8px) 0 0 / 6px 6px, var(--color-surface); }
+    .seg-ready { background: var(--color-surface); box-shadow: inset 0 0 0 2px var(--color-border); }
+    .seg-backlog { background: repeating-linear-gradient(90deg, var(--color-border) 0 4px, var(--color-surface-2) 4px 8px); }
+    .counts { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-items: center; font-size: var(--font-size-small); color: var(--color-text-muted); font-variant-numeric: tabular-nums; }
+    .count { display: inline-flex; align-items: center; gap: var(--space-1); }
+    .rows { display: grid; gap: var(--space-4); }
+    .row { display: grid; gap: var(--space-2); }
+    .row-head { display: flex; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+    .figures { font-family: var(--font-mono); font-size: var(--font-size-small); font-variant-numeric: tabular-nums; color: var(--color-text-muted); }
+    .bar { display: flex; height: 16px; border: 1px solid var(--color-border); border-radius: var(--radius-pill); overflow: hidden; background: var(--color-surface); }
+    .bar .seg { flex: 0 0 var(--w); transform-origin: left; animation: grow 0.9s ease-out both; animation-delay: calc(var(--i) * 90ms); }
+    .bar .seg + .seg { border-left: 1px solid var(--color-border); }
+    .cards { display: grid; gap: var(--space-3); }
+    .card { border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); background: var(--color-surface-2); }
+    .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
+    .card-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); font-size: var(--font-size-small); color: var(--color-text-muted); }
+    .state { font-size: var(--font-size-small); font-weight: 600; white-space: nowrap; }
+    .state-active { color: var(--color-ok); }
+    .pulse { display: inline-block; width: 10px; height: 10px; border-radius: var(--radius-pill); background: var(--color-ok); margin-right: var(--space-1); animation: pulse 1.6s ease-in-out infinite; }
+    .steps { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--font-size-small); }
+    .steps li { color: var(--color-text-muted); }
+    .steps .done { color: var(--color-ok); }
+    .steps .current { color: var(--color-text); font-weight: 700; text-decoration: underline; }
+    .timeline { display: grid; gap: 0; border-left: 2px solid var(--color-border); margin-left: var(--space-2); }
+    .timeline li { position: relative; padding: var(--space-2) 0 var(--space-3) var(--space-4); display: grid; gap: var(--space-1); }
+    .timeline li::before { content: ""; position: absolute; left: -7px; top: 14px; width: 12px; height: 12px; border-radius: var(--radius-pill); background: var(--color-ok); border: 2px solid var(--color-surface); }
+    .note { font-size: var(--font-size-small); color: var(--color-text-muted); }
+    @keyframes grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    @keyframes ring-grow { from { stroke-dasharray: 0 100; } }
+    @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.7); } }
+    [data-refreshed] .seg, [data-refreshed] .ring .value, [data-refreshed] .pulse { animation: none; }
+    @media (prefers-reduced-motion: reduce) {
+      .seg, .ring .value, .pulse { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="live">
+      <header>
+        <h1>Suivi du projet</h1>
+        <p class="muted">Sprint : bientôt disponible</p>
+      </header>
+      {% if error_at %}
+      <div role="alert">
+        <strong>Erreur :</strong> GitHub est injoignable (tentative à <time>{{ error_at[11:19] }}</time> UTC){% if p.epics %} ; les dernières données connues sont affichées{% endif %}.
+        <a href="/progress">Réessayer</a>
+      </div>
+      {% endif %}
+
+      {% set t = p.totals.counts %}
+      {% set total = t.delivered + t.review + t.in_progress + t.ready + t.backlog %}
+      <section class="panel" aria-label="Avancement global">
+        {% if total == 0 %}
+        <div class="empty"><h2>Aucun ticket</h2><p class="muted">Les tickets du dépôt apparaîtront ici dès leur lecture.</p></div>
+        {% else %}
+        <div class="global">
+          <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Avancement global : {{ p.totals.percent }} pour cent, {{ plural(t.delivered, 'livré', 'livrés') }} sur {{ total }} tickets">
+            <circle class="track" cx="60" cy="60" r="52"></circle>
+            <circle class="value" cx="60" cy="60" r="52" pathLength="100" stroke-dasharray="{{ p.totals.percent }} 100"></circle>
+            <text x="60" y="60">{{ p.totals.percent }} %</text>
+          </svg>
+          <div>
+            <p><strong>{{ plural(t.delivered, "livré", "livrés") }} sur {{ total }} tickets</strong></p>
+            <ul class="legend">
+              {% for key, label in statuses %}
+              <li><span class="swatch seg-{{ key }}" aria-hidden="true"></span>{{ label }} <strong>{{ t[key] }}</strong></li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+        {% endif %}
+      </section>
+
+      <div class="layout">
+        <div class="stack">
+          <section class="panel" aria-labelledby="epics-title">
+            <h2 id="epics-title">Par épique</h2>
+            {% if p.epics %}
+            <ul class="rows">{% for e in p.epics %}{{ bar(e.title, e.counts, e.percent) }}{% endfor %}</ul>
+            {% else %}
+            <p class="muted">Aucun ticket</p>
+            {% endif %}
+          </section>
+          <section class="panel" aria-labelledby="sprint-title">
+            <h2 id="sprint-title">Par sprint</h2>
+            <p class="soon">Colonnes et sprint du Project : bientôt disponible.</p>
+          </section>
+        </div>
+        <section class="panel" aria-labelledby="agents-title">
+          <h2 id="agents-title">Agents au travail</h2>
+          {% if p.agents %}
+          <div class="cards">
+            {% for a in p.agents %}
+            <article class="card" aria-label="{{ a.name }}">
+              <div class="card-head">
+                <strong>{{ a.name }}</strong>
+                {% if a.active %}<span class="state state-active"><span class="pulse" aria-hidden="true"></span>Actif</span>{% else %}<span class="state muted">○ Inactif</span>{% endif %}
+              </div>
+              <div class="card-meta">
+                <span>Modèle : <code>{{ a.model or "—" }}</code></span>
+                <span>Ticket : {% if a.issue %}<code>#{{ a.issue }}</code>{% else %}—{% endif %}</span>
+                <span>Durée : <code>{{ a.elapsed_s | duration }}</code></span>
+              </div>
+              <ol class="steps" aria-label="Étapes">
+                {% set ns = namespace(seen=false) %}
+                {% for key, label in steps %}
+                {% if key == a.step %}{% set ns.seen = true %}<li class="current" aria-current="step">▶ {{ label }}</li>
+                {% elif ns.seen or not a.step %}<li>○ {{ label }}</li>
+                {% else %}<li class="done">✓ {{ label }}</li>{% endif %}
+                {% endfor %}
+              </ol>
+            </article>
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="empty muted">Aucun agent actif</p>
+          {% endif %}
+        </section>
+      </div>
+
+      <section class="panel" aria-labelledby="timeline-title">
+        <h2 id="timeline-title">Frise des livraisons</h2>
+        {% if p.timeline %}
+        <ol class="timeline">
+          {% for e in p.timeline %}
+          <li>
+            <span><code>{{ e.version }}</code> · {{ e.title }}</span>
+            <span class="muted">{% if e.pr %}PR #{{ e.pr }}{% else %}Sans PR{% endif %}{% if e.date %} · <time datetime="{{ e.date }}">{{ e.date[:10] }}</time>{% endif %}</span>
+          </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="muted">Aucune livraison</p>
+        {% endif %}
+      </section>
+      <p class="note">Actualisé toutes les 60 s depuis GitHub.</p>
+    </div>
+  </main>
+  <script src="/static/progress.js" defer></script>
+</body>
+</html>

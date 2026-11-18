@@ -1,4 +1,4 @@
-"""Persistance SQLite des événements d'agents (stdlib `sqlite3`)."""
+"""Persistance SQLite des événements d'agents et des tokens (stdlib `sqlite3`)."""
 
 from __future__ import annotations
 
@@ -20,6 +20,8 @@ EVENT_COLUMNS = (
     "tool_name",
 )
 EventRow = tuple[str | None, ...]
+TOKEN_COLUMNS = ("point_id", "ts", "session_id", "agent_id", "model", "type", "count")
+TokenRow = tuple[str, str, str, str | None, str, str, int]
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -34,12 +36,30 @@ CREATE TABLE IF NOT EXISTS events (
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events (ts);
 CREATE INDEX IF NOT EXISTS idx_events_agent_id ON events (agent_id);
+CREATE TABLE IF NOT EXISTS token_usage (
+    point_id    TEXT PRIMARY KEY,
+    ts          TEXT NOT NULL,
+    session_id  TEXT NOT NULL,
+    agent_id    TEXT,
+    model       TEXT NOT NULL,
+    type        TEXT NOT NULL CHECK (type IN ('input', 'output', 'cacheRead', 'cacheCreation')),
+    count       INTEGER NOT NULL CHECK (count >= 0),
+    -- même format que ts (isoformat microsecondes, +00:00)
+    received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now'))
+);
+CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage (ts);
 """
 
-_INSERT = (
-    f"INSERT OR IGNORE INTO events ({', '.join(EVENT_COLUMNS)}) "  # noqa: S608 - colonnes constantes
-    f"VALUES ({', '.join('?' for _ in EVENT_COLUMNS)})"
-)
+
+def _insert_sql(table: str, columns: Sequence[str]) -> str:
+    return (
+        f"INSERT OR IGNORE INTO {table} ({', '.join(columns)}) "  # noqa: S608 - noms constants
+        f"VALUES ({', '.join('?' for _ in columns)})"
+    )
+
+
+_INSERT = _insert_sql("events", EVENT_COLUMNS)
+_INSERT_TOKENS = _insert_sql("token_usage", TOKEN_COLUMNS)
 
 
 BUSY_TIMEOUT_S = 5.0
@@ -77,9 +97,18 @@ def connect() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def insert_events(conn: sqlite3.Connection, rows: Sequence[EventRow]) -> int:
-    """Insère un lot de façon atomique ; ignore les `event_id` connus. Renvoie le nb inséré."""
+def _insert_many(conn: sqlite3.Connection, sql: str, rows: Sequence[Sequence[object]]) -> int:
     with conn:
         before = conn.total_changes
-        conn.executemany(_INSERT, rows)
+        conn.executemany(sql, rows)
         return conn.total_changes - before
+
+
+def insert_events(conn: sqlite3.Connection, rows: Sequence[EventRow]) -> int:
+    """Insère un lot de façon atomique ; ignore les `event_id` connus. Renvoie le nb inséré."""
+    return _insert_many(conn, _INSERT, rows)
+
+
+def insert_token_usage(conn: sqlite3.Connection, rows: Sequence[TokenRow]) -> int:
+    """Insère un lot de façon atomique ; ignore les `point_id` connus. Renvoie le nb inséré."""
+    return _insert_many(conn, _INSERT_TOKENS, rows)

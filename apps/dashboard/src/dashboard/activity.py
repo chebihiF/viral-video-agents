@@ -18,6 +18,7 @@ _SELECT = (
     "SELECT event_id, ts, hook_event_name, agent_type, agent_id, tool_name "
     "FROM events ORDER BY ts DESC, rowid DESC LIMIT ?"
 )
+_LAST_ID = "SELECT COALESCE(MAX(rowid), 0) FROM events"
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,6 +45,11 @@ def latest_events(conn: sqlite3.Connection, limit: int = MAX_EVENTS) -> list[Eve
     return [Event(*row) for row in conn.execute(_SELECT, (limit,))]
 
 
+def last_id(conn: sqlite3.Connection) -> int:
+    """Identifiant du dernier événement : curseur de départ du flux SSE (`/stream`)."""
+    return int(conn.execute(_LAST_ID).fetchone()[0])
+
+
 def agents(events: list[Event]) -> list[Event]:
     """Dernier événement de chaque agent (`events` est trié du plus récent au plus ancien)."""
     latest: dict[tuple[str | None, str | None], Event] = {}
@@ -55,6 +61,11 @@ def agents(events: list[Event]) -> list[Event]:
 def load_events() -> list[Event]:
     with db.connect() as conn:
         return latest_events(conn)
+
+
+def load_last_id() -> int:
+    with db.connect() as conn:
+        return last_id(conn)
 
 
 def _page(request: Request, status: int, context: dict[str, object]) -> HTMLResponse:
@@ -70,9 +81,22 @@ async def activity_page(request: Request) -> Response:
     if not auth.is_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     try:
+        cursor = await run_in_threadpool(load_last_id)  # avant la lecture : aucun trou possible
         events = await run_in_threadpool(load_events)
     except sqlite3.Error as exc:
         log.warning("lecture des événements impossible : %s", type(exc).__name__)
         failed_at = datetime.now(UTC).strftime("%H:%M:%S")
-        return _page(request, 503, {"error_at": failed_at, "events": [], "agents": []})
-    return _page(request, 200, {"error_at": None, "events": events, "agents": agents(events)})
+        error: dict[str, object] = {
+            "error_at": failed_at,
+            "events": [],
+            "agents": [],
+            "last_id": None,
+        }
+        return _page(request, 503, error)
+    context: dict[str, object] = {
+        "error_at": None,
+        "events": events,
+        "agents": agents(events),
+        "last_id": cursor,
+    }
+    return _page(request, 200, context)

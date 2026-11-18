@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Interactions entre agents — Agents Dashboard</title>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <style>
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: var(--font-size-body); }
+    main { display: grid; gap: var(--space-5); padding: var(--space-5); max-width: 1280px; margin: 0 auto; }
+    header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+    h1 { font-size: var(--font-size-title); margin: 0; }
+    h2 { font-size: var(--font-size-heading); margin: 0 0 var(--space-3); }
+    nav { display: flex; gap: var(--space-4); font-size: var(--font-size-small); }
+    nav a { color: var(--color-accent); font-weight: 600; }
+    nav a[aria-current="page"] { color: var(--color-text); text-decoration: none; }
+    #live-status { margin: 0; font-size: var(--font-size-small); color: var(--color-text-muted); }
+    #sessions { display: grid; gap: var(--space-5); }
+    .panel { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); min-width: 0; }
+    .scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: var(--font-size-data); font-variant-numeric: tabular-nums; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+    th { text-align: left; font-size: var(--font-size-label); color: var(--color-text-muted); font-weight: 600; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); }
+    td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border-subtle); vertical-align: top; }
+    code, time { font-family: var(--font-mono); font-size: var(--font-size-small); }
+    .muted { color: var(--color-text-muted); }
+    [role="alert"] { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-danger); background: var(--color-danger-bg); color: var(--color-danger); }
+    [role="alert"] a { color: inherit; font-weight: 600; }
+    .empty { text-align: center; padding: var(--space-7) var(--space-4); }
+  </style>
+</head>
+<body>
+  <main{% if last_id is not none %} data-stream data-last-id="{{ last_id }}" data-refresh="#sessions"{% endif %}>
+    <header>
+      <h1>Interactions entre agents</h1>
+      <nav aria-label="Vues">
+        <a href="/activity">Activité</a>
+        <a href="/interactions" aria-current="page">Interactions</a>
+      </nav>
+      <p id="live-status" role="status"></p>
+    </header>
+    {% if error_at %}
+    <div role="alert">
+      <strong>Erreur :</strong> les données sont indisponibles (tentative à <time>{{ error_at }}</time> UTC).
+      <a href="/interactions">Réessayer</a>
+    </div>
+    {% else %}
+    <div id="sessions">
+      {% for s in sessions %}
+      <section class="panel" aria-labelledby="session-{{ loop.index }}">
+        <h2 id="session-{{ loop.index }}">Session <code>{{ s.session_id }}</code></h2>
+        <p class="muted">{{ s.event_count }} événement(s) · de <time datetime="{{ s.first_ts }}">{{ s.first_label }}</time> à <time datetime="{{ s.last_ts }}">{{ s.last_label }}</time> UTC</p>
+        {% if s.subagents %}
+        <div class="scroll">
+          <table>
+            <caption class="sr-only">Sous-agents lancés par la session {{ s.session_id }}</caption>
+            <thead>
+              <tr><th scope="col">Sous-agent</th><th scope="col">Identifiant</th><th scope="col">Début (UTC)</th><th scope="col">État</th><th scope="col">Durée</th></tr>
+            </thead>
+            <tbody>
+              {% for a in s.subagents %}
+              <tr>
+                <td>{{ a.agent_type or "—" }}</td>
+                <td><code>{{ a.agent_id }}</code></td>
+                <td>{{ a.start_label }}</td>
+                <td>{{ "○ En cours" if a.running else "● Terminé" }}</td>
+                <td>{{ a.duration_label }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="muted">Aucun sous-agent lancé.</p>
+        {% endif %}
+      </section>
+      {% else %}
+      <section class="panel empty" aria-labelledby="empty-title">
+        <h2 id="empty-title">Aucune interaction pour l'instant</h2>
+        <p class="muted">Les sessions et leurs sous-agents apparaîtront ici dès que des agents travaillent.</p>
+      </section>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </main>
+  <script src="/static/live.js" defer></script>
+</body>
+</html>

@@ -69,6 +69,32 @@ file conservée).
 - Fichier remplacé (inode différent) ou tronqué (offset > taille) : reprise depuis le
   début ; les renvois sont absorbés par la déduplication serveur.
 
+## Tokens par agent et par modèle (OpenTelemetry, #7)
+
+Claude Code exporte lui-même ses compteurs de tokens en OTLP ; aucun script ici. Le
+dashboard ne garde que `claude_code.token.usage` et une liste blanche d'attributs
+([`contracts/token-usage.md`](../../contracts/token-usage.md)). À placer dans le bloc
+`"env"` de **votre** `~/.claude/settings.json` (ou exporter dans le shell), jamais versionné :
+
+| Variable | Valeur | Pourquoi |
+|----------|--------|----------|
+| `CLAUDE_CODE_ENABLE_TELEMETRY` | `1` | active la télémétrie |
+| `OTEL_METRICS_EXPORTER` | `otlp` | métriques uniquement |
+| `OTEL_LOGS_EXPORTER` | non défini (ou `none`) | les événements/logs peuvent contenir du texte ; le dashboard ne les reçoit pas |
+| `OTEL_EXPORTER_OTLP_METRICS_PROTOCOL` | `http/json` | le dashboard n'accepte pas le protobuf (415) |
+| `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` | `https://<dashboard>/v1/metrics` | URL complète, utilisée telle quelle |
+| `OTEL_EXPORTER_OTLP_METRICS_HEADERS` | `Authorization=Bearer <VVA_INGEST_TOKEN>` | même jeton que l'ingestion |
+| `OTEL_EXPORTER_OTLP_METRICS_TEMPORALITY_PREFERENCE` | `delta` | les points cumulatifs sont rejetés (double compte) |
+| `OTEL_METRIC_EXPORT_INTERVAL` | `60000` (défaut) | un envoi par minute |
+| `OTEL_METRICS_INCLUDE_SESSION_ID` | `true` (défaut) | requis : rattachement par session |
+| `OTEL_METRICS_INCLUDE_ACCOUNT_UUID` | `false` | moins d'identifiants envoyés (de toute façon ignorés) |
+| `OTEL_LOG_USER_PROMPTS` | non défini ou `0` | **désactivé** : aucun prompt exporté |
+| `OTEL_LOG_TOOL_DETAILS` | non défini ou `0` | aucun détail d'outil exporté |
+
+Ne pas définir `OTEL_EXPORTER_OTLP_COMPRESSION` (corps lu non compressé). Vérification :
+ouvrir `https://<dashboard>/tokens` après une minute d'activité. Les tokens d'un
+sous-agent portent son nom (`agent.name`) ; le fil principal apparaît sous « (fil principal) ».
+
 ## Compaction
 
 Le JSONL n'est jamais réduit automatiquement. Une fois la file vidée (`ship.py` sort
