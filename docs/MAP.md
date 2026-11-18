@@ -82,6 +82,8 @@
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
 - `docs/adr/ADR-002-stack-dashboard.md` — ADR-002 — Stack du dashboard (et des services Python)
+- `docs/adr/ADR-003-memoire-agents.md` — ADR-003 — Mémoire des agents : mémoire locale vs ADR
+- `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
@@ -119,6 +121,9 @@
 - `prompts/classification.v1.md` — classification.v1
 - `prompts/storyboard.v1.md`
 - `pyproject.toml`
+- `tools/agents/CLAUDE.template.md` — Modèle de CLAUDE.md pour les agents (à copier hors du dépôt)
+- `tools/agents/memory/README.md` — Mémoire des agents (modèle)
+- `tools/agents/memory/modele-fait.md` — Titre : le port du dashboard en local est 8000
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
 - `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).
