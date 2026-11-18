@@ -1,18 +1,5 @@
 # MAP — un fichier par ligne (généré par `make map`, ne pas éditer)
 
-- `.claude/agents/ai-engineer.md` — ai-engineer
-- `.claude/agents/comfyui-engineer.md` — comfyui-engineer
-- `.claude/agents/dev-backend.md` — dev-backend
-- `.claude/agents/devops.md` — devops
-- `.claude/agents/product-owner.md` — product-owner
-- `.claude/agents/qa.md` — QA. Vérifie un ticket contre ses critères Gherkin, écrit les tests manquants, joue les scé
-- `.claude/agents/reviewer.md` — reviewer
-- `.claude/agents/scout.md` — scout
-- `.claude/hooks/lint_file.sh` — PostToolUse(Edit|Write) : corrige puis vérifie le fichier Python modifié. Silencieux si OK
-- `.claude/hooks/log_event.sh` — SubagentStart/SubagentStop/PostToolUse : journal JSONL local, source du dashboard (Sprint 
-- `.claude/hooks/quick_tests.sh` — Stop : lint + tests rapides ; renvoie les échecs à Claude (exit 2), une seule relance.
-- `.claude/settings.json` — données JSON
-- `.claude/telemetry/events.jsonl`
 - `.dockerignore`
 - `.github/ISSUE_TEMPLATE/bug.yml` — Comportement incorrect
 - `.github/ISSUE_TEMPLATE/config.yml`
@@ -23,7 +10,6 @@
 - `.github/workflows/release.yml` — release
 - `.gitignore`
 - `.python-version`
-- `CLAUDE.md` — viral-video-agents — consignes du tech lead (fichier local, jamais commité)
 - `Makefile` — Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 - `README.md` — viral-video-agents
 - `apps/dashboard/Dockerfile`
@@ -47,9 +33,10 @@
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 - `infra/deploy/deploy.sh` — Déploie le dashboard, vérifie /healthz en HTTPS, revient à la version précédente si échec.
-- `infra/deploy/proxy.env.example` — Copié en /opt/vva/proxy.env sur le VPS (valeurs relevées sur l'installation Traefik de n8n
+- `infra/deploy/proxy.env.example` — Copié en /opt/vva/proxy.env sur le VPS (Traefik du projet Docker « n8n » : réseau n8n_defa
+- `infra/runner/README.md` — Runner auto-hébergé `vps-deploy` (VPS Hostinger)
 - `infra/scripts/conftest.py`
-- `infra/scripts/gen_map.py` — Génère docs/MAP.md : une ligne par fichier suivi par git (chemin — résumé).
+- `infra/scripts/gen_map.py` — Génère docs/MAP.md : une ligne par fichier suivi par git (index uniquement) (chemin — résu
 - `infra/scripts/next_version.py` — Calcule la prochaine version SemVer à partir des Conventional Commits.
 - `infra/scripts/quiet.sh` — Exécute une commande ; n'affiche sa sortie (40 dernières lignes) qu'en cas d'échec.
 - `infra/scripts/test_next_version.py`

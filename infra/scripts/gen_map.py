@@ -1,4 +1,4 @@
-"""Génère docs/MAP.md : une ligne par fichier suivi par git (chemin — résumé).
+"""Génère docs/MAP.md : une ligne par fichier suivi par git (index uniquement) (chemin — résumé).
 
 Le résumé est la première ligne de docstring / commentaire / titre trouvée.
 Usage : python3 infra/scripts/gen_map.py [--check]
@@ -35,7 +35,7 @@ def summary(path: Path) -> str:
 
 def render() -> str:
     files = subprocess.run(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],  # noqa: S607
+        ["git", "ls-files", "--cached"],  # noqa: S607
         cwd=ROOT,
         capture_output=True,
         text=True,
