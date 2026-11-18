@@ -22,6 +22,8 @@ EVENT_COLUMNS = (
 EventRow = tuple[str | None, ...]
 TOKEN_COLUMNS = ("point_id", "ts", "session_id", "agent_id", "model", "type", "count")
 TokenRow = tuple[str, str, str, str | None, str, str, int]
+ControlRow = tuple[bool, str | None, int, str]
+DEFAULT_CAP_TOKENS = 500_000
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -48,6 +50,16 @@ CREATE TABLE IF NOT EXISTS token_usage (
     received_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%f000+00:00', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_token_usage_ts ON token_usage (ts);
+-- une seule ligne (id = 1) : pause des agents et plafond de tokens sur 24 h (#8)
+CREATE TABLE IF NOT EXISTS controls (
+    id         INTEGER PRIMARY KEY CHECK (id = 1),
+    paused     INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+    reason     TEXT CHECK (reason IN ('manuel', 'plafond')),
+    cap_tokens INTEGER NOT NULL DEFAULT 500000 CHECK (cap_tokens > 0),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    CHECK ((paused = 0 AND reason IS NULL) OR (paused = 1 AND reason IS NOT NULL))
+);
+INSERT OR IGNORE INTO controls (id) VALUES (1);
 """
 
 
@@ -112,3 +124,40 @@ def insert_events(conn: sqlite3.Connection, rows: Sequence[EventRow]) -> int:
 def insert_token_usage(conn: sqlite3.Connection, rows: Sequence[TokenRow]) -> int:
     """Insère un lot de façon atomique ; ignore les `point_id` connus. Renvoie le nb inséré."""
     return _insert_many(conn, _INSERT_TOKENS, rows)
+
+
+_TOUCH = "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')"
+
+
+def read_controls(conn: sqlite3.Connection) -> ControlRow:
+    """(en pause, motif, plafond, mis à jour) ; la ligne unique est créée avec le schéma."""
+    paused, reason, cap, updated_at = conn.execute(
+        "SELECT paused, reason, cap_tokens, updated_at FROM controls WHERE id = 1"
+    ).fetchone()
+    return bool(paused), reason, int(cap), str(updated_at)
+
+
+def pause(conn: sqlite3.Connection, reason: str) -> None:
+    """Met en pause ; sans effet si déjà en pause (le premier motif est conservé)."""
+    with conn:
+        conn.execute(
+            f"UPDATE controls SET paused = 1, reason = ?, {_TOUCH} "  # noqa: S608 - constante
+            "WHERE id = 1 AND paused = 0",
+            (reason,),
+        )
+
+
+def resume(conn: sqlite3.Connection) -> None:
+    with conn:
+        conn.execute(
+            f"UPDATE controls SET paused = 0, reason = NULL, {_TOUCH} "  # noqa: S608 - constante
+            "WHERE id = 1 AND paused = 1"
+        )
+
+
+def set_cap(conn: sqlite3.Connection, cap_tokens: int) -> None:
+    with conn:
+        conn.execute(
+            f"UPDATE controls SET cap_tokens = ?, {_TOUCH} WHERE id = 1",  # noqa: S608 - constante
+            (cap_tokens,),
+        )
