@@ -1,6 +1,7 @@
 # Télémétrie des agents (émetteur Mac, #4)
 
-Deux scripts **stdlib uniquement** (Python ≥ 3.12) :
+Trois scripts **stdlib uniquement**, compatibles **Python 3.9** (le `python3` du Mac, celui que
+les hooks appellent ; pas de `datetime.UTC` ni de `zip(strict=)`, testé sous 3.9 et 3.12) :
 
 - `hook_emit.py` : appelé par les hooks Claude Code, lit le JSON du hook sur stdin et
   ajoute **une ligne** conforme à [`contracts/agent-event.schema.json`](../../contracts/agent-event.schema.json)
@@ -9,6 +10,8 @@ Deux scripts **stdlib uniquement** (Python ≥ 3.12) :
   ni de sortie d'outil. Toute erreur (ou plus de 0,8 s) : sortie en code 0, sans bruit.
 - `ship.py` : envoie les lignes en attente vers `POST /api/v1/events`
   ([`contracts/ingest-api.md`](../../contracts/ingest-api.md)) par lots de 100 au plus.
+- `pretool_gate.py` : hook `PreToolUse` qui bloque les outils quand les agents sont en pause
+  (#8, [`contracts/control-api.md`](../../contracts/control-api.md)). Échec sûr : en cas de doute, il laisse passer.
 
 ## Variables d'environnement
 
@@ -20,10 +23,19 @@ Deux scripts **stdlib uniquement** (Python ≥ 3.12) :
 
 Le jeton reste dans l'environnement local (trousseau, `~/.zshenv`…), jamais dans le dépôt.
 
-## Réglage des hooks (à copier en local)
+## Câblage des hooks (à copier en local)
 
 À placer dans **votre** `.claude/settings.local.json` (ou `~/.claude/settings.json`).
-Ce fichier n'est **pas** versionné : seul cet exemple l'est.
+Ce fichier n'est **pas** versionné : seul cet exemple l'est. Les variables `VVA_*` doivent être
+visibles des hooks (bloc `"env"` du même fichier, ou `~/.zshenv`).
+
+- `SubagentStart`, `SubagentStop`, `PostToolUse` : `hook_emit.py` écrit une ligne par événement.
+- `PreToolUse` : `pretool_gate.py` applique la pause (`VVA_CONTROL_URL`, `VVA_INGEST_TOKEN`).
+- `Stop` : `ship.py --background` envoie les lignes en attente à l'arrêt de la session.
+  Il rend la main aussitôt (code 0, aucune sortie, stdin ignoré), puis expédie dans un
+  processus détaché (nouvelle session, timeout réseau de 3 s). Sans `VVA_INGEST_URL` /
+  `VVA_INGEST_TOKEN`, il sort en silence. Aucun `launchd` nécessaire ; le verrou
+  `<fichier>.lock` évite deux expéditeurs simultanés.
 
 ```json
 {
@@ -39,10 +51,29 @@ Ce fichier n'est **pas** versionné : seul cet exemple l'est.
     "PostToolUse": [
       { "matcher": "*", "hooks": [{ "type": "command", "timeout": 2,
         "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\"" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 5,
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/pretool_gate.py\"" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "timeout": 2,
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/ship.py\" --background" }] }
     ]
   }
 }
 ```
+
+Vérification : `echo '{"hook_event_name":"Stop","session_id":"t"}' | python3 tools/telemetry/hook_emit.py`
+ajoute une ligne à `events.jsonl` (sans erreur sous le `python3` 3.9 du Mac).
+
+## Ancien fichier (`log_event.sh`)
+
+Au démarrage, `ship.py` examine les lignes en attente : une ligne JSON sans `event_id`, `ts`,
+`hook_event_name` ni `session_id` est de l'ancien format. Le fichier est alors renommé en
+`events.legacy-AAAAMMJJ.jsonl` (suffixe `-2`, `-3`… si l'archive existe déjà), le curseur est
+supprimé et **rien** de l'archive n'est jamais renvoyé. Les lignes valides en attente sont
+reprises dans un nouveau `events.jsonl`. Les archives peuvent être supprimées à la main.
 
 ## Envoi
 
@@ -51,7 +82,7 @@ VVA_INGEST_URL=https://<dashboard>/api/v1/events VVA_INGEST_TOKEN=... \
   python3 tools/telemetry/ship.py
 ```
 
-À lancer périodiquement (ex. `launchd` toutes les minutes). Codes de sortie :
+À la main, ou automatiquement par le hook `Stop` (`--background`, voir ci-dessus). Codes de sortie :
 `0` file vidée, `1` serveur injoignable ou 5xx (file conservée, réessayer plus tard),
 `2` configuration (variable manquante, URL refusée, redirection 3xx, 4xx hors 413/422 ;
 file conservée).

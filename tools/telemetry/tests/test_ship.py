@@ -405,9 +405,7 @@ def archives(events_file: Path) -> list[Path]:
     return sorted(events_file.parent.glob("events.legacy-*.jsonl"))
 
 
-def test_legacy_only_file_is_archived_and_never_sent(
-    server: FakeIngest, events_file: Path
-) -> None:
+def test_legacy_only_file_is_archived_and_never_sent(server: FakeIngest, events_file: Path) -> None:
     write_raw(events_file, *(json.dumps(LEGACY) for _ in range(5)))
     assert ship.run(config(events_file, server.url)) == ship.EXIT_OK
     assert server.batches == []
@@ -516,7 +514,9 @@ def test_background_without_config_exits_zero_silently(tmp_path: Path) -> None:
     assert proc.stderr == ""
 
 
-def test_background_uses_a_short_timeout(monkeypatch: pytest.MonkeyPatch, events_file: Path) -> None:
+def test_background_uses_a_short_timeout(
+    monkeypatch: pytest.MonkeyPatch, events_file: Path
+) -> None:
     monkeypatch.setenv("VVA_TELEMETRY_FILE", str(events_file))
     monkeypatch.setenv("VVA_INGEST_URL", "http://127.0.0.1:9/x")
     monkeypatch.setenv("VVA_INGEST_TOKEN", TOKEN)

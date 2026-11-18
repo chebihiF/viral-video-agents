@@ -48,11 +48,7 @@ def test_no_api_newer_than_39(script: str) -> None:
             assert "UTC" not in [a.name for a in node.names]
         if isinstance(node, ast.Attribute) and node.attr == "UTC":
             pytest.fail("datetime.UTC n'existe pas en 3.9 : utiliser timezone.utc")
-        if (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "zip"
-        ):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "zip":
             assert "strict" not in [k.arg for k in node.keywords]
 
 
