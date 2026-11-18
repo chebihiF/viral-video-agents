@@ -27,3 +27,4 @@ Texte et texte atténué >= 4,5:1 sur bg, surface, surface-2 ; états (ok, warn,
 
 ## Écrans
 - [Activité des agents](activity.md)
+- [Suivi du projet](progress.md)
