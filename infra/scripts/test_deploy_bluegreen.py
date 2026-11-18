@@ -192,13 +192,57 @@ def test_migration_from_single_legacy_container(sb: dict[str, Any]) -> None:
     assert (sb["state"] / "slot").read_text().strip() == "blue"
 
 
-def test_compose_has_retry_middleware_and_single_label_set() -> None:
+def test_compose_routers_are_named_per_slot_and_share_one_service() -> None:
     text = (DEPLOY / "compose.yaml").read_text()
-    assert "retry.attempts=3" in text
-    assert text.count("vva-dashboard.rule=") == 1
+    for slot in ("blue", "green"):
+        assert f"routers.vva-dashboard-{slot}.rule=" in text
+        assert f"middlewares.vva-retry-{slot}.retry.attempts=3" in text
+        assert f"routers.vva-dashboard-{slot}.service=vva-dashboard" in text
+    # jamais le routeur historique « vva-dashboard » : conflit avec l'ancien conteneur unique
+    assert "routers.vva-dashboard.rule=" not in text
+    assert text.count("services.vva-dashboard.loadbalancer.server.port=8000") == 2
 
 
-def test_compose_has_two_slots_sharing_traefik_service() -> None:
+def test_compose_has_two_slots() -> None:
     text = (DEPLOY / "compose.yaml").read_text()
     assert "dashboard_blue:" in text and "dashboard_green:" in text
-    assert text.count("loadbalancer.server.port=8000") == 1  # défini une fois (ancre)
+
+
+LEGACY_LABELS = {  # labels de l'ancien conteneur unique (0.14.0), encore en prod pendant la migration
+    "traefik.http.routers.vva-dashboard.rule": "Host(`${DASHBOARD_HOST}`)",
+    "traefik.http.routers.vva-dashboard.entrypoints": "${TLS_ENTRYPOINT}",
+    "traefik.http.routers.vva-dashboard.tls": "true",
+    "traefik.http.routers.vva-dashboard.tls.certresolver": "${CERT_RESOLVER}",
+    "traefik.http.services.vva-dashboard.loadbalancer.server.port": "8000",
+}
+
+
+def _slot_labels(text: str, slot: str) -> dict[str, str]:
+    block = text.split(f"  dashboard_{slot}:", 1)[1].split("\n  dashboard_", 1)[0]
+    labels = [ln.strip()[2:] for ln in block.splitlines() if ln.strip().startswith("- traefik.")]
+    return dict(item.split("=", 1) for item in labels)
+
+
+def test_slot_labels_never_conflict_with_legacy_container_or_each_other() -> None:
+    text = (DEPLOY / "compose.yaml").read_text()
+    blue, green = _slot_labels(text, "blue"), _slot_labels(text, "green")
+    for slot_labels in (blue, green):
+        for key, value in LEGACY_LABELS.items():
+            if key in slot_labels:  # même objet Traefik : la définition doit être identique
+                assert slot_labels[key] == value, key
+    # routeurs/middlewares : aucun nom partagé avec l'ancien conteneur
+    legacy_names = {k.split(".")[3] for k in LEGACY_LABELS if ".routers." in k or ".middlewares." in k}
+    for slot_labels in (blue, green):
+        names = {k.split(".")[3] for k in slot_labels if ".routers." in k or ".middlewares." in k}
+        assert not names & legacy_names
+    # blue et green : même service, mêmes valeurs ; objets nommés par slot et distincts
+    service_keys = [k for k in blue if ".services." in k]
+    assert service_keys and all(blue[k] == green[k] for k in service_keys)
+    assert not {k for k in blue if "-blue" in k} & {k for k in green}
+
+
+def test_deploy_ignores_legacy_orphan_container_without_removing_it() -> None:
+    text = (DEPLOY / "deploy.sh").read_text()
+    # l'ancien conteneur (service « dashboard ») n'est arrêté qu'après le smoke public du nouveau slot
+    assert "COMPOSE_IGNORE_ORPHANS=true" in text
+    assert "--remove-orphans" not in text
