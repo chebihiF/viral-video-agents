@@ -41,6 +41,9 @@ personnelle dans le cookie. Le cookie `Secure` impose HTTPS (Traefik en prod).
 | `GET /stream` | session | 200 `text/event-stream` ; **401** sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
 | `GET /static/live.js` | public | client temps réel (`EventSource`), sans dépendance ni CDN |
 | `GET /static/tokens.css` | public | feuille de style du design system |
+| `GET /progress` | session | 200 page « Suivi du projet » ; 303 vers `/login` sans session valide (aucune lecture GitHub ni base) |
+| `GET /api/v1/progress` | session | 200 JSON conforme à [`progress.schema.json`](progress.schema.json) ; 401 sans session valide |
+| `GET /static/progress.js` | public | rafraîchissement de `/progress` (JS natif, sans CDN) |
 
 ### `POST /login`
 
@@ -104,5 +107,28 @@ dépendance à vendoriser). Il ajoute la ligne au flux (`<ol data-feed>`, 100 li
 doublon d'`event_id`) puis rafraîchit le tableau « Agents » / les sessions en rechargeant la
 page et en remplaçant la zone `data-refresh`. DOM construit par `textContent` (aucun HTML
 injecté).
+### `GET /progress` et `GET /api/v1/progress`
+
+Spec : `docs/design/progress.md`. Schéma : [`progress.schema.json`](progress.schema.json) (aligné sur le
+modèle pydantic `dashboard.progress.Progress` par `tests/test_progress.py`). Réponses en `no-store`.
+
+- **GitHub** (décision D20 : dépôt public, **aucun jeton**) : API REST `api.github.com`, dépôt
+  `VVA_GITHUB_REPO` (défaut `chebihiF/viral-video-agents`, forme `propriétaire/nom` validée), lectures
+  `issues`, `pulls`, `tags` (100 premiers de chaque). Cache mémoire de **60 s** partagé, requêtes
+  conditionnelles (ETag ; un 304 ne compte pas dans la limite de 60 requêtes/heure). Échec ou limite
+  atteinte : dernières données connues (ou vides) et `github_error_at` renseigné (bandeau `role="alert"`) ;
+  pas de nouvelle tentative avant 60 s. Aucun détail d'erreur n'est exposé.
+- **Statuts** : épique = ticket labellisé `epic`, ses tickets = ligne `Épique : #n` du corps ; sans lien :
+  groupe « Sans épique » (`id` 0). Livré = fermé ; revue = PR ouverte dont la branche est `<type>/<n°>-…` ;
+  en cours = label `in-progress` ; prêt = `P0`/`P1` non `blocked` ; backlog = le reste. Exclus : PR,
+  épiques, labels `decision`, `wontfix`, `duplicate`, `invalid`, `question`. Pourcentage = livrés ÷ total.
+- **Sprint** : `{"available": false, "title": null}` (« bientôt disponible », branché par #9).
+- **Agents** : 500 derniers événements, un agent par (`agent_type`, `agent_id`) ; événements sans
+  `agent_type` ignorés. Actif = dernier événement ≠ `SubagentStop` et de moins de 30 min. `since` = dernier
+  `SubagentStart`. Modèle et étape déduits du rôle (table dans le code), étape `pr` si l'outil contient
+  `pull_request` ; `issue` reste `null` tant que les événements ne portent pas le ticket.
+- **Frise** : tags joints aux PR fusionnées par `merge_commit_sha` (date = fusion), plus récent d'abord,
+  10 au plus ; un tag sans PR fusionnée est listé en dernier, sans date.
+- **Actualisation** : `static/progress.js` recharge `#live` toutes les 60 s (aucune dépendance).
 
 Limites connues : la limite de 5 essais/minute est globale (compte unique : un tiers peut verrouiller la connexion une minute) et en mémoire (un seul worker ; remise à zéro au redémarrage). Pas de déconnexion : seule la rotation de `DASHBOARD_SESSION_KEY` révoque les sessions (ticket de suivi).

@@ -18,6 +18,7 @@ from dashboard.ingest import router as ingest_router
 from dashboard.interactions import router as interactions_router
 from dashboard.otlp import router as otlp_router
 from dashboard.stream import router as stream_router
+from dashboard.progress import router as progress_router
 
 VERSION = os.environ.get("APP_VERSION", "dev")
 HERE = Path(__file__).parent
@@ -31,6 +32,7 @@ app.include_router(auth_router)
 app.include_router(activity_router)
 app.include_router(interactions_router)
 app.include_router(stream_router)
+app.include_router(progress_router)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
 
 
