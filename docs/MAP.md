@@ -86,6 +86,8 @@
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
 - `docs/adr/ADR-002-stack-dashboard.md` — ADR-002 — Stack du dashboard (et des services Python)
+- `docs/adr/ADR-003-memoire-agents.md` — ADR-003 — Mémoire des agents : mémoire locale vs ADR
+- `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
