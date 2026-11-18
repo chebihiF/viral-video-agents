@@ -31,9 +31,11 @@ export DASHBOARD_SESSION_KEY DASHBOARD_PASSWORD_HASH
 COMPOSE_FILE="$HERE/compose.yaml"
 PROBE="${VVA_PROBE:-1}"
 
+# COMPOSE_IGNORE_ORPHANS : l'ancien conteneur unique (service « dashboard ») reste en service pendant la bascule ;
+# ne jamais retirer les orphelins ici (il serait arrêté avant la vérification du nouveau slot).
 compose() { # compose <tag> <args...>
   local tag="$1"; shift
-  IMAGE_TAG="$tag" docker compose -p vva -f "$COMPOSE_FILE" --project-directory "$STATE_DIR" "$@"
+  COMPOSE_IGNORE_ORPHANS=true IMAGE_TAG="$tag" docker compose -p vva -f "$COMPOSE_FILE" --project-directory "$STATE_DIR" "$@"
 }
 
 start_slot() { # start_slot <slot> <tag> [pull] : démarre ce seul service, attend qu'il tourne

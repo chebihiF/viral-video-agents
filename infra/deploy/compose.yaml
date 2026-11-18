@@ -4,9 +4,10 @@ name: vva
 # Blue/green (#25) : deux services identiques, un seul actif en régime normal ; deploy.sh démarre
 # le slot inactif, vérifie qu'il est sain, puis arrête l'ancien. Même routeur et même service Traefik
 # (vva-dashboard) : Traefik répartit sur les conteneurs sains, donc aucune coupure pendant la bascule.
-# INVARIANT : un SEUL jeu de labels Traefik (ci-dessous, via l'ancre) : routeur, middleware et service
-# doivent être identiques entre les deux slots et entre versions, sinon Traefik voit des définitions
-# en conflit. Ne jamais mettre de labels propres à un slot.
+# LABELS : routeur et middleware portent le nom du slot (vva-dashboard-blue / -green) : ainsi deux
+# versions (ou l'ancien conteneur unique « vva-dashboard ») ne peuvent jamais définir le même routeur
+# de façon différente (Traefik ignorerait alors le routeur : 404, constaté au premier déploiement).
+# Le SERVICE vva-dashboard, lui, doit rester strictement identique partout (même port).
 # Migrations de base : additives uniquement (les deux versions tournent en même temps sur /data).
 x-dashboard: &dashboard
     image: ${IMAGE}:${IMAGE_TAG:-unused}
@@ -27,21 +28,33 @@ x-dashboard: &dashboard
     mem_limit: 256m
     cpus: 0.5
     networks: [proxy]
-    labels:
-      - traefik.enable=true
-      - traefik.docker.network=${PROXY_NETWORK}
-      - traefik.http.routers.vva-dashboard.rule=Host(`${DASHBOARD_HOST}`)
-      - traefik.http.routers.vva-dashboard.entrypoints=${TLS_ENTRYPOINT}
-      - traefik.http.routers.vva-dashboard.tls=true
-      - traefik.http.routers.vva-dashboard.middlewares=vva-retry
-      - traefik.http.middlewares.vva-retry.retry.attempts=3
-      - traefik.http.routers.vva-dashboard.tls.certresolver=${CERT_RESOLVER}
-      - traefik.http.services.vva-dashboard.loadbalancer.server.port=8000
 services:
   dashboard_blue:
     <<: *dashboard
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${PROXY_NETWORK}
+      - traefik.http.routers.vva-dashboard-blue.rule=Host(`${DASHBOARD_HOST}`)
+      - traefik.http.routers.vva-dashboard-blue.entrypoints=${TLS_ENTRYPOINT}
+      - traefik.http.routers.vva-dashboard-blue.tls=true
+      - traefik.http.routers.vva-dashboard-blue.tls.certresolver=${CERT_RESOLVER}
+      - traefik.http.routers.vva-dashboard-blue.middlewares=vva-retry-blue
+      - traefik.http.middlewares.vva-retry-blue.retry.attempts=3
+      - traefik.http.routers.vva-dashboard-blue.service=vva-dashboard
+      - traefik.http.services.vva-dashboard.loadbalancer.server.port=8000
   dashboard_green:
     <<: *dashboard
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${PROXY_NETWORK}
+      - traefik.http.routers.vva-dashboard-green.rule=Host(`${DASHBOARD_HOST}`)
+      - traefik.http.routers.vva-dashboard-green.entrypoints=${TLS_ENTRYPOINT}
+      - traefik.http.routers.vva-dashboard-green.tls=true
+      - traefik.http.routers.vva-dashboard-green.tls.certresolver=${CERT_RESOLVER}
+      - traefik.http.routers.vva-dashboard-green.middlewares=vva-retry-green
+      - traefik.http.middlewares.vva-retry-green.retry.attempts=3
+      - traefik.http.routers.vva-dashboard-green.service=vva-dashboard
+      - traefik.http.services.vva-dashboard.loadbalancer.server.port=8000
 volumes:
   vva-data:
 networks:
