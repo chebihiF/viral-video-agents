@@ -1,0 +1,25 @@
+name: Tâche technique
+description: Outillage, infra, dette, refactor
+title: "TS: "
+labels: ["type:TS"]
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Objectif
+    validations: { required: true }
+  - type: textarea
+    id: files
+    attributes:
+      label: Fichiers à toucher
+    validations: { required: true }
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contrat / interface impactés
+  - type: textarea
+    id: done
+    attributes:
+      label: Critères d'acceptation
+      value: "- [ ] …"
+    validations: { required: true }

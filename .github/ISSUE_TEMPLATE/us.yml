@@ -1,0 +1,36 @@
+name: User story
+description: Valeur visible pour un utilisateur (critères Gherkin)
+title: "US: "
+labels: ["type:US"]
+body:
+  - type: textarea
+    id: story
+    attributes:
+      label: Story
+      value: "En tant que …, je veux …, afin de …"
+    validations: { required: true }
+  - type: textarea
+    id: gherkin
+    attributes:
+      label: Critères d'acceptation (Gherkin)
+      value: |
+        Scénario : …
+          Étant donné …
+          Quand …
+          Alors …
+    validations: { required: true }
+  - type: textarea
+    id: files
+    attributes:
+      label: Fichiers à toucher
+      description: Chemins exacts ; le ticket sert de paquet de contexte à l'agent.
+    validations: { required: true }
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contrat
+      description: Route, schéma (contracts/), événement ou interface concernés.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes, dépendances, hors périmètre
