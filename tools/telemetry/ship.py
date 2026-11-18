@@ -245,23 +245,33 @@ def archive_path(events_file: Path) -> Path:
 
 
 def archive_legacy(events_file: Path, lines: list[Line]) -> bool:
-    """Renomme le fichier s'il contient de l'ancien format ; reprend les lignes valides.
+    """Archive le fichier s'il contient de l'ancien format ; reprend les lignes valides.
 
-    Le renommage est atomique : un hook concurrent recrée simplement un nouveau fichier.
+    Copie d'abord l'archive, puis remplace events.jsonl par un fichier temporaire
+    renommé : un crash entre les deux laisse l'original intact (rien n'est perdu).
+    Limite acceptée : une ligne écrite par un hook entre la lecture et le renommage
+    finit dans l'archive seulement (fenêtre de l'ordre de la microseconde).
     """
     if not any(is_legacy(line) for line in lines):
         return False
+    data = events_file.read_bytes()
     archive = archive_path(events_file)
-    os.replace(events_file, archive)
+    fd = open_private(archive, os.O_WRONLY | os.O_EXCL)
+    with os.fdopen(fd, "wb") as out:
+        out.write(data)
+        out.flush()
+        os.fsync(out.fileno())
+    keep = b"".join(line.raw for line in lines if not is_legacy(line))
+    keep += data[lines[-1].end :]
     cursor_path(events_file).unlink(missing_ok=True)
-    with archive.open("rb") as fh:
-        fh.seek(lines[-1].end)
-        tail = fh.read()
-    keep = b"".join(line.raw for line in lines if not is_legacy(line)) + tail
     if keep:
-        fd = open_private(events_file, os.O_WRONLY | os.O_APPEND)
-        with os.fdopen(fd, "ab") as out:
+        tmp = events_file.with_name(events_file.name + ".tmp")
+        fd = open_private(tmp, os.O_WRONLY | os.O_TRUNC)
+        with os.fdopen(fd, "wb") as out:
             out.write(keep)
+        os.replace(tmp, events_file)
+    else:
+        events_file.unlink()
     print(f"ship: ancien format archivé dans {archive.name}", file=sys.stderr)
     return True
 

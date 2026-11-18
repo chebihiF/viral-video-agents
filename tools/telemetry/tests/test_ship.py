@@ -439,7 +439,7 @@ def test_second_archive_same_day_does_not_overwrite(server: FakeIngest, events_f
     assert len(archives(events_file)) == 2
 
 
-def test_file_without_any_conforming_line_is_archived(
+def test_json_without_required_fields_is_archived_and_garbage_kept(
     server: FakeIngest, events_file: Path
 ) -> None:
     write_raw(events_file, "pas du json", "[1, 2]")

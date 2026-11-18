@@ -31,7 +31,7 @@ visibles des hooks (bloc `"env"` du même fichier, ou `~/.zshenv`).
 
 - `SubagentStart`, `SubagentStop`, `PostToolUse` : `hook_emit.py` écrit une ligne par événement.
 - `PreToolUse` : `pretool_gate.py` applique la pause (`VVA_CONTROL_URL`, `VVA_INGEST_TOKEN`).
-- `Stop` : `ship.py --background` envoie les lignes en attente à l'arrêt de la session.
+- `Stop` : `ship.py --background` envoie les lignes en attente à chaque fin de tour (le verrou évite les envois concurrents).
   Il rend la main aussitôt (code 0, aucune sortie, stdin ignoré), puis expédie dans un
   processus détaché (nouvelle session, timeout réseau de 3 s). Sans `VVA_INGEST_URL` /
   `VVA_INGEST_TOKEN`, il sort en silence. Aucun `launchd` nécessaire ; le verrou
