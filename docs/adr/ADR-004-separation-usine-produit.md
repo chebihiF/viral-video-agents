@@ -69,6 +69,16 @@ tout autre dépôt, la règle reste entière : aucun fichier Claude commité (ga
   - Opus ≤ 30 % des tokens d'un sprint ;
   - au plus 1 geste du propriétaire par ticket (la validation).
 
+### Amendement du 2026-11-18 : un sprint A limité dans le temps
+Le propriétaire décide d'un **seul sprint consacré à A** avant d'appliquer la répartition
+80 % B / 20 % A. Objectif : réduire la consommation de tokens, sur mesure et non à l'aveugle.
+1. Mesurer d'abord : #59 (événements des agents), puis #19 (tokens par ticket, agent, modèle).
+2. Charge de référence : 2 à 3 tickets B sans GPU (#53, #51, #52 ou #36), mesurés.
+3. Corriger les 3 plus gros postes de dépense constatés.
+4. Fin de sprint : écart aux plafonds ci-dessus, noté ici ; retour à 80/20.
+
+L'extraction vers `chebihiF/agent-factory` (#67 à #71) attend la fin de ce sprint.
+
 ## Conséquences
 - \+ Le tableau de B ne montre que le produit ; la dérive se voit et se plafonne.
 - \+ A peut servir aux autres projets du propriétaire.
