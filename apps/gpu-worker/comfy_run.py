@@ -15,13 +15,17 @@ import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
+from typing import Any
+
+DEFAULT_TIMEOUT_S = 15 * 60  # au-delà, le rendu est abandonné (TimeoutError)
 
 
-def http_json(url: str, payload: dict | None = None) -> dict:
+def http_json(url: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     data = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as resp:
-        return json.loads(resp.read() or b"{}")
+        body: dict[str, Any] = json.loads(resp.read() or b"{}")
+        return body
 
 
 def free_ollama_vram(ollama_url: str = "http://127.0.0.1:11434") -> None:
@@ -34,7 +38,7 @@ def free_ollama_vram(ollama_url: str = "http://127.0.0.1:11434") -> None:
 
 
 def run(workflow_path: str, prompt: str, seed: int, out_dir: str, url: str, image: str = "",
-        audio: str = "", length: int = 0) -> list[Path]:
+        audio: str = "", length: int = 0, timeout: float = DEFAULT_TIMEOUT_S) -> list[Path]:
     raw = Path(workflow_path).read_text().replace("{{PROMPT}}", json.dumps(prompt)[1:-1])
     raw = raw.replace("{{IMAGE}}", image)  # nom d'un fichier présent dans ComfyUI/input
     raw = raw.replace("{{AUDIO}}", audio)  # idem, pour les workflows audio
@@ -54,15 +58,16 @@ def run(workflow_path: str, prompt: str, seed: int, out_dir: str, url: str, imag
     client_id = uuid.uuid4().hex
     prompt_id = http_json(f"{url}/prompt", {"prompt": wf, "client_id": client_id})["prompt_id"]
 
-    start = time.time()
+    start = time.monotonic()
     while True:
         hist = http_json(f"{url}/history/{prompt_id}").get(prompt_id)
         if hist and hist.get("status", {}).get("completed"):
             break
         if hist and hist.get("status", {}).get("status_str") == "error":
             raise RuntimeError(json.dumps(hist["status"], indent=2)[:2000])
+        if time.monotonic() - start > timeout:
+            raise TimeoutError(f"rendu ComfyUI non terminé après {timeout:.0f} s")
         time.sleep(1)
-    elapsed = time.time() - start
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -71,11 +76,10 @@ def run(workflow_path: str, prompt: str, seed: int, out_dir: str, url: str, imag
         items = [i for v in node_out.values() if isinstance(v, list) for i in v if isinstance(i, dict) and "filename" in i]
         for item in items:
             q = urllib.parse.urlencode({k: item[k] for k in ("filename", "subfolder", "type")})
-            dest = out / item["filename"]
+            dest = out / Path(item["filename"]).name  # jamais hors de out_dir
             with urllib.request.urlopen(f"{url}/view?{q}") as r:
                 dest.write_bytes(r.read())
             saved.append(dest)
-    print(f"Terminé en {elapsed:.1f} s -> {', '.join(map(str, saved))}")
     return saved
 
 
@@ -90,4 +94,6 @@ if __name__ == "__main__":
     p.add_argument("--audio", default="", help="fichier audio (dans ComfyUI/input)")
     p.add_argument("--length", type=int, default=0, help="nombre d'images (4n+1), remplace celui du workflow")
     a = p.parse_args()
-    run(a.workflow, a.prompt, a.seed, a.out, a.url, a.image, a.audio, a.length)
+    t0 = time.monotonic()
+    saved = run(a.workflow, a.prompt, a.seed, a.out, a.url, a.image, a.audio, a.length)
+    print(f"Terminé en {time.monotonic() - t0:.1f} s -> {', '.join(map(str, saved))}")

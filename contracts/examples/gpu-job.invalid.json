@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "job_id": "story-0001-plan-1",
+  "type": "image_to_clip",
+  "image_path": "story-0001/plan-1.png",
+  "motion_prompt": "The carpet glides forward gently, slow camera dolly in",
+  "frames": 48
+}

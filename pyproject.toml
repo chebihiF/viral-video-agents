@@ -44,10 +44,11 @@ known-first-party = ["dashboard", "next_version", "hook_emit", "ship"]
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["apps/dashboard/src", "infra/scripts", "tools/telemetry"]
+files = ["apps/dashboard/src", "infra/scripts", "tools/telemetry",
+  "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/dashboard/tests", "infra/scripts", "tools/telemetry/tests"]
-pythonpath = ["infra/scripts", "tools/telemetry"]
+testpaths = ["apps/dashboard/tests", "infra/scripts", "tools/telemetry/tests", "apps/gpu-worker/tests"]
+pythonpath = ["infra/scripts", "tools/telemetry", "apps/gpu-worker"]
 filterwarnings = ["ignore::DeprecationWarning"]
 addopts = "-q --no-header -p no:cacheprovider"
