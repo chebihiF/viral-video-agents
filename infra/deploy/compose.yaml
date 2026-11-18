@@ -1,0 +1,25 @@
+# Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
+# Variables fournies par deploy.sh et /opt/vva/proxy.env (propre au VPS, hors dépôt).
+name: vva
+services:
+  dashboard:
+    image: ${IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 256m
+    cpus: 0.5
+    networks: [proxy]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${PROXY_NETWORK}
+      - traefik.http.routers.vva-dashboard.rule=Host(`${DASHBOARD_HOST}`)
+      - traefik.http.routers.vva-dashboard.entrypoints=${TLS_ENTRYPOINT}
+      - traefik.http.routers.vva-dashboard.tls=true
+      - traefik.http.routers.vva-dashboard.tls.certresolver=${CERT_RESOLVER}
+      - traefik.http.services.vva-dashboard.loadbalancer.server.port=8000
+networks:
+  proxy:
+    name: ${PROXY_NETWORK}
+    external: true
