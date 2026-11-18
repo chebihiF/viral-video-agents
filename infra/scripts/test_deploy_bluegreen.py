@@ -192,13 +192,17 @@ def test_migration_from_single_legacy_container(sb: dict[str, Any]) -> None:
     assert (sb["state"] / "slot").read_text().strip() == "blue"
 
 
-def test_compose_has_retry_middleware_and_single_label_set() -> None:
+def test_compose_routers_are_named_per_slot_and_share_one_service() -> None:
     text = (DEPLOY / "compose.yaml").read_text()
-    assert "retry.attempts=3" in text
-    assert text.count("vva-dashboard.rule=") == 1
+    for slot in ("blue", "green"):
+        assert f"routers.vva-dashboard-{slot}.rule=" in text
+        assert f"middlewares.vva-retry-{slot}.retry.attempts=3" in text
+        assert f"routers.vva-dashboard-{slot}.service=vva-dashboard" in text
+    # jamais le routeur historique « vva-dashboard » : conflit avec l'ancien conteneur unique
+    assert "routers.vva-dashboard.rule=" not in text
+    assert text.count("services.vva-dashboard.loadbalancer.server.port=8000") == 2
 
 
-def test_compose_has_two_slots_sharing_traefik_service() -> None:
+def test_compose_has_two_slots() -> None:
     text = (DEPLOY / "compose.yaml").read_text()
     assert "dashboard_blue:" in text and "dashboard_green:" in text
-    assert text.count("loadbalancer.server.port=8000") == 1  # défini une fois (ancre)
