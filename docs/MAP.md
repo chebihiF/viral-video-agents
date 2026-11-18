@@ -25,9 +25,11 @@
 - `apps/dashboard/src/dashboard/otlp.py` — POST /v1/metrics : tokens Claude Code en OTLP/HTTP JSON (contrat : contracts/token-usage.m
 - `apps/dashboard/src/dashboard/progress.py` — GET /progress et GET /api/v1/progress : avancement du projet et travail des agents (#26).
 - `apps/dashboard/src/dashboard/static/live.js` — Temps réel : flux SSE /stream (EventSource, reprise automatique par Last-Event-ID).
+- `apps/dashboard/src/dashboard/static/nav.css`
 - `apps/dashboard/src/dashboard/static/progress.js` — Actualisation de /progress toutes les 60 s (sans dépendance : ni CDN, ni bibliothèque).
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
+- `apps/dashboard/src/dashboard/templates/_nav.html`
 - `apps/dashboard/src/dashboard/templates/activity.html`
 - `apps/dashboard/src/dashboard/templates/controls.html`
 - `apps/dashboard/src/dashboard/templates/interactions.html`
