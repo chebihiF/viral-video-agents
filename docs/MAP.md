@@ -88,9 +88,14 @@
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
+- `evals/cases/storyboard.jsonl`
+- `evals/cases/storyboard.recorded.jsonl`
+- `evals/cases/storyboard.test.schema.json` — données JSON
 - `evals/classification_eval.py` — Éval de la classification de sécurité enfant (libre / adouci / bloque).
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
+- `evals/storyboard_eval.py` — Éval du prompt storyboard : taux de sorties JSON conformes à contracts/storyboard.schema.j
 - `evals/test_classification_eval.py` — Tests hors GPU de l'éval de classification (#35) : contrat, cas, dry-run, seuils.
+- `evals/test_storyboard_eval.py` — Tests de l'éval storyboard : jamais d'appel Ollama (réseau bloqué).
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
 - `infra/deploy/deploy.sh` — Déploie le dashboard sans coupure (blue/green derrière Traefik), vérifie /healthz en HTTPS
 - `infra/deploy/ensure-token.sh` — Crée $STATE_DIR/ingest_token (600) s'il n'existe pas, sans jamais l'afficher.
@@ -113,6 +118,7 @@
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
 - `prompts/classification.v1.md` — classification.v1
+- `prompts/storyboard.v1.md`
 - `pyproject.toml`
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
