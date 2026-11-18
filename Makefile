@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check build map run bootstrap
+.PHONY: help sync lint fmt type test audit check build map run bootstrap ticket
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -41,3 +41,7 @@ run: ## Dashboard en local sur :8000
 
 bootstrap: ## Copie .claude/ et CLAUDE.md du checkout principal (VVA_MAIN=chemin)
 	infra/scripts/bootstrap_worktree.sh
+
+ticket: ## Ticket N sur un poste libre du pool (N=<n>, DRY=1 pour simuler)
+	case '$(N)' in ''|*[!0-9]*) echo "usage : make ticket N=<n> (numérique)" >&2; exit 2;; esac
+	infra/scripts/pool.sh $(if $(DRY),--dry-run) '$(N)'
