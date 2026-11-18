@@ -47,6 +47,8 @@
 - `apps/dashboard/tests/test_tokens.py` — Page /tokens : totaux par agent et par modèle sur 24 h et 7 jours (#7).
 - `apps/gpu-worker/README.md` — gpu-worker
 - `apps/gpu-worker/comfy_run.py` — Lance un workflow ComfyUI (format API) et attend le résultat.
+- `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
+- `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
 - `apps/media-service/README.md` — media-service
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
@@ -58,8 +60,11 @@
 - `contracts/examples/classification.adouci.json` — données JSON
 - `contracts/examples/classification.bloque.json` — données JSON
 - `contracts/examples/classification.libre.json` — données JSON
+- `contracts/examples/gpu-job.invalid.json` — données JSON
+- `contracts/examples/gpu-job.valid.json` — données JSON
 - `contracts/examples/storyboard.invalid.json` — données JSON
 - `contracts/examples/storyboard.valid.json` — données JSON
+- `contracts/gpu-job.schema.json` — données JSON
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
 - `contracts/progress.schema.json` — données JSON
 - `contracts/storyboard.schema.json` — données JSON

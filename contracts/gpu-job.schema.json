@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/gpu-job.schema.json",
+  "title": "GpuJob",
+  "description": "Job envoyé par n8n au gpu-worker (POST /jobs) : une image clé devient un clip Wan 2.2. Réponses : $defs/JobStatus (POST 202, GET /jobs/{job_id} 200).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "job_id", "type", "image_path", "motion_prompt", "frames"],
+  "properties": {
+    "schema_version": {
+      "description": "Version du contrat ; changement incompatible = nouvelle version.",
+      "type": "string",
+      "const": "1.0"
+    },
+    "job_id": {
+      "description": "Identifiant choisi par l'appelant, clé d'idempotence : un job_id déjà connu ne relance rien.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{1,64}$"
+    },
+    "type": {
+      "description": "Nature du job ; seul image_to_clip existe en v1.0.",
+      "type": "string",
+      "const": "image_to_clip"
+    },
+    "image_path": {
+      "description": "Image clé, chemin relatif au dossier ComfyUI/input (ni chemin absolu, ni '..').",
+      "type": "string",
+      "pattern": "^(?!.*\\.\\.)[A-Za-z0-9_][A-Za-z0-9_./-]{0,254}$"
+    },
+    "motion_prompt": {
+      "description": "Mouvement à animer EN ANGLAIS (personnages + caméra).",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "frames": {
+      "description": "Nombre d'images du clip, de la forme 4n+1 (Wan 2.2), à 24 i/s : 49 = 2 s, 121 = 5 s. Entier JSON strict : ni chaîne, ni booléen, ni décimal (49.0 est refusé par le worker).",
+      "type": "integer",
+      "enum": [5, 9, 13, 17, 21, 25, 29, 33, 37, 41, 45, 49, 53, 57, 61, 65, 69, 73, 77, 81, 85, 89, 93, 97, 101, 105, 109, 113, 117, 121]
+    }
+  },
+  "$defs": {
+    "JobStatus": {
+      "description": "État d'un job : queued (en file), running (sur le GPU), done (output_path), failed (error).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["job_id", "status"],
+      "properties": {
+        "job_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+        "status": { "type": "string", "enum": ["queued", "running", "done", "failed"] },
+        "output_path": {
+          "description": "Clip produit, chemin sur le PC GPU (présent si done).",
+          "type": "string",
+          "minLength": 1
+        },
+        "error": {
+          "description": "Cause de l'échec (présente si failed) : type d'erreur + message générique, jamais le texte brut de ComfyUI.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "status": { "const": "done" } } }, "then": { "required": ["output_path"] } },
+        { "if": { "properties": { "status": { "const": "failed" } } }, "then": { "required": ["error"] } }
+      ]
+    }
+  }
+}
