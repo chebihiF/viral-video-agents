@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "compris_fr": "Un petit chat orange vole dans le ciel.",
+  "recap_darija": "Mech sghir kaytir f sma.",
+  "classification": "libre",
+  "plans": [
+    {
+      "image_prompt": "A cute small orange cat on a flying magic carpet, cute 3D animated film style, vertical format",
+      "motion_prompt": "The carpet glides forward gently, slow camera dolly in"
+    }
+  ]
+}
