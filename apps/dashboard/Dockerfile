@@ -7,11 +7,12 @@ COPY apps/dashboard apps/dashboard
 RUN uv sync --frozen --no-dev --package dashboard --no-editable
 
 FROM python:3.12-slim-bookworm
-RUN useradd --system --uid 10001 app
+RUN useradd --system --uid 10001 app && install -d -o app -g app /data
 COPY --from=build /app/.venv /app/.venv
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1
 ARG APP_VERSION=dev
-ENV APP_VERSION=${APP_VERSION}
+ENV APP_VERSION=${APP_VERSION} VVA_DB_PATH=/data/vva.db
+VOLUME /data
 USER app
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=3s CMD python -c "import urllib.request,sys; sys.exit(urllib.request.urlopen('http://127.0.0.1:8000/healthz').status!=200)"

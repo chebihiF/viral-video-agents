@@ -8,6 +8,12 @@ services:
     read_only: true
     tmpfs: [/tmp]
     security_opt: ["no-new-privileges:true"]
+    environment:
+      # Jeton généré par deploy.sh dans /opt/vva/ingest_token (hors dépôt) ; absent => l'ingestion répond 503.
+      INGEST_TOKEN: ${INGEST_TOKEN:-}
+      VVA_DB_PATH: /data/vva.db
+    volumes:
+      - vva-data:/data
     mem_limit: 256m
     cpus: 0.5
     networks: [proxy]
@@ -19,6 +25,8 @@ services:
       - traefik.http.routers.vva-dashboard.tls=true
       - traefik.http.routers.vva-dashboard.tls.certresolver=${CERT_RESOLVER}
       - traefik.http.services.vva-dashboard.loadbalancer.server.port=8000
+volumes:
+  vva-data:
 networks:
   proxy:
     name: ${PROXY_NETWORK}

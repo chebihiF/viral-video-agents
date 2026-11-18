@@ -13,6 +13,10 @@ set -a
 . "$STATE_DIR/proxy.env"
 set +a
 export IMAGE
+# Jeton d'ingestion : généré une fois sur le VPS (jamais dans le dépôt), passé au conteneur par l'environnement.
+"$HERE/ensure-token.sh" "$STATE_DIR"
+INGEST_TOKEN="$(cat "$STATE_DIR/ingest_token")"
+export INGEST_TOKEN
 
 up() {
   IMAGE_TAG="$1" docker compose -f "$HERE/compose.yaml" --project-directory "$STATE_DIR" \
