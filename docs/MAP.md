@@ -58,3 +58,8 @@
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
 - `pyproject.toml`
+- `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
+- `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
+- `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).
+- `tools/telemetry/tests/test_emit.py` — Émetteur de hooks : stdin JSON -> ligne JSONL minimale (#4).
+- `tools/telemetry/tests/test_ship.py` — Expéditeur : JSONL -> POST /api/v1/events par lots, sans perte ni doublon (#4).
