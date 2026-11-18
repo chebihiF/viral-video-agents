@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "compris_fr": "Un petit chat orange vole dans le ciel sur un tapis magique et salue les oiseaux.",
+  "recap_darija": "Mech sghir kaytir f sma 3la zerbiya sehriya o kaysellem 3la tyour.",
+  "classification": "libre",
+  "plans": [
+    {
+      "image_prompt": "A cute small orange cat sitting on a flying magic carpet above fluffy clouds, cute 3D animated film style, vertical format",
+      "motion_prompt": "The carpet glides forward gently, the cat's fur ruffles in the wind, slow camera dolly in",
+      "narration_fr": "Le petit chat s'envole sur son tapis magique !",
+      "duree_s": 3
+    },
+    {
+      "image_prompt": "The orange cat waving its paw at a group of colorful birds in a blue sky, cute 3D animated film style, vertical format",
+      "motion_prompt": "The cat waves, the birds flap their wings around it, camera slowly orbits",
+      "narration_fr": "Bonjour les oiseaux, crie-t-il en riant."
+    }
+  ]
+}
