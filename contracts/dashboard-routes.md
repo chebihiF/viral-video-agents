@@ -113,22 +113,29 @@ Spec : `docs/design/progress.md`. Schéma : [`progress.schema.json`](progress.sc
 modèle pydantic `dashboard.progress.Progress` par `tests/test_progress.py`). Réponses en `no-store`.
 
 - **GitHub** (décision D20 : dépôt public, **aucun jeton**) : API REST `api.github.com`, dépôt
-  `VVA_GITHUB_REPO` (défaut `chebihiF/viral-video-agents`, forme `propriétaire/nom` validée), lectures
-  `issues`, `pulls`, `tags` (100 premiers de chaque). Cache mémoire de **60 s** partagé, requêtes
-  conditionnelles (ETag ; un 304 ne compte pas dans la limite de 60 requêtes/heure). Échec ou limite
-  atteinte : dernières données connues (ou vides) et `github_error_at` renseigné (bandeau `role="alert"`) ;
-  pas de nouvelle tentative avant 60 s. Aucun détail d'erreur n'est exposé.
+  `VVA_GITHUB_REPO` (défaut `chebihiF/viral-video-agents`, forme `propriétaire/nom` validée). Trois
+  lectures : `issues` (tickets **et** PR, `state=all`, `Link: rel="next"` suivi jusqu'à 5 pages = 500 au
+  plus, seuls liens `api.github.com` suivis), `tags`, `commits` (50 derniers). Cache mémoire de **3 min**
+  partagé, requêtes conditionnelles (ETag ; un 304 ne compte pas dans la limite de 60 requêtes/heure).
+  Toute erreur (réseau, JSON, `IncompleteRead`…) : dernières données connues (ou vides) et
+  `github_error_at` renseigné (bandeau `role="alert"`), pas de nouvelle tentative avant l'échéance du
+  cache. Sur 403/429 de limite, aucune lecture avant `X-RateLimit-Reset` (attente plafonnée à 1 h).
+  Aucun détail d'erreur n'est exposé.
 - **Statuts** : épique = ticket labellisé `epic`, ses tickets = ligne `Épique : #n` du corps ; sans lien :
-  groupe « Sans épique » (`id` 0). Livré = fermé ; revue = PR ouverte dont la branche est `<type>/<n°>-…` ;
+  groupe « Sans épique » (`id` 0). Livré = fermé avec `state_reason = completed` (fermé « not planned » :
+  exclu) ; revue = PR ouverte dont le corps contient `Closes/Fixes/Resolves #n` (ou le titre `(#n)`) ;
   en cours = label `in-progress` ; prêt = `P0`/`P1` non `blocked` ; backlog = le reste. Exclus : PR,
-  épiques, labels `decision`, `wontfix`, `duplicate`, `invalid`, `question`. Pourcentage = livrés ÷ total.
+  épiques, labels `decision`, `wontfix`, `duplicate`, `invalid`, `question`. Pourcentage =
+  livrés × 100 ÷ total, arrondi vers le bas.
 - **Sprint** : `{"available": false, "title": null}` (« bientôt disponible », branché par #9).
 - **Agents** : 500 derniers événements, un agent par (`agent_type`, `agent_id`) ; événements sans
   `agent_type` ignorés. Actif = dernier événement ≠ `SubagentStop` et de moins de 30 min. `since` = dernier
-  `SubagentStart`. Modèle et étape déduits du rôle (table dans le code), étape `pr` si l'outil contient
+  `SubagentStart`. Cartes : tous les actifs, puis 5 inactifs au plus (le plus récent de chaque rôle, hors
+  rôles actifs). Modèle et étape déduits du rôle (table dans le code), étape `pr` si l'outil contient
   `pull_request` ; `issue` reste `null` tant que les événements ne portent pas le ticket.
-- **Frise** : tags joints aux PR fusionnées par `merge_commit_sha` (date = fusion), plus récent d'abord,
-  10 au plus ; un tag sans PR fusionnée est listé en dernier, sans date.
-- **Actualisation** : `static/progress.js` recharge `#live` toutes les 60 s (aucune dépendance).
+- **Frise** : tags joints aux commits par SHA (titre = sujet du commit sans le `(#n)` final, `pr` = ce
+  `#n`, date = date du commit), plus récent d'abord, 10 au plus ; tag hors des 50 derniers commits :
+  listé en dernier, sans date.
+- **Actualisation** : `static/progress.js` recharge `#live` toutes les 60 s (aucune dépendance) ; les données GitHub ne changent qu'au plus toutes les 3 min (cache serveur).
 
 Limites connues : la limite de 5 essais/minute est globale (compte unique : un tiers peut verrouiller la connexion une minute) et en mémoire (un seul worker ; remise à zéro au redémarrage). Pas de déconnexion : seule la rotation de `DASHBOARD_SESSION_KEY` révoque les sessions (ticket de suivi).

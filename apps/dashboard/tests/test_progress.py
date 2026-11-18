@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import re
 import urllib.request
@@ -32,51 +33,48 @@ def issue(
     labels: tuple[str, ...] = (),
     epic: int | None = 2,
     title: str | None = None,
+    reason: str | None = None,
+    body: str | None = None,
     pr: bool = False,
 ) -> dict[str, Any]:
-    body = f"Épique : #{epic}" if epic else "sans épique"
+    if body is None:
+        body = f"Épique : #{epic}" if epic else "sans épique"
+    if state == "closed" and reason is None:
+        reason = "completed"
     item: dict[str, Any] = {
         "number": number,
         "title": title or f"Ticket {number}",
         "state": state,
+        "state_reason": reason,
         "body": body,
         "labels": [{"name": name} for name in labels],
     }
     if pr:
-        item["pull_request"] = {}
+        item["pull_request"] = {"merged_at": None}
     return item
-
-
-def pull(
-    number: int, ref: str, *, state: str = "open", merged_at: str | None = None, sha: str = ""
-) -> dict[str, Any]:
-    return {
-        "number": number,
-        "title": f"feat: PR {number}",
-        "state": state,
-        "merged_at": merged_at,
-        "merge_commit_sha": sha or None,
-        "head": {"ref": ref},
-    }
 
 
 ISSUES = [
     issue(2, labels=("epic",), epic=None, title="EPIC: Dashboard"),
     issue(3, state="closed", labels=("P0",)),
     issue(4, labels=("P1",)),  # prêt
-    issue(5, labels=("P1",)),  # en revue (PR ouverte)
+    issue(5, labels=("P1",)),  # en revue (PR ouverte « Closes #5 »)
     issue(6, labels=("P2",)),  # backlog
     issue(7, labels=("P1", "blocked")),  # backlog (bloqué)
     issue(8, labels=("P1", "in-progress")),  # en cours
     issue(9, labels=("decision",), epic=None),  # journal : ignoré
-    issue(10, epic=None, pr=True),  # une PR : ignorée
     issue(11, state="closed", labels=("wontfix",)),  # abandonné : ignoré
     issue(12, labels=("P0",), epic=None, title="Sans parent"),  # orphelin, prêt
+    issue(13, state="closed", reason="not_planned"),  # fermé sans livraison : ignoré
+    issue(40, epic=None, pr=True, body="Closes #5", title="feat: revue"),  # PR ouverte
+    issue(41, state="closed", epic=None, pr=True, body="Closes #3"),  # PR fusionnée : ignorée
 ]
-PULLS = [
-    pull(40, "feat/5-revue"),
-    pull(41, "feat/3-fait", state="closed", merged_at="2026-11-17T09:00:00Z", sha="a" * 40),
-    pull(42, "feat/9-autre", state="closed", merged_at="2026-11-18T04:00:00Z", sha="b" * 40),
+COMMITS = [
+    {
+        "sha": sha * 40,
+        "commit": {"message": f"feat: PR {n} (#{n})\n\ncorps", "committer": {"date": date}},
+    }
+    for sha, n, date in (("a", 41, "2026-11-17T09:00:00Z"), ("b", 42, "2026-11-18T04:00:00Z"))
 ]
 TAGS = [
     {"name": "v0.1.0", "commit": {"sha": "0" * 40}},
@@ -88,14 +86,22 @@ TAGS = [
 class FakeGithub:
     def __init__(self) -> None:
         self.calls: list[str] = []
-        self.fail = False
-        self.data: dict[str, Any] = {"issues": ISSUES, "pulls": PULLS, "tags": TAGS}
+        self.error: Exception | None = None
+        self.data: dict[str, Any] = {"issues": ISSUES, "commits": COMMITS, "tags": TAGS}
 
     def __call__(self, path: str) -> Any:
         self.calls.append(path)
-        if self.fail:
-            raise URLError("réseau coupé")
+        if self.error:
+            raise self.error
         return self.data[next(key for key in self.data if f"/{key}" in path)]
+
+    @property
+    def fail(self) -> bool:
+        return self.error is not None
+
+    @fail.setter
+    def fail(self, value: bool) -> None:
+        self.error = URLError("réseau coupé") if value else None
 
 
 class Clock:
@@ -111,7 +117,7 @@ def gh(monkeypatch: pytest.MonkeyPatch) -> FakeGithub:
     fake = FakeGithub()
     clock = Clock()
     fake.clock = clock  # type: ignore[attr-defined]
-    monkeypatch.setattr(progress, "CACHE", progress.GithubCache(fake, clock=clock))
+    monkeypatch.setattr(progress, "CACHE", progress.GithubCache(fake, clock=clock, wall=clock))
     return fake
 
 
@@ -164,7 +170,7 @@ def test_epic_counts_and_percent(client: TestClient) -> None:
         "ready": 1,
         "backlog": 2,
     }
-    assert epics[2]["percent"] == 17  # 1 livré sur 6
+    assert epics[2]["percent"] == 16  # 1 livré sur 6, arrondi vers le bas
 
 
 def test_orphans_grouped_and_noise_ignored(client: TestClient) -> None:
@@ -199,7 +205,7 @@ def test_page_shows_progress_with_text_alternatives(client: TestClient) -> None:
     html = client.get("/progress").text
     assert "<h1>Suivi du projet</h1>" in html
     assert re.search(r'role="img" aria-label="EPIC: Dashboard : 1 livrés?, 1 en revue', html)
-    assert "17 % · 1 livré / 6" in html
+    assert "16 % · 1 livré / 6" in html
     assert "14 %" in html and "1 livré sur 7 tickets" in html
     assert "<circle" in html  # anneau
     for label in ("Livré", "Revue", "En cours", "Prêt", "Backlog"):
@@ -291,11 +297,14 @@ def test_timeline_newest_first_joins_tags_and_merged_prs(client: TestClient) -> 
 
 
 # Cache 60 s et échec GitHub (décision D20)
-def test_github_is_cached_for_60_seconds(client: TestClient, gh: FakeGithub) -> None:
+def test_github_is_cached_for_3_minutes(client: TestClient, gh: FakeGithub) -> None:
     client.get("/api/v1/progress")
     client.get("/progress")
-    assert len(gh.calls) == 3  # issues, pulls, tags : une seule lecture
-    gh.clock.now += 61  # type: ignore[attr-defined]
+    assert len(gh.calls) == 3  # issues, tags, commits : une seule lecture
+    gh.clock.now += 120
+    client.get("/api/v1/progress")
+    assert len(gh.calls) == 3
+    gh.clock.now += 181  # type: ignore[attr-defined]
     client.get("/api/v1/progress")
     assert len(gh.calls) == 6
 
@@ -305,7 +314,7 @@ def test_github_failure_serves_last_known_data_with_banner(
 ) -> None:
     assert api(client)["github_error_at"] is None
     gh.fail = True
-    gh.clock.now += 61  # type: ignore[attr-defined]
+    gh.clock.now += 181  # type: ignore[attr-defined]
     body = api(client)
     assert body["github_error_at"] is not None
     assert body["totals"]["counts"]["delivered"] == 1  # dernières données connues
@@ -329,6 +338,76 @@ def test_failure_is_not_retried_before_ttl(client: TestClient, gh: FakeGithub) -
     first = len(gh.calls)
     client.get("/api/v1/progress")
     assert len(gh.calls) == first
+
+
+def test_any_failure_is_absorbed_and_not_retried_before_ttl(
+    client: TestClient, gh: FakeGithub
+) -> None:
+    gh.error = http.client.IncompleteRead(b"")  # n'est pas une OSError
+    assert api(client)["github_error_at"] is not None
+    count = len(gh.calls)
+    gh.clock.now += 100  # type: ignore[attr-defined]
+    api(client)
+    assert len(gh.calls) == count
+
+
+def test_rate_limit_waits_for_reset_and_keeps_last_data(client: TestClient, gh: FakeGithub) -> None:
+    api(client)
+    clock: Clock = gh.clock  # type: ignore[attr-defined]
+    gh.error = progress.RateLimited(until=clock.now + 181 + 1000)
+    clock.now += 181
+    body = api(client)
+    assert body["github_error_at"] is not None and body["totals"]["counts"]["delivered"] == 1
+    count = len(gh.calls)
+    clock.now += 900  # TTL dépassé mais réinitialisation GitHub pas encore atteinte
+    api(client)
+    assert len(gh.calls) == count
+    clock.now += 101
+    gh.error = None
+    assert api(client)["github_error_at"] is None
+    assert len(gh.calls) > count
+
+
+def test_rate_limit_wait_is_capped(gh: FakeGithub) -> None:
+    gh.error = progress.RateLimited(until=10**9)
+    clock: Clock = gh.clock  # type: ignore[attr-defined]
+    cache = progress.GithubCache(gh, clock=clock, wall=clock)
+    cache.get()
+    gh.error = None
+    clock.now += progress.MAX_RATE_WAIT_S + 1
+    assert cache.get()[1] is None
+
+
+def test_closed_not_planned_is_not_delivered(client: TestClient, gh: FakeGithub) -> None:
+    gh.data["issues"] = [
+        issue(2, labels=("epic",), epic=None),
+        issue(3, state="closed", reason="not_planned"),
+    ]
+    assert api(client)["totals"]["counts"]["delivered"] == 0
+
+
+def test_percent_rounds_down(client: TestClient, gh: FakeGithub) -> None:
+    gh.data["issues"] = [issue(2, labels=("epic",), epic=None)] + [
+        issue(n, state="closed") for n in range(3, 10)
+    ]
+    gh.data["issues"].append(issue(10, labels=("P2",)))
+    assert api(client)["epics"][0]["percent"] == 87  # 7/8 = 87,5 : jamais arrondi au pair
+
+
+def test_agents_cards_active_plus_five_distinct_inactive(client: TestClient) -> None:
+    types = ["qa", "reviewer", "devops", "scout", "ux-designer", "ai-engineer", "dev-backend"]
+    events = [(ago(minutes=1), "SubagentStart", "qa", "live", None)]
+    for i, kind in enumerate(types):  # chaque type : deux instances inactives
+        for j in range(2):
+            events.append(
+                (ago(minutes=40 + i, seconds=j), "SubagentStop", kind, f"{kind}-{j}", None)
+            )
+    seed(*events)
+    agents = api(client)["agents"]
+    assert agents[0]["active"] is True and agents[0]["name"] == "qa"
+    inactive = [a["name"] for a in agents if not a["active"]]
+    assert len(inactive) == 5 and len(set(inactive)) == 5
+    assert "qa" not in inactive  # déjà actif
 
 
 def test_github_values_are_html_escaped(client: TestClient, gh: FakeGithub) -> None:
@@ -460,9 +539,9 @@ def test_routes_documented_in_contract() -> None:
 
 # Client HTTP GitHub : sans jeton, conditionnel (ETag), URL fixe
 class FakeResponse:
-    def __init__(self, payload: Any, etag: str = '"v1"') -> None:
+    def __init__(self, payload: Any, etag: str = '"v1"', link: str | None = None) -> None:
         self._raw = json.dumps(payload).encode()
-        self.headers = {"ETag": etag}
+        self.headers = {"ETag": etag, **({"Link": link} if link else {})}
 
     def __enter__(self) -> FakeResponse:
         return self
@@ -515,3 +594,167 @@ def test_repo_setting_is_validated(value: str, monkeypatch: pytest.MonkeyPatch) 
 def test_repo_setting_override(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("VVA_GITHUB_REPO", "octo/cat")
     assert progress.repo() == "octo/cat"
+
+
+def _urlopen_from(
+    answers: list[Any], seen: list[urllib.request.Request]
+) -> Callable[..., FakeResponse]:
+    def fake(req: urllib.request.Request, timeout: float) -> FakeResponse:
+        seen.append(req)
+        answer = answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer  # type: ignore[no-any-return]
+
+    return fake
+
+
+def _next(n: int) -> str:
+    return f'<https://api.github.com/repos/o/r/issues?page={n}>; rel="next", <x>; rel="last"'
+
+
+def test_http_client_follows_next_pages_up_to_the_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[urllib.request.Request] = []
+    answers = [FakeResponse([n], link=_next(n + 1)) for n in range(1, 10)]
+    monkeypatch.setattr(progress, "urlopen", _urlopen_from(answers, seen))
+    assert progress.HttpJson()("/repos/o/r/issues?per_page=100") == [1, 2, 3, 4, 5]
+    assert len(seen) == progress.MAX_PAGES == 5
+
+
+def test_http_client_never_follows_a_foreign_next_link(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[urllib.request.Request] = []
+    evil = '<https://evil.example/x>; rel="next"'
+    answers = [FakeResponse([1], link=evil), FakeResponse([2])]
+    monkeypatch.setattr(progress, "urlopen", _urlopen_from(answers, seen))
+    assert progress.HttpJson()("/repos/o/r/issues") == [1]
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    ("code", "headers"),
+    [
+        (403, {"X-RateLimit-Remaining": "0", "X-RateLimit-Reset": "5000"}),
+        (429, {"X-RateLimit-Reset": "5000"}),
+    ],
+)
+def test_http_client_reports_rate_limit_reset(
+    monkeypatch: pytest.MonkeyPatch, code: int, headers: dict[str, str]
+) -> None:
+    msg = Message()
+    for key, value in headers.items():
+        msg[key] = value
+    seen: list[urllib.request.Request] = []
+    answers: list[Any] = [HTTPError("u", code, "limit", msg, None)]
+    monkeypatch.setattr(progress, "urlopen", _urlopen_from(answers, seen))
+    with pytest.raises(progress.RateLimited) as err:
+        progress.HttpJson()("/repos/o/r/issues")
+    assert err.value.until == 5000
+
+
+def test_plain_403_is_not_a_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    answers: list[Any] = [HTTPError("u", 403, "interdit", Message(), None)]
+    monkeypatch.setattr(progress, "urlopen", _urlopen_from(answers, []))
+    with pytest.raises(HTTPError):
+        progress.HttpJson()("/repos/o/r/issues")
+
+
+# Compléments (#26) : étapes, animation active seule, reduced-motion, cas limites
+def _style() -> str:
+    text = TEMPLATE.read_text(encoding="utf-8")
+    return "".join(re.findall(r"<style>(.*?)</style>", text, re.S))
+
+
+def test_every_agent_step_is_reached_and_rendered(client: TestClient) -> None:
+    # Scénario agents : étapes dev, revue, QA, PR, déploiement
+    seed(
+        (ago(minutes=3), "SubagentStart", "qa", "ag-12", None),
+        (ago(minutes=2), "SubagentStart", "devops", "ag-13", None),
+    )
+    steps = {a["name"]: a["step"] for a in api(client)["agents"]}
+    assert steps == {"qa": "qa", "devops": "deploy"}
+    html = client.get("/progress").text
+    assert "▶ QA" in html and "▶ Déploiement" in html
+    # carte QA : étapes avant « QA » fermées (✓), étapes suivantes ouvertes (○)
+    assert "✓ Dév" in html and "✓ Revue" in html and "○ PR" in html
+
+
+def test_pulse_animation_only_on_active_agent_card(client: TestClient) -> None:
+    # Scénario agents : animation discrète tant que l'agent est actif
+    seed(
+        (ago(minutes=2), "SubagentStart", "reviewer", "ag-10", None),
+        (ago(minutes=30), "SubagentStop", "qa", "ag-11", None),
+    )
+    html = client.get("/progress").text
+    assert html.count('class="pulse"') == 1
+    reviewer_card = html.split('aria-label="reviewer"', 1)[1].split("</article>", 1)[0]
+    assert 'class="pulse"' in reviewer_card
+
+
+def test_reduced_motion_covers_every_animated_selector() -> None:
+    # Scénario accessibilité : toute animation est coupée sous prefers-reduced-motion
+    style = _style()
+    head, _, media = style.partition("@media (prefers-reduced-motion: reduce)")
+    reduced = re.search(r"\{\s*([^{}]*)\{([^{}]*)\}", media)
+    assert reduced and "animation: none" in reduced.group(2)
+    covered = {sel.strip().split()[-1] for sel in reduced.group(1).split(",")}
+    rules = re.findall(r"([^{}@]+)\{([^{}]*)\}", head)
+    animated = {
+        sel.strip().split()[-1]
+        for sel, body in rules
+        if "animation:" in body and "animation: none" not in body
+    }
+    assert animated, "aucune animation détectée : le test ne vaut rien"
+    assert animated <= covered, animated - covered
+
+
+def test_timeout_is_absorbed_and_last_data_is_kept(client: TestClient, gh: FakeGithub) -> None:
+    # Timeout réseau : pas de 500, dernières données conservées, bandeau d'erreur
+    api(client)
+    gh.error = TimeoutError("délai dépassé")
+    gh.clock.now += 181  # type: ignore[attr-defined]
+    body = api(client)
+    assert body["github_error_at"] is not None
+    assert body["totals"]["counts"]["delivered"] == 1
+    assert client.get("/progress").status_code == 200
+
+
+def test_timeout_is_passed_to_http_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen_timeouts: list[float] = []
+
+    def fake(req: urllib.request.Request, timeout: float) -> FakeResponse:
+        seen_timeouts.append(timeout)
+        return FakeResponse([])
+
+    monkeypatch.setattr(progress, "urlopen", fake)
+    progress.HttpJson()("/repos/o/r/issues")
+    assert seen_timeouts == [progress.HTTP_TIMEOUT_S] and 0 < progress.HTTP_TIMEOUT_S <= 10
+
+
+def test_arabic_darija_title_is_kept_intact_and_escaped(client: TestClient, gh: FakeGithub) -> None:
+    title = 'شنو الجديد "<b>" ؟'
+    gh.data["issues"] = [issue(2, labels=("epic",), epic=None, title=title)]
+    assert api(client)["epics"][0]["title"] == title
+    resp = client.get("/progress")
+    assert "شنو الجديد" in resp.text
+    assert "&lt;b&gt;" in resp.text and "<b>" not in resp.text
+
+
+def test_empty_github_title_falls_back_to_number(client: TestClient, gh: FakeGithub) -> None:
+    gh.data["issues"] = [issue(20, labels=("epic",), epic=None, title="")]
+    assert api(client)["epics"][0]["title"] == "Ticket 20"
+
+
+def test_every_status_segment_has_a_non_color_cue() -> None:
+    style = _style()
+    for key, _label in progress.STATUSES:
+        rule = re.search(rf"\.seg-{key}\s*\{{([^}}]*)\}}", style)
+        assert rule and re.search(r"gradient|box-shadow|border", rule.group(1)), key
+
+
+def test_each_bar_has_a_visible_text_line_with_matching_swatches(client: TestClient) -> None:
+    html = client.get("/progress").text
+    row = html.split('<li class="row">', 1)[1].split("</li>", 1)[0]
+    line = re.sub(r"<[^>]+>", "", row.split('<p class="counts">', 1)[1].split("</p>", 1)[0])
+    assert " ".join(line.split()) == "Livré 1 · Revue 1 · En cours 1 · Prêt 1 · Backlog 2"
+    for key, _label in progress.STATUSES:
+        assert f'class="swatch seg-{key}"' in row, key
