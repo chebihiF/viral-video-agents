@@ -121,9 +121,6 @@
 - `prompts/classification.v1.md` — classification.v1
 - `prompts/storyboard.v1.md`
 - `pyproject.toml`
-- `tools/agents/CLAUDE.template.md` — Modèle de CLAUDE.md pour les agents (à copier hors du dépôt)
-- `tools/agents/memory/README.md` — Mémoire des agents (modèle)
-- `tools/agents/memory/modele-fait.md` — Titre : le port du dashboard en local est 8000
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
 - `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).

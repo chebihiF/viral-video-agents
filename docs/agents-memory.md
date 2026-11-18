@@ -13,8 +13,8 @@ stocker de donnée sensible. Décision : [ADR-003](adr/ADR-003-memoire-agents.md
 
 ## Format d'un fait
 
-Un fichier par fait, **≤ 10 lignes** : titre, date, source, date d'expiration. Modèle :
-[`tools/agents/memory/modele-fait.md`](../tools/agents/memory/modele-fait.md).
+Un fichier par fait, **≤ 10 lignes** : titre, date, source, date d'expiration. Les fichiers de
+mémoire restent locaux, hors du dépôt.
 
 ## Durée de vie
 
@@ -39,5 +39,5 @@ Base vectorielle ou service externe, mémoire du contenu des conversations, dash
 
 ## Règle de dépôt
 
-Aucun fichier `.claude/` ni `CLAUDE.md` réel n'est versionné (test `test_no_claude_tracked.py`). Le
-modèle de référence est `tools/agents/CLAUDE.template.md`.
+Aucun fichier de l'outillage Claude (`.claude/`, `CLAUDE.md`, modèles, mémoire) n'est versionné
+(test `test_no_claude_tracked.py`). Ces fichiers restent locaux.
