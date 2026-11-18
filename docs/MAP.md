@@ -17,10 +17,11 @@
 - `apps/dashboard/src/dashboard/__init__.py` — Agents Dashboard.
 - `apps/dashboard/src/dashboard/activity.py` — GET /activity : 100 derniers événements d'agents (contrat : contracts/dashboard-routes.md)
 - `apps/dashboard/src/dashboard/auth.py` — Connexion au dashboard (contrat : contracts/dashboard-routes.md).
-- `apps/dashboard/src/dashboard/db.py` — Persistance SQLite des événements d'agents (stdlib `sqlite3`).
+- `apps/dashboard/src/dashboard/db.py` — Persistance SQLite des événements d'agents et des tokens (stdlib `sqlite3`).
 - `apps/dashboard/src/dashboard/ingest.py` — POST /api/v1/events : ingestion authentifiée (contrat : contracts/ingest-api.md).
 - `apps/dashboard/src/dashboard/interactions.py` — GET /interactions : sessions, sous-agents et durée (contrat : contracts/dashboard-routes.m
 - `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (routes : contracts/dashboard-routes.md).
+- `apps/dashboard/src/dashboard/otlp.py` — POST /v1/metrics : tokens Claude Code en OTLP/HTTP JSON (contrat : contracts/token-usage.m
 - `apps/dashboard/src/dashboard/static/live.js` — Temps réel : flux SSE /stream (EventSource, reprise automatique par Last-Event-ID).
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
@@ -28,13 +29,17 @@
 - `apps/dashboard/src/dashboard/templates/index.html`
 - `apps/dashboard/src/dashboard/templates/interactions.html`
 - `apps/dashboard/src/dashboard/templates/login.html`
+- `apps/dashboard/src/dashboard/templates/tokens.html`
+- `apps/dashboard/src/dashboard/tokens.py` — Totaux de tokens par agent et par modèle, sur 24 h et 7 jours glissants.
 - `apps/dashboard/tests/test_activity.py` — Liste d'activité des agents (#5) : 100 derniers événements, vues tableau + flux.
 - `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
 - `apps/dashboard/tests/test_main.py`
+- `apps/dashboard/tests/test_otlp.py` — Réception OTLP/HTTP JSON des métriques de tokens (#7).
 - `apps/dashboard/tests/test_stream.py` — Flux SSE /stream (#6) : session exigée, id croissant, reprise par Last-Event-ID.
+- `apps/dashboard/tests/test_tokens.py` — Page /tokens : totaux par agent et par modèle sur 24 h et 7 jours (#7).
 - `apps/gpu-worker/README.md` — gpu-worker
 - `apps/gpu-worker/comfy_run.py` — Lance un workflow ComfyUI (format API) et attend le résultat.
 - `apps/media-service/README.md` — media-service
@@ -45,6 +50,7 @@
 - `contracts/agent-event.schema.json` — données JSON
 - `contracts/dashboard-routes.md` — Routes du dashboard
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
+- `contracts/token-usage.md` — Métriques de tokens (OTLP/HTTP JSON)
 - `docs/ARCHITECTURE.md` — Architecture — Viral Video Agents
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
