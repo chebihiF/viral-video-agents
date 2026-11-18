@@ -206,3 +206,34 @@ def test_compose_routers_are_named_per_slot_and_share_one_service() -> None:
 def test_compose_has_two_slots() -> None:
     text = (DEPLOY / "compose.yaml").read_text()
     assert "dashboard_blue:" in text and "dashboard_green:" in text
+
+
+LEGACY_LABELS = {  # labels de l'ancien conteneur unique (0.14.0), encore en prod pendant la migration
+    "traefik.http.routers.vva-dashboard.rule": "Host(`${DASHBOARD_HOST}`)",
+    "traefik.http.routers.vva-dashboard.middlewares": "vva-retry",
+    "traefik.http.services.vva-dashboard.loadbalancer.server.port": "8000",
+}
+
+
+def _slot_labels(text: str, slot: str) -> dict[str, str]:
+    block = text.split(f"  dashboard_{slot}:", 1)[1].split("\n  dashboard_", 1)[0]
+    labels = [ln.strip()[2:] for ln in block.splitlines() if ln.strip().startswith("- traefik.")]
+    return dict(item.split("=", 1) for item in labels)
+
+
+def test_slot_labels_never_conflict_with_legacy_container_or_each_other() -> None:
+    text = (DEPLOY / "compose.yaml").read_text()
+    blue, green = _slot_labels(text, "blue"), _slot_labels(text, "green")
+    for slot_labels in (blue, green):
+        for key, value in LEGACY_LABELS.items():
+            if key in slot_labels:  # même objet Traefik : la définition doit être identique
+                assert slot_labels[key] == value, key
+    # routeurs/middlewares : aucun nom partagé avec l'ancien conteneur
+    legacy_names = {k.split(".")[3] for k in LEGACY_LABELS if ".routers." in k or ".middlewares." in k}
+    for slot_labels in (blue, green):
+        names = {k.split(".")[3] for k in slot_labels if ".routers." in k or ".middlewares." in k}
+        assert not names & legacy_names
+    # blue et green : même service, mêmes valeurs ; objets nommés par slot et distincts
+    service_keys = [k for k in blue if ".services." in k]
+    assert service_keys and all(blue[k] == green[k] for k in service_keys)
+    assert not {k for k in blue if "-blue" in k} & {k for k in green}
