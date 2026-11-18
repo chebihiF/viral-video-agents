@@ -16,6 +16,7 @@
 - `apps/dashboard/pyproject.toml`
 - `apps/dashboard/src/dashboard/__init__.py` — Agents Dashboard.
 - `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (Sprint 0 : page vide + santé).
+- `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/templates/index.html`
 - `apps/dashboard/tests/test_main.py`
 - `apps/gpu-worker/README.md` — gpu-worker
@@ -29,6 +30,8 @@
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
 - `docs/adr/ADR-002-stack-dashboard.md` — ADR-002 — Stack du dashboard (et des services Python)
+- `docs/design/README.md` — Design system du dashboard
+- `docs/design/activity.md` — Écran « Activité des agents »
 - `evals/README.md` — evals
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
