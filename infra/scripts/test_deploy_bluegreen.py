@@ -210,7 +210,9 @@ def test_compose_has_two_slots() -> None:
 
 LEGACY_LABELS = {  # labels de l'ancien conteneur unique (0.14.0), encore en prod pendant la migration
     "traefik.http.routers.vva-dashboard.rule": "Host(`${DASHBOARD_HOST}`)",
-    "traefik.http.routers.vva-dashboard.middlewares": "vva-retry",
+    "traefik.http.routers.vva-dashboard.entrypoints": "${TLS_ENTRYPOINT}",
+    "traefik.http.routers.vva-dashboard.tls": "true",
+    "traefik.http.routers.vva-dashboard.tls.certresolver": "${CERT_RESOLVER}",
     "traefik.http.services.vva-dashboard.loadbalancer.server.port": "8000",
 }
 
@@ -237,3 +239,10 @@ def test_slot_labels_never_conflict_with_legacy_container_or_each_other() -> Non
     service_keys = [k for k in blue if ".services." in k]
     assert service_keys and all(blue[k] == green[k] for k in service_keys)
     assert not {k for k in blue if "-blue" in k} & {k for k in green}
+
+
+def test_deploy_ignores_legacy_orphan_container_without_removing_it() -> None:
+    text = (DEPLOY / "deploy.sh").read_text()
+    # l'ancien conteneur (service « dashboard ») n'est arrêté qu'après le smoke public du nouveau slot
+    assert "COMPOSE_IGNORE_ORPHANS=true" in text
+    assert "--remove-orphans" not in text
