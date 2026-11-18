@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/classification.schema.json",
+  "title": "Classification",
+  "description": "Sortie de la classification de sécurité d'une dictée d'enfant (docs/ARCHITECTURE.md §6, prompt prompts/classification.v1.md). libre = tout l'imaginaire, combats façon jeu vidéo compris ; adouci = violence réécrite en dessin animé (ni sang ni mort) ; bloque = sexuel ou nudité, rien n'est généré. En cas de doute : la classe la plus prudente. Ne contient jamais la dictée originale.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "classe", "signaler_parent", "motif"],
+  "properties": {
+    "schema_version": {
+      "description": "Version du contrat.",
+      "type": "string",
+      "enum": ["1"]
+    },
+    "classe": {
+      "description": "Ordre de prudence croissante : libre < adouci < bloque.",
+      "type": "string",
+      "enum": ["libre", "adouci", "bloque"]
+    },
+    "signaler_parent": {
+      "description": "Vrai pour adouci, bloque, sujets tabous et signes de détresse : alimente le rapport parent a posteriori.",
+      "type": "boolean"
+    },
+    "motif": {
+      "description": "Raison courte, en français, destinée au parent.",
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 160
+    },
+    "texte_adouci": {
+      "description": "Uniquement si classe = adouci : la scène réécrite en dessin animé, en français simple, sans sang ni mort.",
+      "type": "string",
+      "minLength": 10,
+      "maxLength": 600
+    },
+    "mot_pour_enfant": {
+      "description": "Uniquement si classe = adouci ou bloque : petit mot bienveillant, sans reproche, dans la langue de la dictée.",
+      "type": "string",
+      "minLength": 5,
+      "maxLength": 300
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "classe": { "const": "libre" } } },
+      "then": {
+        "not": { "anyOf": [{ "required": ["texte_adouci"] }, { "required": ["mot_pour_enfant"] }] }
+      }
+    },
+    {
+      "if": { "properties": { "classe": { "const": "adouci" } } },
+      "then": {
+        "required": ["texte_adouci", "mot_pour_enfant"],
+        "properties": { "signaler_parent": { "const": true } }
+      }
+    },
+    {
+      "if": { "properties": { "classe": { "const": "bloque" } } },
+      "then": {
+        "required": ["mot_pour_enfant"],
+        "properties": { "signaler_parent": { "const": true } },
+        "not": { "required": ["texte_adouci"] }
+      }
+    }
+  ]
+}
