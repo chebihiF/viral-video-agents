@@ -49,10 +49,12 @@
 - `infra/scripts/conftest.py`
 - `infra/scripts/gen_map.py` — Génère docs/MAP.md : une ligne par fichier suivi par git (index uniquement) (chemin — résu
 - `infra/scripts/next_version.py` — Calcule la prochaine version SemVer à partir des Conventional Commits.
+- `infra/scripts/pool.sh` — Pool de postes : un ticket = une branche neuve sur un poste libre.
 - `infra/scripts/quiet.sh` — Exécute une commande ; n'affiche sa sortie (40 dernières lignes) qu'en cas d'échec.
 - `infra/scripts/test_bootstrap_worktree.py` — bootstrap_worktree.sh copie .claude/ sans worktrees/ ni telemetry/ et sans écraser.
 - `infra/scripts/test_next_version.py`
 - `infra/scripts/test_no_claude_tracked.py` — Garde-fou : aucun chemin .claude/ ni CLAUDE.md ne doit être suivi par git.
+- `infra/scripts/test_pool.py` — pool.sh : un ticket = une branche sur un poste libre du pool (#14).
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
 - `pyproject.toml`
