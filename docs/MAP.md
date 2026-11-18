@@ -58,10 +58,13 @@
 - `infra/scripts/next_version.py` — Calcule la prochaine version SemVer à partir des Conventional Commits.
 - `infra/scripts/pool.sh` — Pool de postes : un ticket = une branche neuve sur un poste libre.
 - `infra/scripts/quiet.sh` — Exécute une commande ; n'affiche sa sortie (40 dernières lignes) qu'en cas d'échec.
+- `infra/scripts/set-dashboard-password.sh` — Définit le mot de passe du dashboard (à lancer par le parent, sur le Mac).
 - `infra/scripts/test_bootstrap_worktree.py` — bootstrap_worktree.sh copie .claude/ sans worktrees/ ni telemetry/ et sans écraser.
+- `infra/scripts/test_deploy_dashboard_secrets.py` — deploy.sh + compose.yaml (#30) : clé de session stable, hash transmis, /login fermé par dé
 - `infra/scripts/test_next_version.py`
 - `infra/scripts/test_no_claude_tracked.py` — Garde-fou : aucun chemin .claude/ ni CLAUDE.md ne doit être suivi par git.
 - `infra/scripts/test_pool.py` — pool.sh : un ticket = une branche sur un poste libre du pool (#14).
+- `infra/scripts/test_set_dashboard_password.py` — set-dashboard-password.sh (#30) : hash vérifiable, mot de passe jamais écrit ni affiché.
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
 - `pyproject.toml`
