@@ -57,6 +57,7 @@
 - `docs/adr/ADR-002-stack-dashboard.md` — ADR-002 — Stack du dashboard (et des services Python)
 - `docs/design/README.md` — Design system du dashboard
 - `docs/design/activity.md` — Écran « Activité des agents »
+- `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `evals/README.md` — evals
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
 - `infra/deploy/compose.yaml` — Dashboard en prod sur le VPS, derrière le reverse proxy existant (Traefik de n8n).
