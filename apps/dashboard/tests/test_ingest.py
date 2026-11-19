@@ -301,3 +301,69 @@ def test_indexes_on_ts_and_agent_id(client: TestClient, db_path: Path) -> None:
             for c in conn.execute(f'PRAGMA index_info("{name}")')
         }
     assert {"ts", "agent_id"} <= cols
+
+
+# Ticket en cours (#100) : champ optionnel, entier >= 1, rétrocompatible
+def stored_tickets(path: Path) -> list[tuple[str, int | None]]:
+    with sqlite3.connect(path) as conn:
+        rows = conn.execute("SELECT event_id, ticket FROM events ORDER BY event_id").fetchall()
+    return [(str(event_id), ticket) for event_id, ticket in rows]
+
+
+def test_ticket_is_stored(client: TestClient, db_path: Path) -> None:
+    resp = client.post(URL, json=event(ticket=93), headers=auth())
+    assert resp.status_code == 202
+    assert stored_tickets(db_path) == [("evt-1", 93)]
+
+
+# Scénario : ancien événement sans ticket stocké avec ticket NULL
+@pytest.mark.parametrize("extra", [{}, {"ticket": None}])
+def test_event_without_ticket_is_stored_null(
+    client: TestClient, db_path: Path, extra: dict[str, Any]
+) -> None:
+    resp = client.post(URL, json=event(**extra), headers=auth())
+    assert resp.status_code == 202
+    assert stored_tickets(db_path) == [("evt-1", None)]
+
+
+# Scénario : ticket négatif ou textuel refusé (contrat)
+@pytest.mark.parametrize("bad", [-1, 0, "93", "#93", True, 9.5])
+def test_invalid_ticket_is_422(client: TestClient, db_path: Path, bad: object) -> None:
+    assert client.post(URL, json=event(ticket=bad), headers=auth()).status_code == 422
+    assert count_events(db_path) == 0
+
+
+LEGACY_EVENTS = """
+CREATE TABLE events (
+    event_id TEXT PRIMARY KEY, ts TEXT NOT NULL, hook_event_name TEXT NOT NULL,
+    session_id TEXT NOT NULL, agent_type TEXT, agent_id TEXT, tool_name TEXT,
+    received_at TEXT NOT NULL DEFAULT 'x'
+);
+INSERT INTO events (event_id, ts, hook_event_name, session_id)
+VALUES ('old', '2026-11-01T10:00:00+00:00', 'PreToolUse', 'sess-0');
+"""
+
+
+def test_legacy_database_gains_ticket_column(client: TestClient, db_path: Path) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(LEGACY_EVENTS)
+    resp = client.post(URL, json=event(ticket=7), headers=auth())
+    assert resp.status_code == 202
+    assert stored_tickets(db_path) == [("evt-1", 7), ("old", None)]
+
+
+def test_ticket_migration_is_idempotent(db_path: Path) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.executescript(LEGACY_EVENTS)
+        db.init_schema(conn)
+        db.init_schema(conn)
+        cols = [row[1] for row in conn.execute("PRAGMA table_info(events)")]
+    assert cols.count("ticket") == 1
+
+
+def test_contract_ticket_is_positive_integer() -> None:
+    contract = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    spec = contract["properties"]["ticket"]
+    assert spec["type"] == ["integer", "null"]
+    assert spec["minimum"] == 1
+    assert "ticket" not in contract["required"]

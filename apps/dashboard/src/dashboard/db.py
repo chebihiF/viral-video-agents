@@ -18,8 +18,9 @@ EVENT_COLUMNS = (
     "agent_type",
     "agent_id",
     "tool_name",
+    "ticket",
 )
-EventRow = tuple[str | None, ...]
+EventRow = tuple[str | int | None, ...]
 TOKEN_COLUMNS = ("point_id", "ts", "session_id", "agent_id", "model", "type", "count")
 TokenRow = tuple[str, str, str, str | None, str, str, int]
 ControlRow = tuple[bool, str | None, int, str]
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS events (
     agent_type      TEXT,
     agent_id        TEXT,
     tool_name       TEXT,
+    ticket          INTEGER,
     received_at     TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 CREATE INDEX IF NOT EXISTS idx_events_ts ON events (ts);
@@ -86,6 +88,19 @@ def db_path() -> Path:
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(SCHEMA)
+    _add_ticket_column(conn)
+
+
+def _add_ticket_column(conn: sqlite3.Connection) -> None:
+    """Migration idempotente (#100) : bases créées avant la colonne `events.ticket`."""
+    if any(row[1] == "ticket" for row in conn.execute("PRAGMA table_info(events)")):
+        return
+    try:
+        with conn:
+            conn.execute("ALTER TABLE events ADD COLUMN ticket INTEGER")
+    except sqlite3.OperationalError as exc:  # autre processus plus rapide
+        if "duplicate column" not in str(exc):
+            raise
 
 
 def _ensure_schema(conn: sqlite3.Connection, path: Path) -> None:

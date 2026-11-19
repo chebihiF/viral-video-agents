@@ -34,6 +34,7 @@ class AgentEvent(BaseModel):
     agent_type: OptionalName = None
     agent_id: OptionalName = None
     tool_name: OptionalName = None
+    ticket: Annotated[int | None, Field(ge=1, strict=True)] = None
 
     def row(self) -> db.EventRow:
         values = self.model_dump()

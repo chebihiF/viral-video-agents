@@ -220,3 +220,56 @@ def test_large_payload_is_read_entirely(tmp_path: Path) -> None:
     assert proc.returncode == 0
     [line] = lines(target)
     assert line["tool_name"] == "Bash"
+
+
+# Ticket en cours (#100) : déduit de la branche du `cwd` du hook, uniquement le nombre
+def git_repo(path: Path, branch: str) -> Path:
+    path.mkdir(parents=True, exist_ok=True)
+    for args in (["init", "-q"], ["symbolic-ref", "HEAD", f"refs/heads/{branch}"]):
+        subprocess.run(["git", "-C", str(path), *args], check=True)  # noqa: S603, S607
+    return path
+
+
+def emitted_in(tmp_path: Path, branch: str) -> dict[str, Any]:
+    repo = git_repo(tmp_path / "repo", branch)
+    target = tmp_path / "events.jsonl"
+    proc, _ = run_hook(json.dumps(subagent_start() | {"cwd": str(repo)}), tmp_path, target)
+    assert proc.returncode == 0
+    [line] = lines(target)
+    return line
+
+
+# Scénario : branche feat/93-accueil -> ticket 93
+@pytest.mark.parametrize(
+    ("branch", "ticket"), [("feat/93-accueil", 93), ("fix/7-bug", 7), ("chore/120-ci", 120)]
+)
+def test_ticket_comes_from_branch(tmp_path: Path, branch: str, ticket: int) -> None:
+    line = emitted_in(tmp_path, branch)
+    assert line["ticket"] == ticket
+    ingest.AgentEvent.model_validate_json(json.dumps(line))
+
+
+# Scénario : branche sans numéro -> ticket absent, ingestion 2xx
+@pytest.mark.parametrize("branch", ["main", "feat/accueil", "feat/93", "wip/93-x"])
+def test_branch_without_number_has_no_ticket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, branch: str
+) -> None:
+    from fastapi.testclient import TestClient  # noqa: PLC0415 - seul test HTTP du fichier
+
+    from dashboard.main import app  # noqa: PLC0415
+
+    line = emitted_in(tmp_path, branch)
+    assert "ticket" not in line
+    monkeypatch.setenv("VVA_DB_PATH", str(tmp_path / "vva.db"))
+    monkeypatch.setenv("INGEST_TOKEN", "test-token-not-a-secret")
+    headers = {"Authorization": "Bearer test-token-not-a-secret"}
+    resp = TestClient(app).post("/api/v1/events", json=line, headers=headers)
+    assert resp.status_code == 202
+
+
+def test_missing_or_bad_cwd_has_no_ticket(tmp_path: Path) -> None:
+    target = tmp_path / "events.jsonl"
+    for cwd in (None, 42, str(tmp_path / "absent")):
+        run_hook(json.dumps(subagent_start() | {"cwd": cwd}), tmp_path, target)
+    assert all("ticket" not in line for line in lines(target))
+    assert len(lines(target)) == 3

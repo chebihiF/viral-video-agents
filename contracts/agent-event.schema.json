@@ -40,6 +40,11 @@
     "tool_name": {
       "type": ["string", "null"],
       "maxLength": 128
+    },
+    "ticket": {
+      "description": "Optionnel (#100) : numéro du ticket en cours, lu dans la branche `<type>/<n>-…` ; absent hors branche de ticket. Anciens événements : NULL.",
+      "type": ["integer", "null"],
+      "minimum": 1
     }
   }
 }
