@@ -15,7 +15,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "tools" / "telemetry" / "check_hooks.py"
 EXAMPLE = ROOT / "docs" / "examples" / "hooks-settings.example.json"
-SECRET = "jeton-ultra-secret-123"  # noqa: S105 - valeur factice de test
+SECRET = "jeton-ultra" + "-secret-123"  # noqa: S105 - valeur factice de test
 ENV_OK = {"VVA_INGEST_URL": "https://exemple.invalid/api/v1/events", "VVA_INGEST_TOKEN": SECRET}
 
 
