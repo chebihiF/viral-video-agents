@@ -25,14 +25,14 @@
     .muted { color: var(--color-text-muted); }
     [role="alert"] { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-danger); background: var(--color-danger-bg); color: var(--color-danger); }
     [role="alert"] a { color: inherit; font-weight: 600; }
-    .empty { text-align: center; padding: var(--space-7) var(--space-4); }
   </style>
 </head>
 <body>
-  <main{% if last_id is not none %} data-stream data-last-id="{{ last_id }}" data-refresh="#sessions"{% endif %}>
+  {% from "_empty.html" import empty %}
+  {% with active="/interactions" %}{% include "_nav.html" %}{% endwith %}
+  <main id="contenu"{% if last_id is not none %} data-stream data-last-id="{{ last_id }}" data-refresh="#sessions"{% endif %}>
     <header>
       <h1>Interactions entre agents</h1>
-      {% with active="/interactions" %}{% include "_nav.html" %}{% endwith %}
       <p id="live-status" role="status"></p>
     </header>
     {% if error_at %}
@@ -96,10 +96,7 @@
         {% endif %}
       </section>
       {% else %}
-      <section class="panel empty" aria-labelledby="empty-title">
-        <h2 id="empty-title">Aucune interaction pour l'instant</h2>
-        <p class="muted">Les sessions et leurs sous-agents apparaîtront ici dès que des agents travaillent.</p>
-      </section>
+      {% call empty("Aucune interaction pour l'instant", "Aucune session n'a été enregistrée : les sessions et leurs sous-agents apparaîtront ici dès que des agents travaillent.") %}Prochaine étape : lancer un agent, ou consulter l'<a href="/activity">activité</a> pour vérifier que la télémétrie arrive.{% endcall %}
       {% endfor %}
     </div>
     {% endif %}

@@ -1,5 +1,21 @@
-<nav aria-label="Navigation principale">
-  {% for href, label in [("/progress", "Suivi"), ("/activity", "Activité"), ("/tokens", "Tokens"), ("/controls", "Contrôles"), ("/interactions", "Interactions")] %}
+<a class="skip-link" href="#contenu">Aller au contenu</a>
+<nav class="sidenav" aria-label="Navigation principale">
+  <ul>
+    {% for href, label in [("/", "Accueil"), ("/progress", "Suivi"), ("/activity", "Activité"), ("/interactions", "Interactions"), ("/tokens", "Tokens"), ("/controls", "Contrôles")] %}
+    <li><a class="navlink" href="{{ href }}"{% if href == active %} aria-current="page"{% endif %}>{{ label }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>
+<nav class="tabbar" aria-label="Navigation principale">
+  {% for href, label in [("/", "Accueil"), ("/progress", "Suivi"), ("/activity", "Activité"), ("/tokens", "Tokens")] %}
   <a href="{{ href }}"{% if href == active %} aria-current="page"{% endif %}>{{ label }}</a>
   {% endfor %}
+  <details>
+    <summary>Plus</summary>
+    <div class="more-sheet">
+      {% for href, label in [("/interactions", "Interactions"), ("/controls", "Contrôles")] %}
+      <a href="{{ href }}"{% if href == active %} aria-current="page"{% endif %}>{{ label }}</a>
+      {% endfor %}
+    </div>
+  </details>
 </nav>

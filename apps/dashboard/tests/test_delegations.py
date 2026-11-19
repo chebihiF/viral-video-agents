@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from html import unescape
 from pathlib import Path
 
 import pytest
@@ -276,7 +277,7 @@ def test_requires_session(db_file: Path) -> None:
 
 def test_empty_database_shows_only_the_existing_empty_state(client: TestClient) -> None:
     response = client.get("/interactions")
-    html = text_of(response.text)
+    html = unescape(text_of(response.text))
     assert response.status_code == 200
     assert "Aucune interaction pour l'instant" in html
     assert "Délégations" not in html

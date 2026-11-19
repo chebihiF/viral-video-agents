@@ -79,6 +79,7 @@
 .state svg { width: 40px; height: 40px; color: var(--color-text-muted); }
 .state h2 { font-size: var(--font-size-heading); }
 .state p { color: var(--color-text-muted); max-width: 44ch; }
+.state .state-action { color: var(--color-text); font-weight: 600; }
 .skeleton { background: linear-gradient(90deg, var(--color-surface-2), var(--color-border-subtle), var(--color-surface-2)); background-size: 200% 100%; border-radius: var(--radius-md); animation: shimmer 1.4s linear infinite; }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .banner { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid currentColor; font-weight: 600; }
@@ -107,7 +108,12 @@
   .page-head h1 { font-size: 22px; }
 }
 
-/* Transition : navigation horizontale des gabarits actuels (_nav.html), retirée avec la refonte des pages (#93-#99). */
-nav[aria-label="Navigation principale"]:not(.sidenav):not(.tabbar) { display: flex; flex-wrap: wrap; gap: var(--space-4); font-size: var(--font-size-small); }
-nav[aria-label="Navigation principale"]:not(.sidenav):not(.tabbar) a { color: var(--color-accent); font-weight: 600; }
-nav[aria-label="Navigation principale"]:not(.sidenav):not(.tabbar) a[aria-current="page"] { color: var(--color-text); text-decoration: none; }
+/* Placement de la navigation commune (#99) dans les gabarits actuels, sans grille .app ; à retirer quand les pages adoptent .app (#94-#97). */
+@media (min-width: 900px) {
+  body { padding-left: var(--nav-width); }
+  .sidenav { position: fixed; inset: 0 auto 0 0; width: var(--nav-width); overflow-y: auto; z-index: 10; }
+}
+@media (max-width: 899px) {
+  body { overflow-x: hidden; padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+  .tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; }
+}

@@ -37,6 +37,7 @@
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/templates/_delegations.html`
+- `apps/dashboard/src/dashboard/templates/_empty.html`
 - `apps/dashboard/src/dashboard/templates/_live.html`
 - `apps/dashboard/src/dashboard/templates/_nav.html`
 - `apps/dashboard/src/dashboard/templates/_quota.html`
@@ -55,12 +56,14 @@
 - `apps/dashboard/tests/test_controls.py` — Contrôles pause et plafond de tokens (#8) : /controls, POST protégés (CSRF), /api/v1/contr
 - `apps/dashboard/tests/test_delegations.py` — Interactions (#102) : qui délègue à qui, fil chronologique groupé par ticket.
 - `apps/dashboard/tests/test_design_tokens.py` — Design system (#92) : contrastes WCAG AA et rétrocompatibilité de tokens.css.
+- `apps/dashboard/tests/test_empty_states.py` — États vides parlants du dashboard (#98) : titre, explication, action suivante.
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_home.py` — Accueil (#93) : vue d'ensemble agents, tickets, tokens, fil de délégations.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
 - `apps/dashboard/tests/test_live.py` — « Qui fait quoi » en direct (#101) : agents, ticket, état, durée sur /activity.
 - `apps/dashboard/tests/test_main.py` — Accueil, redirections et navigation commune (#58).
+- `apps/dashboard/tests/test_nav.py` — Navigation commune du dashboard (#99) : page active, mobile, clavier.
 - `apps/dashboard/tests/test_otlp.py` — Réception OTLP/HTTP JSON des métriques de tokens (#7).
 - `apps/dashboard/tests/test_progress.py` — Suivi visuel du projet (#26) : /progress et /api/v1/progress. GitHub est toujours mocké.
 - `apps/dashboard/tests/test_quota.py` — Quota de tokens réglable par le parent (#100) : fenêtre de 5 h et semaine, jamais inventé.
