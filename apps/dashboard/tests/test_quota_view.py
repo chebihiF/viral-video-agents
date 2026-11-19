@@ -109,7 +109,7 @@ def test_levels_green_orange_red(db_path: Path) -> None:
     def level(used: int) -> str | None:
         return quota_view.gauge(used, 1000, "x", "y", "ENV").level
 
-    assert [level(699), level(700), level(900), level(901), level(2000)] == [
+    assert [level(699), level(700), level(899), level(900), level(2000)] == [
         "ok",
         "warn",
         "warn",
@@ -212,3 +212,78 @@ def test_ticket_and_agent_names_are_escaped(db_path: Path, monkeypatch: pytest.M
     monkeypatch.setenv(quota.ENV_5H, "1000")
     seed([(H, "s", "<script>x</script>", 5)], now=datetime.now(UTC))
     assert "<script>x" not in logged_in().get("/tokens").text
+
+
+# #126 : jauges conformes à la maquette (#118)
+def gauges_page(monkeypatch: pytest.MonkeyPatch, used_5h: int, used_week: int = 0) -> str:
+    monkeypatch.setenv(quota.ENV_5H, "1000000")
+    monkeypatch.setenv(quota.ENV_WEEK, "10000000")
+    now = datetime.now(UTC)
+    seed([(H, "s", "qa", used_5h), (2 * D, "s", "qa", used_week)], now=now)
+    return logged_in().get("/tokens").text
+
+
+def test_bar_is_a_meter_with_value_range_and_label(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    text = gauges_page(monkeypatch, 420_000)
+    assert text.count('role="meter"') == 3
+    assert 'aria-valuenow="42"' in text and 'aria-valuemin="0"' in text
+    assert 'aria-valuemax="100"' in text
+    assert 'aria-label="42 % du quota des 5 dernières heures' in text
+
+
+def test_bar_has_ticks_at_70_and_90(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    text = gauges_page(monkeypatch, 420_000)
+    assert text.count("tick--warn") == 3 and text.count("tick--danger") == 3
+
+
+@pytest.mark.parametrize(
+    ("used", "badge"),
+    [
+        (420_000, "● Normal 42 %"),
+        (750_000, "▲ Attention 75 %"),
+        (950_000, "■ Critique 95 %"),
+    ],
+)
+def test_badge_has_symbol_label_and_value(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch, used: int, badge: str
+) -> None:
+    assert badge in gauges_page(monkeypatch, used)
+
+
+def test_margin_block_names_closest_gauge(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    text = gauges_page(monkeypatch, 420_000, used_week=7_000_000)  # 5 h : 42 %, semaine : 74 %
+    assert "Marge restante avant plafond" in text
+    assert "Plus proche du plafond : <strong>Semaine</strong>" in text
+    assert "580" in text  # marge 5 h
+
+
+def test_margin_is_zero_when_over_the_limit(db_path: Path) -> None:
+    seed([(H, "s", "qa", 1_500_000)])
+    v = view(FULL)
+    assert [(m.name, m.remaining) for m in v.margins] == [
+        ("Fenêtre de 5 heures", 0),
+        ("Semaine", 8_500_000),
+    ]
+    assert v.closest is not None and v.closest.name == "Fenêtre de 5 heures"
+
+
+def test_no_margin_without_quota(db_path: Path) -> None:
+    seed([(H, "s", "qa", 420_000)])
+    v = view(NONE)
+    assert v.margins == [] and v.closest is None
+
+
+def test_legend_names_levels_and_thresholds(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    text = gauges_page(monkeypatch, 420_000)
+    for expected in ("Normal", "Attention", "Critique", "70 %", "90 %", "à partir de 90 %"):
+        assert expected in text
+    assert "plus de 90 %" not in text
+
+
+def test_unconfigured_gauges_keep_muted_badge_without_meter(db_path: Path) -> None:
+    seed([(H, "s", "backend", 420_000)], now=datetime.now(UTC))
+    text = logged_in().get("/tokens").text
+    assert 'role="meter"' not in text and "badge--muted" in text
+    assert "Marge restante avant plafond" not in text

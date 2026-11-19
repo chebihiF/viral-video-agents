@@ -66,6 +66,14 @@
 .bar { height: 8px; border-radius: var(--radius-pill); background: var(--color-surface-2); border: 1px solid var(--color-border-subtle); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--color-accent); }
 
+/* Repères de seuil sur une barre (70 % et 90 %, alignés sur WARN_PERCENT / DANGER_PERCENT) */
+.tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--color-text); }
+.tick--warn { left: 70%; }
+.tick--danger { left: 90%; }
+
+/* Marge restante avant plafond */
+.margin { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); padding: var(--space-3); list-style: none; background: var(--color-surface-2); border-radius: var(--radius-md); }
+
 /* Tableau (défile dans son conteneur) */
 .table-wrap { overflow-x: auto; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: var(--color-surface); }
 .table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--font-size-data); min-width: 560px; }
