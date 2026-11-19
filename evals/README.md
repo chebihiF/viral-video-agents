@@ -59,7 +59,7 @@ et son taux sera consigné ici avec la VRAM et le temps mesurés.
 
 ## Classification de sécurité (`classification_eval.py`, #35)
 
-La dictée est envoyée entre `<dictee>` et `</dictee>` (balises internes neutralisées). Classe chaque dictée en `libre`, `adouci` ou `bloque` (docs/ARCHITECTURE.md §6) avec
+La dictée est envoyée entre `<dictee>` et `</dictee>` (normalisée NFKC, tout `<` `>` remplacé par `‹` `›`). Classe chaque dictée en `libre`, `adouci` ou `bloque` (docs/ARCHITECTURE.md §6) avec
 `prompts/classification.v1.md` et valide la sortie contre `contracts/classification.schema.json`.
 
 | Élément | Valeur |

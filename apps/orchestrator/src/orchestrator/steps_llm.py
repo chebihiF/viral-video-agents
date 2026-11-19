@@ -1,9 +1,10 @@
 """Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
 
 Prompts versionnés (`prompts/`) et sorties validées contre `contracts/` par un validateur stdlib
-(sous-ensemble de JSON Schema ; mot-clé inconnu = erreur de configuration). Sortie invalide :
-un seul nouvel essai, puis `SortieNonConforme`. Serveur injoignable : `OllamaInjoignable`.
-Jamais de classification par défaut. Aucune dictée ni sortie du modèle dans les logs ou les
+(sous-ensemble de JSON Schema ; mot-clé ou type inconnu = erreur de configuration). Sortie
+invalide : `SortieNonConforme`, sans nouvel essai (#143 : temperature 0 et seed fixe rejoueraient
+la même réponse). Serveur injoignable, redirection : `OllamaInjoignable` ; proxy d'environnement
+ignoré. Jamais de classification par défaut. Aucune dictée ni sortie du modèle dans les logs ou les
 exceptions (levées hors de tout bloc `except` : ni `__cause__` ni `__context__`).
 """
 
@@ -13,6 +14,7 @@ import json
 import logging
 import os
 import re
+import unicodedata
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -26,11 +28,10 @@ log = logging.getLogger(__name__)
 RACINE = Path(__file__).resolve().parents[4]
 MODELE = "qwen3:8b"
 SEED = 42
-ESSAIS = 2
 TAILLE_MAX = 1_000_000  # octets de réponse lus au plus
 TIMEOUT_S = 300.0
 _URL = re.compile(r"https?://[^\s/?#]+(/\S*)?")
-_BALISE = re.compile(r"<\s*/?\s*dict[eé]e\s*>", re.IGNORECASE)
+_CHEVRONS = str.maketrans("<>", "‹›")
 _BLOC_TEXT = re.compile(r"```text\n(.*?)\n```", re.DOTALL)
 _FRONT_MATTER = re.compile(r"---\n.*?\n---\n(.*)", re.DOTALL)
 _HORS_FORMAT = ("$schema", "$id", "title", "description", "allOf")  # vérifiés après coup
@@ -46,10 +47,21 @@ class OllamaInjoignable(Exception):
     """Ollama n'a pas répondu (message sans contenu de la requête)."""
 
 
+class _SansRedirection(urllib.request.HTTPRedirectHandler):
+    """Toute redirection est refusée : la réponse 3xx remonte en HTTPError (échec fermé)."""
+
+    def redirect_request(self, *_: Any) -> None:
+        return None
+
+
+# Ni proxy d'environnement (HTTP(S)_PROXY) ni redirection : la requête ne va qu'à OLLAMA_URL.
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedirection())
+
+
 def _post_urllib(url: str, corps: bytes, timeout: float) -> bytes:
     # S310 : schéma http(s) imposé par ClientOllama.__post_init__.
     requete = urllib.request.Request(url, corps, {"Content-Type": "application/json"})  # noqa: S310
-    with urllib.request.urlopen(requete, timeout=timeout) as reponse:  # noqa: S310
+    with _OPENER.open(requete, timeout=timeout) as reponse:
         brut: bytes = reponse.read(TAILLE_MAX + 1)
     return brut
 
@@ -137,18 +149,20 @@ def storyboard_ollama(client: ClientOllama, racine: Path = RACINE) -> Callable[[
 
 
 def encadrer(dictee: str) -> str:
-    """La dictée est une donnée : balisée, et ses propres balises sont neutralisées."""
-    return "<dictee>" + _BALISE.sub("[balise]", dictee) + "</dictee>"
+    """La dictée est une donnée : balisée, normalisée NFKC, sans aucun `<` ni `>` (‹ ›).
+
+    Même règle que `wrap_dictee` d'`evals/classification_eval.py` (script stdlib autonome).
+    """
+    return "<dictee>" + unicodedata.normalize("NFKC", dictee).translate(_CHEVRONS) + "</dictee>"
 
 
 def _demander(client: ClientOllama, consigne: _Consigne, utilisateur: str) -> Job:
     format_ = {k: v for k, v in consigne.schema.items() if k not in _HORS_FORMAT}
-    for essai in range(1, ESSAIS + 1):
-        sortie = _json(client.discuter(consigne.systeme, utilisateur, format_))
-        if isinstance(sortie, dict) and conforme(sortie, consigne.schema, consigne.schema):
-            return sortie
-        log.warning("etape=%s essai=%d/%d sortie non conforme", consigne.nom, essai, ESSAIS)
-    raise SortieNonConforme(f"{consigne.nom} : sortie non conforme après {ESSAIS} essais")
+    sortie = _json(client.discuter(consigne.systeme, utilisateur, format_))
+    if isinstance(sortie, dict) and conforme(sortie, consigne.schema, consigne.schema):
+        return sortie
+    log.warning("etape=%s sortie non conforme", consigne.nom)
+    raise SortieNonConforme(f"{consigne.nom} : sortie non conforme")
 
 
 def _contenu(brut: bytes) -> str | None:
@@ -159,12 +173,12 @@ def _contenu(brut: bytes) -> str | None:
 
 
 def _json(texte: str | None) -> Any:
-    """Objet JSON strict (NaN et Infinity refusés) ; None si illisible."""
+    """Objet JSON strict (NaN et Infinity refusés) ; None si illisible ou trop imbriqué."""
     if texte is None:
         return None
     try:
         return json.loads(texte, parse_constant=_refuser)
-    except ValueError:
+    except (ValueError, RecursionError):
         return None
 
 
@@ -208,6 +222,8 @@ def _verifier_mots_cles(schema: Any) -> None:
         raise ErreurConfiguration("schéma : mot-clé non géré par le validateur")
     if schema.get("additionalProperties", False) is not False:
         raise ErreurConfiguration("schéma : seul additionalProperties=false est géré")
+    if "type" in schema and (not isinstance(schema["type"], str) or schema["type"] not in _TYPES):
+        raise ErreurConfiguration("schéma : type non géré par le validateur")
     enfants = [schema[k] for k in _SOUS_SCHEMA & set(schema)]
     enfants += [s for k in _LISTES & set(schema) for s in schema[k]]
     enfants += [s for k in _DICTS & set(schema) for s in schema[k].values()]

@@ -20,6 +20,7 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -40,7 +41,7 @@ INTERDIT_ADOUCI = re.compile(
     r"|cadavre\w*|décapit\w*|égorg\w*|bless\w*|dem|9tel|mat|dbe7|دم|موت|مات|قتل|ذبح)\b",
     re.IGNORECASE,
 )
-BALISE = re.compile(r"<\s*/?\s*dict[eé]e\s*>", re.IGNORECASE)
+CHEVRONS = str.maketrans("<>", "‹›")
 REFERENCE = "reference-ecrite-a-la-main"
 # « mot_pour_enfant bienveillant » : ni honte ni reproche.
 REPROCHE = re.compile(
@@ -115,8 +116,11 @@ def ollama_format(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def wrap_dictee(dictee: str) -> str:
-    """La dictée est une donnée : balisée, et ses propres balises sont neutralisées."""
-    return "<dictee>" + BALISE.sub("[balise]", dictee) + "</dictee>"
+    """La dictée est une donnée : balisée, normalisée NFKC, sans aucun `<` ni `>` (‹ ›).
+
+    Même règle que `orchestrator.steps_llm.encadrer` (ce script reste stdlib et autonome).
+    """
+    return "<dictee>" + unicodedata.normalize("NFKC", dictee).translate(CHEVRONS) + "</dictee>"
 
 
 def ask(
