@@ -91,8 +91,11 @@ def parse_job(data: Any) -> TtsJob:
     return TtsJob(output_dir=Path(out), plans=_plans(root["plans"]))
 
 
-def _config(env: Mapping[str, str]) -> tuple[str, str]:
-    """Résout PIPER_BIN (exécutable) et PIPER_MODEL (fichier) ; erreur de configuration claire."""
+def verifier_configuration(env: Mapping[str, str]) -> tuple[str, str]:
+    """API publique : résout PIPER_BIN (exécutable) et PIPER_MODEL (fichier) en chemins absolus.
+
+    Lève TtsError (message sans texte de dictée) si l'un manque ou est introuvable.
+    """
     configured = env.get("PIPER_BIN", "").strip()
     if not configured:
         raise TtsError("PIPER_BIN non configuré : indiquer le binaire Piper")
@@ -170,7 +173,7 @@ def synthetiser(
     Configuration : PIPER_BIN et PIPER_MODEL (dans `env`, sinon l'environnement du processus).
     """
     parsed = _plans(plans)
-    binary, model = _config(os.environ if env is None else env)
+    binary, model = verifier_configuration(os.environ if env is None else env)
     if not out_dir.is_dir():
         raise TtsError("dossier de sortie introuvable")
     voices: list[PlanVoice] = []
