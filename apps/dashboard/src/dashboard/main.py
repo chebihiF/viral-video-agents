@@ -15,6 +15,7 @@ from dashboard import auth, db, tokens
 from dashboard.activity import router as activity_router
 from dashboard.auth import router as auth_router
 from dashboard.controls import router as controls_router
+from dashboard.home import router as home_router
 from dashboard.ingest import router as ingest_router
 from dashboard.interactions import router as interactions_router
 from dashboard.otlp import router as otlp_router
@@ -30,18 +31,13 @@ app = FastAPI(title="Agents Dashboard", version=VERSION, docs_url=None, redoc_ur
 app.include_router(ingest_router)
 app.include_router(otlp_router)
 app.include_router(auth_router)
+app.include_router(home_router)
 app.include_router(activity_router)
 app.include_router(interactions_router)
 app.include_router(stream_router)
 app.include_router(progress_router)
 app.include_router(controls_router)
 app.mount("/static", StaticFiles(directory=HERE / "static"), name="static")
-
-
-@app.get("/", response_model=None)
-def index(request: Request) -> Response:
-    target = "/progress" if auth.is_authenticated(request) else "/login"
-    return RedirectResponse(target, status_code=303, headers={"Cache-Control": "no-store"})
 
 
 @app.get("/tokens", response_class=HTMLResponse)
