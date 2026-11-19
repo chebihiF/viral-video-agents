@@ -5,6 +5,7 @@ Usage : worker.py [--port 8765] [--comfy-url http://127.0.0.1:8188] [--workflow 
 
 Écoute 127.0.0.1 uniquement ; un seul job GPU à la fois ; idempotence par job_id.
 Les journaux ne contiennent que le job_id (jamais de prompt ni de chemin : données d'enfant).
+Hors réseau local (lan_guard, adresse du socket seule) : réponse « deferred », rien n'est lu ni mis en file.
 Bibliothèque standard uniquement, pour tourner tel quel sur le PC GPU.
 """
 
@@ -24,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import comfy_run
+import lan_guard
 
 HOST = "127.0.0.1"
 MAX_BODY = 64 * 1024
@@ -190,7 +192,7 @@ class ComfyRunner:
         return str(clips[0])
 
 
-def _handler(jobs: JobQueue) -> type[BaseHTTPRequestHandler]:
+def _handler(jobs: JobQueue, networks: tuple[str, ...]) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:
             """Pas de journal d'accès : seul le job_id est journalisé, par JobQueue."""
@@ -206,6 +208,10 @@ def _handler(jobs: JobQueue) -> type[BaseHTTPRequestHandler]:
         def do_POST(self) -> None:
             if self.path != "/jobs":
                 return self._reply(404, {"error": "route inconnue"})
+            if not lan_guard.is_local(self.client_address[0], networks):
+                return self._reply(
+                    200, {"status": "deferred", "message": lan_guard.MSG_HORS_RESEAU}
+                )
             raw = self.headers.get("Content-Length") or "0"
             if LENGTH_RE.fullmatch(raw) is None:
                 return self._reply(422, {"errors": ["Content-Length : invalide"]})
@@ -231,9 +237,11 @@ def _handler(jobs: JobQueue) -> type[BaseHTTPRequestHandler]:
     return Handler
 
 
-def make_server(jobs: JobQueue, port: int = 8765) -> ThreadingHTTPServer:
+def make_server(
+    jobs: JobQueue, port: int = 8765, networks: tuple[str, ...] = lan_guard.LAN_NETWORKS
+) -> ThreadingHTTPServer:
     """Serveur HTTP lié à 127.0.0.1 uniquement (WireGuard viendra plus tard)."""
-    return ThreadingHTTPServer((HOST, port), _handler(jobs))
+    return ThreadingHTTPServer((HOST, port), _handler(jobs, networks))
 
 
 def main() -> None:
@@ -242,12 +250,15 @@ def main() -> None:
     p.add_argument("--comfy-url", default="http://127.0.0.1:8188")
     p.add_argument("--workflow", type=Path, default=WORKFLOW)
     p.add_argument("--out", type=Path, default=Path("out/clips"))
+    p.add_argument(
+        "--lan", nargs="+", default=list(lan_guard.LAN_NETWORKS), help="réseaux autorisés (CIDR)"
+    )
     a = p.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     out = a.out.resolve()
     jobs = JobQueue(ComfyRunner(a.comfy_url, a.workflow, out), out)
     jobs.start()
-    server = make_server(jobs, a.port)
+    server = make_server(jobs, a.port, tuple(a.lan))
     log.info("gpu-worker sur %s:%s", HOST, a.port)
     try:
         server.serve_forever()
