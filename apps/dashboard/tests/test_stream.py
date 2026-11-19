@@ -241,7 +241,8 @@ def test_contract_documents_stream() -> None:
 def test_activity_page_is_wired_to_the_stream(client: TestClient) -> None:
     seed(3)
     html = client.get("/activity").text
-    assert re.search(r'<main data-stream data-last-id="3" data-refresh="#agents">', html)
+    pattern = r'<main id="contenu" data-stream data-last-id="3" data-refresh="#agents">'
+    assert re.search(pattern, html)
     assert '<ol aria-live="polite" data-feed>' in html
     assert '<script src="/static/live.js" defer></script>' in html
 

@@ -29,10 +29,10 @@
   </style>
 </head>
 <body>
-  <main>
+  {% with active="/controls" %}{% include "_nav.html" %}{% endwith %}
+  <main id="contenu">
     <header>
       <h1>Contrôles</h1>
-      {% with active="/controls" %}{% include "_nav.html" %}{% endwith %}
     </header>
     {% if error_at %}
     <div class="banner banner-danger" role="alert">
