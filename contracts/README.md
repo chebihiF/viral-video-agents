@@ -8,3 +8,4 @@ Schémas JSON versionnés échangés entre services (storyboard, jobs, événeme
 | [`gpu-job.schema.json`](gpu-job.schema.json) | Job image -> clip n8n vers gpu-worker (v1.0) et son état (`$defs/JobStatus`) ; exemples dans [`examples/`](examples/) |
 | [`montage-job.schema.json`](montage-job.schema.json) | Entrée du media-service (v1.0) : plans clip + voix + narration, sortie MP4, `subtitles_path` ASS optionnel ; exemples dans [`examples/`](examples/) |
 | [`tts-job.schema.json`](tts-job.schema.json) | Entrée du TTS Piper du media-service (v1.0) : texte de voix off par plan ; sortie `$defs/TtsResult` (WAV + durée par plan) ; exemple dans [`examples/`](examples/) |
+| [`agent-report.schema.json`](agent-report.schema.json) | CR de fin de tâche d'un agent (ticket, agent, date, résumé de 5 lignes, statut), table SQLite locale `agent_reports` (#61) |
