@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
-CONTRACTS = Path(__file__).resolve().parents[3] / "contracts"
+CONTRACTS = Path(__file__).resolve().parents[2] / "contracts"
 
 
 def _load(name: str) -> Any:

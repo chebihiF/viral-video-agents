@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check mapcheck build map run run-mock e2e-mock bootstrap ticket status telemetry-check
+.PHONY: help sync lint fmt type test audit check mapcheck build map run run-mock e2e-mock bootstrap ticket status telemetry-check ci-b
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -61,3 +61,8 @@ status: ## CR d'agents depuis la dernière lecture (10 lignes max, #61)
 
 telemetry-check: ## Les hooks locaux émettent-ils vers l'ingestion ? (--live : envoi réel, LIVE=1)
 	$(UV) python tools/telemetry/check_hooks.py $(if $(LIVE),--live)
+
+ci-b: ## CI de B sans GPU : contrats, evals --dry-run, garde-fou fichiers Claude
+	$(UV) pytest -q tests/contracts infra/scripts/test_no_claude_tracked.py
+	$(UV) python evals/classification_eval.py --dry-run
+	$(UV) python evals/storyboard_eval.py --dry-run

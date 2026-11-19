@@ -52,7 +52,6 @@
 - `apps/dashboard/src/dashboard/trend.py` — Tendance de consommation (#96) : tokens par jour sur 7 jours UTC et marge avant le plafond
 - `apps/dashboard/tests/test_activity.py` — Liste d'activité des agents (#5) : 100 derniers événements, vues tableau + flux.
 - `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
-- `apps/dashboard/tests/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
 - `apps/dashboard/tests/test_controls.py` — Contrôles pause et plafond de tokens (#8) : /controls, POST protégés (CSRF), /api/v1/contr
 - `apps/dashboard/tests/test_delegations.py` — Interactions (#102) : qui délègue à qui, fil chronologique groupé par ticket.
 - `apps/dashboard/tests/test_design_tokens.py` — Design system (#92) : contrastes WCAG AA et rétrocompatibilité de tokens.css.
@@ -181,6 +180,7 @@
 - `prompts/classification.v1.md` — classification.v1
 - `prompts/storyboard.v1.md`
 - `pyproject.toml`
+- `tests/contracts/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
 - `tools/agents/bin/cr.sh` — CR d'agents en base SQLite (#61). Voir docs/agents.md.
 - `tools/agents/bin/handoff.sh` — Passation automatique de session au seuil de contexte (#83). Voir docs/agents.md.
 - `tools/agents/bin/token-report.sh` — Tokens par ticket, agent et modèle, ≤ 15 lignes, compteurs seuls (#19). Voir docs/agents.m
