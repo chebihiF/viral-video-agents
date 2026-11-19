@@ -5,15 +5,18 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from dashboard import activity, auth, db, delegations
+from dashboard.live import format_duration
 
 MAX_SESSIONS = 20
+MAX_TICKETS = 30
+TICKET_WINDOW = delegations.HISTORY_WINDOW
 START, STOP = "SubagentStart", "SubagentStop"
 _SESSIONS = (
     "SELECT session_id, MIN(ts), MAX(ts), COUNT(*) FROM events "
@@ -23,6 +26,11 @@ _SUBAGENT_EVENTS = (
     "SELECT session_id, agent_id, agent_type, hook_event_name, ts FROM events "
     "WHERE hook_event_name IN (?, ?) AND agent_id IS NOT NULL "
     "AND session_id IN ({marks}) ORDER BY ts, rowid"
+)
+_TICKETS = (
+    "SELECT ticket, MIN(ts), MAX(ts), COUNT(DISTINCT session_id), "
+    "COUNT(DISTINCT CASE WHEN hook_event_name = ? THEN session_id || '/' || agent_id END) "
+    "FROM events WHERE ticket IS NOT NULL AND ts >= ? GROUP BY ticket"
 )
 
 log = logging.getLogger(__name__)
@@ -95,6 +103,43 @@ class Session:
         return _label(self.last_ts)
 
 
+def _plural(count: int, word: str) -> str:
+    return f"{count} {word}{'s' if count > 1 else ''}"
+
+
+@dataclass(frozen=True)
+class TicketStat:
+    """Durée (première à dernière activité), sous-agents lancés et sessions d'un ticket."""
+
+    ticket: int
+    duration_s: int
+    subagents: int
+    sessions: int
+
+    @property
+    def duration_label(self) -> str:
+        return format_duration(timedelta(seconds=self.duration_s))
+
+    @property
+    def line(self) -> str:
+        return (
+            f"ticket #{self.ticket} · durée {self.duration_label} · "
+            f"{_plural(self.subagents, 'sous-agent')} · {_plural(self.sessions, 'session')}"
+        )
+
+
+def load_ticket_stats(conn: sqlite3.Connection, now: datetime) -> list[TicketStat]:
+    """Tickets des 7 derniers jours, du plus long au plus court (les sans-ticket sont exclus)."""
+    since = (now - TICKET_WINDOW).astimezone(UTC).isoformat()
+    stats: list[TicketStat] = []
+    for ticket, first, last, sessions, subagents in conn.execute(_TICKETS, (START, since)):
+        begin, end = _parse(first), _parse(last)
+        seconds = int((end - begin).total_seconds()) if begin and end else 0
+        stats.append(TicketStat(int(ticket), max(seconds, 0), subagents, sessions))
+    stats.sort(key=lambda stat: (-stat.duration_s, -stat.ticket))
+    return stats[:MAX_TICKETS]
+
+
 def _pair_subagents(rows: list[tuple[str, str, str | None, str, str]]) -> dict[str, list[Subagent]]:
     """Apparie Start/Stop par (session, agent_id) : premier Start, dernier Stop."""
     merged: dict[tuple[str, str], Subagent] = {}
@@ -124,11 +169,21 @@ def load_sessions(conn: sqlite3.Connection) -> list[Session]:
     ]
 
 
-def load_page() -> tuple[int, list[Session], list[delegations.TicketGroup]]:
+@dataclass(frozen=True)
+class Page:
+    cursor: int
+    sessions: list[Session]
+    groups: list[delegations.TicketGroup]
+    tickets: list[TicketStat]
+
+
+def load_page() -> Page:
     with db.connect() as conn:
         cursor = activity.last_id(conn)  # avant la lecture : aucun trou possible
         sessions = load_sessions(conn)
-        return cursor, sessions, delegations.load_groups(conn, datetime.now(UTC))
+        now = datetime.now(UTC)
+        groups = delegations.load_groups(conn, now)
+        return Page(cursor, sessions, groups, load_ticket_stats(conn, now))
 
 
 def _page(request: Request, status: int, context: dict[str, object]) -> HTMLResponse:
@@ -144,19 +199,26 @@ async def interactions_page(request: Request) -> Response:
     if not auth.is_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     try:
-        cursor, sessions, groups = await run_in_threadpool(load_page)
+        page = await run_in_threadpool(load_page)
     except sqlite3.Error as exc:
         log.warning("lecture des interactions impossible : %s", type(exc).__name__)
         failed_at = datetime.now(UTC).strftime("%H:%M:%S")
         return _page(
             request,
             503,
-            {"error_at": failed_at, "sessions": [], "delegation_groups": [], "last_id": None},
+            {
+                "error_at": failed_at,
+                "sessions": [],
+                "delegation_groups": [],
+                "ticket_stats": [],
+                "last_id": None,
+            },
         )
     context: dict[str, object] = {
         "error_at": None,
-        "sessions": sessions,
-        "delegation_groups": groups,
-        "last_id": cursor,
+        "sessions": page.sessions,
+        "delegation_groups": page.groups,
+        "ticket_stats": page.tickets,
+        "last_id": page.cursor,
     }
     return _page(request, 200, context)

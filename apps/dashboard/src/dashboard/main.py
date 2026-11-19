@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from dashboard import auth, db, tokens
+from dashboard import auth, db, quota, quota_view, tokens
 from dashboard.activity import router as activity_router
 from dashboard.auth import router as auth_router
 from dashboard.controls import router as controls_router
@@ -45,8 +45,10 @@ def tokens_page(request: Request) -> Response:
     if not auth.is_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     with db.connect() as conn:
-        report = tokens.totals(conn, datetime.now(UTC))
-    context = {"version": VERSION, "report": report}
+        now = datetime.now(UTC)
+        report = tokens.totals(conn, now)
+        quota_data = quota_view.build(conn, now, quota.read_quota())
+    context = {"version": VERSION, "report": report, "quota": quota_data}
     return TEMPLATES.TemplateResponse(request, "tokens.html", context)
 
 
