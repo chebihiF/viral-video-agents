@@ -123,6 +123,18 @@ def wrap_dictee(dictee: str) -> str:
     return "<dictee>" + unicodedata.normalize("NFKC", dictee).translate(CHEVRONS) + "</dictee>"
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Toute redirection est refusée : la réponse 3xx remonte en HTTPError (échec fermé)."""
+
+    def redirect_request(self, *_: Any) -> None:
+        return None
+
+
+# Ni proxy d'environnement ni redirection : la dictée ne va qu'à l'URL Ollama donnée
+# (même règle que `orchestrator.steps_llm` ; ce script reste stdlib et autonome).
+_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirect())
+
+
 def ask(
     dictee: str, system: str, schema: dict[str, Any], model: str, url: str
 ) -> tuple[Any, float]:
@@ -141,7 +153,7 @@ def ask(
         url, json.dumps(payload).encode(), {"Content-Type": "application/json"}
     )
     start = time.time()
-    with urllib.request.urlopen(req, timeout=300) as r:
+    with _OPENER.open(req, timeout=300) as r:
         out = json.loads(r.read())
     content = out["message"]["content"]
     try:
