@@ -1,0 +1,74 @@
+{
+  "_commentaire": "Modèle de hooks de télémétrie (#170) à FUSIONNER dans .claude/settings.json (voir docs/agents.md). Aucun secret : VVA_INGEST_URL, VVA_INGEST_TOKEN et VVA_CONTROL_URL viennent de l'environnement.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 3,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/pretool_gate.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 2,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\""
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 2,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\""
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 2,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\""
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 2,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "timeout": 2,
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/ship.py\" --background"
+          }
+        ]
+      }
+    ]
+  }
+}
