@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check mapcheck build map run run-mock bootstrap ticket status
+.PHONY: help sync lint fmt type test audit check mapcheck build map run run-mock bootstrap ticket status telemetry-check
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -55,3 +55,6 @@ ticket: ## Ticket N sur un poste libre du pool (N=<n>, DRY=1 pour simuler)
 
 status: ## CR d'agents depuis la dernière lecture (10 lignes max, #61)
 	python3 tools/agents/cr.py status
+
+telemetry-check: ## Les hooks locaux émettent-ils vers l'ingestion ? (--live : envoi réel, LIVE=1)
+	$(UV) python tools/telemetry/check_hooks.py $(if $(LIVE),--live)

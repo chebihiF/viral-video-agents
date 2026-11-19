@@ -140,6 +140,7 @@
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `docs/design/refonte.md` — Refonte du dashboard — spec (#92, couvre #93 à #99)
 - `docs/design/tokens.md` — Écran « Tokens » (`/tokens`) — spec alignée sur le réel (#129, écarts #118)
+- `docs/examples/hooks-settings.example.json` — données JSON
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
@@ -185,9 +186,11 @@
 - `tools/agents/tests/test_token_report.py` — Mesure des tokens par ticket et routage des modèles (#19).
 - `tools/agents/token_report.py` — Tokens par ticket, agent et modèle ; routage des modèles (#19). Voir docs/agents.md.
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
+- `tools/telemetry/check_hooks.py` — make telemetry-check : les hooks locaux émettent-ils vers l'ingestion ? (#170)
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
 - `tools/telemetry/pretool_gate.py` — Hook Claude Code PreToolUse : bloque les outils tant que les agents sont en pause (#8).
 - `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).
+- `tools/telemetry/tests/test_check_hooks.py` — make telemetry-check : les hooks locaux émettent-ils vers l'ingestion ? (#170)
 - `tools/telemetry/tests/test_emit.py` — Émetteur de hooks : stdin JSON -> ligne JSONL minimale (#4).
 - `tools/telemetry/tests/test_gate.py` — Hook PreToolUse pretool_gate.py (#8) : code 2 si pause, échec sûr (cache 5 min).
 - `tools/telemetry/tests/test_py39.py` — Les scripts lancés par les hooks tournent sous le python3 du Mac (3.9) (#59).
