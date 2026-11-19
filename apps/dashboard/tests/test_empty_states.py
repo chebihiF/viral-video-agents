@@ -51,7 +51,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, gh: FakeGithub) -> T
 def seed_everything() -> None:
     now = datetime.now(UTC).isoformat(timespec="microseconds")
     with db.connect() as conn:
-        db.insert_events(conn, [("e1", now, "PreToolUse", "s1", "qa", "ag-1", "Bash")])
+        db.insert_events(conn, [("e1", now, "PreToolUse", "s1", "qa", "ag-1", "Bash", None)])
         db.insert_token_usage(conn, [("t1", now, "s1", "ag-1", "sonnet", "input", 10)])
 
 

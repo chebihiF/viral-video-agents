@@ -37,6 +37,7 @@
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/templates/_delegations.html`
+- `apps/dashboard/src/dashboard/templates/_empty.html`
 - `apps/dashboard/src/dashboard/templates/_live.html`
 - `apps/dashboard/src/dashboard/templates/_nav.html`
 - `apps/dashboard/src/dashboard/templates/_quota.html`
@@ -54,6 +55,7 @@
 - `apps/dashboard/tests/test_controls.py` — Contrôles pause et plafond de tokens (#8) : /controls, POST protégés (CSRF), /api/v1/contr
 - `apps/dashboard/tests/test_delegations.py` — Interactions (#102) : qui délègue à qui, fil chronologique groupé par ticket.
 - `apps/dashboard/tests/test_design_tokens.py` — Design system (#92) : contrastes WCAG AA et rétrocompatibilité de tokens.css.
+- `apps/dashboard/tests/test_empty_states.py` — États vides parlants du dashboard (#98) : titre, explication, action suivante.
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_home.py` — Accueil (#93) : vue d'ensemble agents, tickets, tokens, fil de délégations.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
