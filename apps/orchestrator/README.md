@@ -74,3 +74,14 @@ etapes = Etapes(classifier, storyboard, voix_piper(), image, clip, montage_reel(
 - `voix_piper(env=None)` : `tts-job` -> `TtsResult` via `media_service.tts.synthetiser` ; crée `output_dir` ; `PIPER_BIN` / `PIPER_MODEL` lus dans `env` (sinon l'environnement). Piper ou modèle absent : `ErreurConfiguration` claire avant toute synthèse, le pipeline range le run en « erreur » sur l'étape `voix`.
 - `montage_reel()` : durées des WAV (ffprobe) -> `subtitles.write_ass` (`<sortie>.ass` à côté du MP4) -> `run_montage` avec `subtitles_path` -> chemin du MP4 (1080x1920). L'ASS est supprimé si le montage échoue.
 - Pas de fuite : erreurs du montage réécrites en `ErreurMontage` (type seul, sans le message de FFmpeg), ni cause ni contexte ; les messages de voix nomment le plan, jamais son texte.
+
+## Parcours de bout en bout avec mocks (#139)
+
+```
+make e2e-mock   # pytest -m e2e : dictée -> MP4, ffmpeg local requis, sans GPU ni réseau
+```
+
+- `tests/test_e2e_mock.py` pilote le CLI (`orchestrator.__main__.main`) avec des étapes injectées (`tests/fakes.py`) : classification et storyboard factices, **faux Piper** (script écrit en dossier temporaire, 0,25 s par mot), image et clip factices (clips `lavfi`, GPU tracé), montage FFmpeg **réel** avec ASS incrusté.
+- Scénarios : MP4 H.264 + AAC 1080x1920 de durée = somme des WAV (±0,2 s) ; un `.ass` à côté du MP4 avec un événement par mot ; dictée « bloque » : aucun MP4, run « bloque » ; Piper absent : run « erreur » sur `voix`, aucun MP4 ni ASS ; étapes image/clip de deux runs concurrents sans chevauchement.
+- Marqueur `e2e` ; test sauté si `ffmpeg` / `ffprobe` sont absents. Sorties en dossier temporaire pytest, dictée de test fixe et neutre, aucune dictée dans les logs ni `run.json`.
+- Aussi exécuté par `make test` / `make check`.
