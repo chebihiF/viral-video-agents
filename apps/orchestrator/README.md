@@ -60,3 +60,17 @@ etapes = Etapes(classifier_ollama(client), storyboard_ollama(client), voix, imag
 - Pas de nouvel essai (décision #143) : à `temperature: 0` et seed fixe, la même requête rend la même réponse ; un retry doublerait l'attente (2 × 300 s) sans chance de succès. Échec fermé, 300 s au plus.
 - Ni dictée ni sortie du modèle dans les logs ou les exceptions (sans `__cause__` ni `__context__`).
 - Transport injectable `(url, corps, timeout) -> octets` : faux Ollama en test, aucun appel réseau.
+
+## Étapes média réelles (#136)
+
+```python
+from orchestrator.steps_media import montage_reel, voix_piper
+
+# PIPER_BIN / PIPER_MODEL lus dans os.environ
+etapes = Etapes(classifier, storyboard, voix_piper(), image, clip, montage_reel())
+```
+
+- Installation : extra `media` (`orchestrator[media]`, dépendance locale media-service) ; Python 3.12 requis pour ce module seul, le cœur reste stdlib / 3.9+.
+- `voix_piper(env=None)` : `tts-job` -> `TtsResult` via `media_service.tts.synthetiser` ; crée `output_dir` ; `PIPER_BIN` / `PIPER_MODEL` lus dans `env` (sinon l'environnement). Piper ou modèle absent : `ErreurConfiguration` claire avant toute synthèse, le pipeline range le run en « erreur » sur l'étape `voix`.
+- `montage_reel()` : durées des WAV (ffprobe) -> `subtitles.write_ass` (`<sortie>.ass` à côté du MP4) -> `run_montage` avec `subtitles_path` -> chemin du MP4 (1080x1920). L'ASS est supprimé si le montage échoue.
+- Pas de fuite : erreurs du montage réécrites en `ErreurMontage` (type seul, sans le message de FFmpeg), ni cause ni contexte ; les messages de voix nomment le plan, jamais son texte.

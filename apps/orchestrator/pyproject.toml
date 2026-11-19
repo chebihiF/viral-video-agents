@@ -5,6 +5,12 @@ description = "Orchestrateur du pipeline vidéo : étapes injectables, GPU en s�
 requires-python = ">=3.9"
 dependencies = []
 
+[project.optional-dependencies]
+media = ["media-service"]  # étapes réelles voix/montage (steps_media.py, Python 3.12)
+
+[tool.uv.sources]
+media-service = { workspace = true }
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

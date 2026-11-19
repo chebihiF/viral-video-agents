@@ -961,6 +961,15 @@ name = "orchestrator"
 version = "0.0.0"
 source = { editable = "apps/orchestrator" }
 
+[package.optional-dependencies]
+media = [
+    { name = "media-service" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "media-service", marker = "extra == 'media'", editable = "apps/media-service" }]
+provides-extras = ["media"]
+
 [[package]]
 name = "packageurl-python"
 version = "0.17.6"
@@ -1664,7 +1673,7 @@ dev = [
     { name = "jsonschema" },
     { name = "media-service" },
     { name = "mypy" },
-    { name = "orchestrator" },
+    { name = "orchestrator", extra = ["media"] },
     { name = "pip-audit" },
     { name = "pytest" },
     { name = "ruff" },
@@ -1679,7 +1688,7 @@ dev = [
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "media-service", editable = "apps/media-service" },
     { name = "mypy", specifier = ">=1.13" },
-    { name = "orchestrator", editable = "apps/orchestrator" },
+    { name = "orchestrator", extras = ["media"], editable = "apps/orchestrator" },
     { name = "pip-audit", specifier = ">=2.7" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "ruff", specifier = ">=0.8" },
