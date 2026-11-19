@@ -35,12 +35,6 @@ def client(db_file: Path) -> TestClient:
     return c
 
 
-def add_ticket_column() -> None:
-    """Simule le champ `ticket` de #100 (absent du schéma tant que #100 n'est pas livré)."""
-    with db.connect() as conn, conn:
-        conn.execute("ALTER TABLE events ADD COLUMN ticket INTEGER")
-
-
 _counter = iter(range(10_000))
 
 
@@ -55,8 +49,7 @@ def put(
     session: str = "sess-1",
 ) -> None:
     with db.connect() as conn, conn:
-        cols = [r[1] for r in conn.execute("PRAGMA table_info(events)")]
-        names = "event_id, ts, hook_event_name, session_id, agent_type, agent_id, tool_name"
+        names = "event_id, ts, hook_event_name, session_id, agent_type, agent_id, tool_name, ticket"
         values: list[object] = [
             f"evt-{next(_counter)}",
             at.isoformat(),
@@ -65,10 +58,8 @@ def put(
             agent_type,
             agent_id,
             tool,
+            ticket,
         ]
-        if "ticket" in cols:
-            names += ", ticket"
-            values.append(ticket)
         marks = ", ".join("?" * len(values))
         conn.execute(f"INSERT INTO events ({names}) VALUES ({marks})", values)  # noqa: S608
 
@@ -114,7 +105,6 @@ def at(hh: int, mm: int) -> datetime:
 
 # Scénario : le tech lead lance dev-backend puis qa sur le ticket 93
 def test_thread_is_chronological_with_time_and_ticket(db_file: Path) -> None:
-    add_ticket_column()
     delegate(at(14, 2), "dev-backend")
     delegate(at(14, 40), "qa")
     assert lines(groups_at()) == [
@@ -124,7 +114,6 @@ def test_thread_is_chronological_with_time_and_ticket(db_file: Path) -> None:
 
 
 def test_page_shows_the_thread(client: TestClient) -> None:
-    add_ticket_column()
     now = datetime.now(UTC)
     delegate(now - timedelta(minutes=50), "dev-backend")
     delegate(now - timedelta(minutes=10), "qa")
@@ -148,13 +137,12 @@ def test_running_subagent_has_no_duration(db_file: Path) -> None:
 
 def test_duration_is_shown_beside_the_arrow(client: TestClient) -> None:
     now = datetime.now(UTC)
-    delegate(now - timedelta(hours=1), "dev-backend", stop_after=timedelta(minutes=12))
+    delegate(now - timedelta(hours=1), "dev-backend", stop_after=timedelta(minutes=12), ticket=None)
     assert "dev-backend (ticket inconnu) a duré 12 min" in text_of(client.get("/interactions").text)
 
 
 # Scénario : deux tickets, groupés, le plus récent en haut
 def test_groups_by_ticket_most_recent_first(db_file: Path) -> None:
-    add_ticket_column()
     delegate(at(9, 0), "dev-backend", ticket=90)
     delegate(at(14, 0), "dev-backend", ticket=93)
     delegate(at(14, 30), "qa", ticket=93)
@@ -168,9 +156,9 @@ def test_groups_by_ticket_most_recent_first(db_file: Path) -> None:
 
 
 # Scénario : délégation sans ticket
-def test_without_ticket_column_the_ticket_is_unknown(client: TestClient) -> None:
+def test_without_ticket_the_ticket_is_unknown(client: TestClient) -> None:
     now = datetime.now(UTC)
-    delegate(now - timedelta(minutes=5), "dev-backend")
+    delegate(now - timedelta(minutes=5), "dev-backend", ticket=None)
     response = client.get("/interactions")
     assert response.status_code == 200
     assert "→ dev-backend (ticket inconnu)" in text_of(response.text)
@@ -178,7 +166,6 @@ def test_without_ticket_column_the_ticket_is_unknown(client: TestClient) -> None
 
 @pytest.mark.parametrize("raw", [None, "", "#93", "93a", 93.7, float("inf")])
 def test_null_or_malformed_ticket_is_unknown(db_file: Path, raw: object) -> None:
-    add_ticket_column()
     delegate(at(14, 2), "dev-backend", ticket=raw)
     [group] = groups_at()
     assert group.ticket is None
@@ -186,14 +173,12 @@ def test_null_or_malformed_ticket_is_unknown(db_file: Path, raw: object) -> None
 
 
 def test_ticket_of_the_start_event_is_used_when_the_tool_event_has_none(db_file: Path) -> None:
-    add_ticket_column()
     put(at(14, 2), "PreToolUse", tool="Agent", ticket=None)
     put(at(14, 2) + timedelta(seconds=1), "SubagentStart", agent_type="qa", agent_id="a", ticket=7)
     assert groups_at()[0].ticket == 7
 
 
 def test_ticket_zero_is_not_replaced_by_the_start_ticket(db_file: Path) -> None:
-    add_ticket_column()
     put(at(14, 2), "PreToolUse", tool="Task", ticket=0)
     put(at(14, 2) + timedelta(seconds=1), "SubagentStart", agent_type="qa", agent_id="a", ticket=7)
     assert groups_at()[0].ticket == 0
@@ -249,7 +234,7 @@ def test_sessions_do_not_mix(db_file: Path) -> None:
 
 
 def test_subagent_delegating_is_named_as_delegator(db_file: Path) -> None:
-    delegate(at(14, 2), "scout", by=("dev-backend", "id-dev"))
+    delegate(at(14, 2), "scout", by=("dev-backend", "id-dev"), ticket=None)
     assert lines(groups_at()) == ["14:02 dev-backend → scout (ticket inconnu)"]
 
 
