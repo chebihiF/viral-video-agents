@@ -1,6 +1,8 @@
 """CLI de l'orchestrateur (#138) : `python -m orchestrator run --mocks --dictee-file F --out DIR`.
 
-Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 étapes réelles absentes.
+Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 configuration absente
+(sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL ; échec fermé avant tout appel réseau).
+Image et clip réels (gpu-worker) ne sont pas branchés : le run finit « erreur » (#150).
 La dictée n'est ni écrite, ni journalisée, ni affichée.
 """
 
@@ -15,7 +17,8 @@ from pathlib import Path
 from typing import NoReturn
 
 from orchestrator.mocks import etapes_factices
-from orchestrator.pipeline import lancer, ligne_durees
+from orchestrator.pipeline import Etapes, lancer, ligne_durees
+from orchestrator.steps_llm import ErreurConfiguration
 
 DICTEE_MAX = 2000
 EX_USAGE = 64
@@ -54,6 +57,20 @@ def _lire_dictee(source: str) -> str | None:
     return texte if texte.strip() and len(texte) <= DICTEE_MAX else None
 
 
+def _etapes(mocks: bool) -> Etapes | str:
+    """Étapes du parcours ; message d'erreur (sans dictée) si la configuration manque."""
+    if mocks:
+        return etapes_factices()
+    try:
+        from orchestrator.etapes import etapes_reelles  # extra `media`, Python 3.12
+
+        return etapes_reelles()
+    except ErreurConfiguration as exc:
+        return f"configuration absente : {exc}"
+    except ImportError:
+        return "étapes réelles indisponibles : installer l'extra media (Python 3.12)"
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     dictee = _lire_dictee(args.dictee_file)
@@ -62,14 +79,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"dictée refusée : lisible, non vide, {DICTEE_MAX} caractères au plus", file=sys.stderr
         )
         return EX_USAGE
-    if not args.mocks:
-        print("étapes réelles non configurées : utiliser --mocks", file=sys.stderr)
+    etapes = _etapes(args.mocks)
+    if isinstance(etapes, str):
+        print(etapes, file=sys.stderr)
         return EX_CONFIG
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     out: Path = args.out
-    run = lancer(
-        dictee, etapes_factices(), workdir=str(out), mode="mocks" if args.mocks else "reel"
-    )
+    run = lancer(dictee, etapes, workdir=str(out), mode="mocks" if args.mocks else "reel")
     out.mkdir(parents=True, exist_ok=True)
     (out / "run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
     with open(out / "durees.jsonl", "a", encoding="utf-8") as journal:

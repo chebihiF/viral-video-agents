@@ -89,12 +89,16 @@ def test_stdin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     RUN.validate(json.loads((out / "run.json").read_text("utf-8")))
 
 
-def test_sans_mocks(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_sans_mocks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    for variable in ("OLLAMA_URL", "PIPER_BIN", "PIPER_MODEL"):
+        monkeypatch.delenv(variable, raising=False)
     fichier = tmp_path / "d.txt"
     fichier.write_text(DICTEE, encoding="utf-8")
     code = main(["run", "--dictee-file", str(fichier), "--out", str(tmp_path / "o")])
     assert code == 78
-    assert "étapes réelles non configurées" in capsys.readouterr().err
+    assert "configuration absente" in capsys.readouterr().err
     assert not (tmp_path / "o").exists()
 
 
@@ -167,3 +171,105 @@ def test_journal_sans_aucun_texte_de_dictee(tmp_path: Path) -> None:
     journal = (run_json.parent / "durees.jsonl").read_text("utf-8")
     assert not [mot for mot in DICTEE.rstrip(".").split() if len(mot) > 3 and mot in journal]
     assert str(tmp_path) not in journal
+
+
+# --- Parcours réel (#150) : sans --mocks, échec fermé si la configuration manque ---
+
+
+class _FauxOpener:
+    """Remplace l'ouvreur urllib d'Ollama : compte les appels, réponses préenregistrées."""
+
+    def __init__(self, reponses: list[Any]) -> None:
+        self.reponses = reponses
+        self.appels = 0
+
+    def open(self, requete: object, timeout: float = 0) -> _FausseReponse:
+        self.appels += 1
+        if not self.reponses:
+            raise AssertionError("appel réseau inattendu")
+        contenu = self.reponses.pop(0)
+        corps = json.dumps({"message": {"content": json.dumps(contenu)}}).encode()
+        return _FausseReponse(corps)
+
+
+class _FausseReponse:
+    def __init__(self, corps: bytes) -> None:
+        self.corps = corps
+
+    def __enter__(self) -> _FausseReponse:
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        return None
+
+    def read(self, n: int = -1) -> bytes:
+        return self.corps
+
+
+def _dictee(tmp_path: Path) -> Path:
+    fichier = tmp_path / "d.txt"
+    fichier.write_text(DICTEE, encoding="utf-8")
+    return fichier
+
+
+def _opener(monkeypatch: pytest.MonkeyPatch, reponses: list[Any]) -> _FauxOpener:
+    from orchestrator import steps_llm
+
+    faux = _FauxOpener(reponses)
+    monkeypatch.setattr(steps_llm, "_OPENER", faux)
+    return faux
+
+
+def test_reel_sans_piper_echoue_ferme_sans_reseau(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    faux = _opener(monkeypatch, [])
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama.test:11434")
+    monkeypatch.delenv("PIPER_BIN", raising=False)
+    out = tmp_path / "o"
+    code = main(["run", "--dictee-file", str(_dictee(tmp_path)), "--out", str(out)])
+    sortie = capsys.readouterr()
+    assert code == 78
+    assert "PIPER_BIN" in sortie.err
+    assert "hibou" not in sortie.out + sortie.err
+    assert faux.appels == 0
+    assert not out.exists()
+
+
+def test_reel_sans_ollama_echoue_ferme(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.delenv("OLLAMA_URL", raising=False)
+    code = main(["run", "--dictee-file", str(_dictee(tmp_path)), "--out", str(tmp_path / "o")])
+    assert code == 78
+    assert "OLLAMA_URL" in capsys.readouterr().err
+
+
+def test_reel_image_non_branchee_run_en_erreur(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from test_etapes import FAKE_PIPER, LIBRE, STORYBOARD
+
+    binaire = tmp_path / "piper"
+    binaire.write_text(FAKE_PIPER, encoding="utf-8")
+    binaire.chmod(0o755)
+    modele = tmp_path / "voix.onnx"
+    modele.write_bytes(b"model")
+    monkeypatch.setenv("OLLAMA_URL", "http://ollama.test:11434")
+    monkeypatch.setenv("PIPER_BIN", str(binaire))
+    monkeypatch.setenv("PIPER_MODEL", str(modele))
+    faux = _opener(monkeypatch, [LIBRE, STORYBOARD])
+    out = tmp_path / "o"
+    code = main(["run", "--dictee-file", str(_dictee(tmp_path)), "--out", str(out)])
+    run = json.loads((out / "run.json").read_text("utf-8"))
+    RUN.validate(run)
+    sortie = capsys.readouterr()
+    assert code == 1
+    assert faux.appels == 2
+    assert (run["etat"], run["etapes"][-1]) == ("erreur", {**run["etapes"][-1], "nom": "image"})
+    assert not list(out.rglob("*.mp4"))
+    assert "hibou" not in run_texte(out) + sortie.out + sortie.err
+
+
+def run_texte(out: Path) -> str:
+    return "".join(p.read_text("utf-8", errors="ignore") for p in out.rglob("*.json"))
