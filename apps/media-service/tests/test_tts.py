@@ -11,7 +11,13 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
-from media_service.tts import SCHEMA_VERSION, TtsError, parse_job, synthetiser
+from media_service.tts import (
+    SCHEMA_VERSION,
+    TtsError,
+    parse_job,
+    synthetiser,
+    verifier_configuration,
+)
 
 CONTRACTS = Path(__file__).resolve().parents[3] / "contracts"
 PRENOM = "Secret-Prenom-Enfant"  # noqa: S105 - marqueur de fuite
@@ -87,6 +93,23 @@ def test_texte_vide_nomme_le_plan_sans_logger_le_texte(
         synthetiser(plans, out, env=env)
     assert PRENOM not in str(err.value) and PRENOM not in caplog.text
     assert list(out.iterdir()) == []  # validation avant toute synthèse
+
+
+def test_verifier_configuration_nominal(env: dict[str, str]) -> None:
+    binary, model = verifier_configuration(env)
+    assert binary == env["PIPER_BIN"] and Path(binary).is_absolute()
+    assert model == env["PIPER_MODEL"] and Path(model).is_absolute()
+
+
+def test_verifier_configuration_erreurs_inchangees(env: dict[str, str], tmp_path: Path) -> None:
+    with pytest.raises(TtsError, match="PIPER_BIN non configuré"):
+        verifier_configuration({"PIPER_MODEL": env["PIPER_MODEL"]})
+    with pytest.raises(TtsError, match="PIPER_BIN introuvable"):
+        verifier_configuration({**env, "PIPER_BIN": str(tmp_path / "absent")})
+    with pytest.raises(TtsError, match="PIPER_MODEL non configuré"):
+        verifier_configuration({"PIPER_BIN": env["PIPER_BIN"]})
+    with pytest.raises(TtsError, match="PIPER_MODEL introuvable"):
+        verifier_configuration({**env, "PIPER_MODEL": str(tmp_path / "absent.onnx")})
 
 
 def test_piper_bin_non_configure(env: dict[str, str], out: Path) -> None:

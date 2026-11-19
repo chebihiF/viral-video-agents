@@ -39,7 +39,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
 ignore = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["dashboard", "media_service", "orchestrator", "next_version", "hook_emit", "ship", "token_report"]
+known-first-party = ["dashboard", "media_service", "orchestrator", "next_version", "hook_emit", "ship", "convert_legacy", "test_ship", "token_report"]
 
 [tool.ruff.lint.per-file-ignores]
 "apps/gpu-worker/*" = ["S310", "S110", "E501"]
