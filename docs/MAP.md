@@ -94,7 +94,9 @@
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
 - `apps/orchestrator/src/orchestrator/steps_llm.py` — Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
 - `apps/orchestrator/src/orchestrator/steps_media.py` — Étapes média réelles : voix (Piper) et montage (ASS + FFmpeg), sans GPU (#136).
+- `apps/orchestrator/tests/fakes.py` — Doublures pour le parcours de bout en bout (#139) : faux Piper, clips lavfi, GPU tracé.
 - `apps/orchestrator/tests/test_cli.py` — CLI orchestrateur (#138) : 4 scénarios Gherkin, mode mocks, run.json validé par le contrat
+- `apps/orchestrator/tests/test_e2e_mock.py` — Parcours de bout en bout dictée -> MP4 avec mocks (#139) : `make e2e-mock`.
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
 - `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
 - `apps/orchestrator/tests/test_steps_media.py` — Étapes voix (Piper) et montage réelles (#136) : faux Piper, lavfi, sans fuite de texte.
@@ -140,6 +142,7 @@
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `docs/design/refonte.md` — Refonte du dashboard — spec (#92, couvre #93 à #99)
 - `docs/design/tokens.md` — Écran « Tokens » (`/tokens`) — spec alignée sur le réel (#129, écarts #118)
+- `docs/examples/hooks-settings.example.json` — données JSON
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
@@ -185,10 +188,12 @@
 - `tools/agents/tests/test_token_report.py` — Mesure des tokens par ticket et routage des modèles (#19).
 - `tools/agents/token_report.py` — Tokens par ticket, agent et modèle ; routage des modèles (#19). Voir docs/agents.md.
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
+- `tools/telemetry/check_hooks.py` — make telemetry-check : les hooks locaux émettent-ils vers l'ingestion ? (#170)
 - `tools/telemetry/convert_legacy.py` — Convertisseur ponctuel : ancien events.jsonl -> agent-event, sans doublon (#166).
 - `tools/telemetry/hook_emit.py` — Hook Claude Code : JSON du hook sur stdin -> une ligne JSONL minimale (#4).
 - `tools/telemetry/pretool_gate.py` — Hook Claude Code PreToolUse : bloque les outils tant que les agents sont en pause (#8).
 - `tools/telemetry/ship.py` — Expéditeur : JSONL des hooks -> POST /api/v1/events par lots de 100 au plus (#4).
+- `tools/telemetry/tests/test_check_hooks.py` — make telemetry-check : les hooks locaux émettent-ils vers l'ingestion ? (#170)
 - `tools/telemetry/tests/test_convert_legacy.py` — Convertisseur ponctuel events.jsonl ancien format -> agent-event (#166).
 - `tools/telemetry/tests/test_emit.py` — Émetteur de hooks : stdin JSON -> ligne JSONL minimale (#4).
 - `tools/telemetry/tests/test_gate.py` — Hook PreToolUse pretool_gate.py (#8) : code 2 si pause, échec sûr (cache 5 min).
