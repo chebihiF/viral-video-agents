@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import NoReturn
 
 from orchestrator.mocks import etapes_factices
-from orchestrator.pipeline import Etapes, lancer
+from orchestrator.pipeline import Etapes, lancer, ligne_durees
 from orchestrator.steps_llm import ErreurConfiguration
 
 DICTEE_MAX = 2000
@@ -37,7 +37,9 @@ def _parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="commande", required=True, parser_class=_Parser)
     run = sub.add_parser("run", help="lance un parcours depuis une dictée texte")
     run.add_argument("--dictee-file", required=True, help="fichier de dictée UTF-8, « - » = stdin")
-    run.add_argument("--out", required=True, type=Path, help="dossier de sortie (run.json)")
+    run.add_argument(
+        "--out", required=True, type=Path, help="dossier de sortie (run.json et durees.jsonl)"
+    )
     run.add_argument("--mocks", action="store_true", help="étapes factices (sans GPU)")
     return parser
 
@@ -83,9 +85,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EX_CONFIG
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     out: Path = args.out
-    run = lancer(dictee, etapes, workdir=str(out))
+    run = lancer(dictee, etapes, workdir=str(out), mode="mocks" if args.mocks else "reel")
     out.mkdir(parents=True, exist_ok=True)
     (out / "run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
+    with open(out / "durees.jsonl", "a", encoding="utf-8") as journal:
+        journal.write(json.dumps(ligne_durees(run)) + "\n")
     print(f"run={run['run_id']} etat={run['etat']}")
     return _CODES[run["etat"]]
 

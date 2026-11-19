@@ -57,7 +57,7 @@ def serve(tmp_path: Path) -> Iterator[Server]:
     def _serve(comfy: FakeComfy) -> str:
         jobs = worker.JobQueue(comfy, tmp_path)
         jobs.start()
-        server = worker.make_server(jobs, port=0)
+        server = worker.make_server(jobs, port=0, networks=("127.0.0.0/8",))
         threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
         started.append((jobs, server))
         host, port = server.server_address[:2]

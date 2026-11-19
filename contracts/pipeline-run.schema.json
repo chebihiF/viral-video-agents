@@ -29,6 +29,8 @@
       "maxItems": 6,
       "items": { "$ref": "#/$defs/Etape" }
     },
+    "mode": { "$ref": "#/$defs/Mode" },
+    "termine_le": { "$ref": "#/$defs/TermineLe" },
     "video_path": {
       "description": "MP4 final rendu par le montage ; présent si et seulement si etat = ok.",
       "type": "string",
@@ -50,6 +52,29 @@
     }
   ],
   "$defs": {
+    "Mode": {
+      "description": "Optionnel (#164) : étapes réelles (reel) ou factices (mocks) ; absent dans les runs antérieurs.",
+      "type": "string",
+      "enum": ["reel", "mocks"]
+    },
+    "TermineLe": {
+      "description": "Optionnel (#164) : fin du run, ISO 8601 UTC à la seconde.",
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "LigneDurees": {
+      "description": "Une ligne de <out>/durees.jsonl par run (#164), lue pour estimer la durée restante. Ni dictée, ni texte, ni chemin.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "mode", "etat", "termine_le", "etapes"],
+      "properties": {
+        "run_id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,48}$" },
+        "mode": { "$ref": "#/$defs/Mode" },
+        "etat": { "type": "string", "enum": ["ok", "bloque", "erreur"] },
+        "termine_le": { "$ref": "#/$defs/TermineLe" },
+        "etapes": { "type": "array", "minItems": 1, "maxItems": 6, "items": { "$ref": "#/$defs/Etape" } }
+      }
+    },
     "Etape": {
       "type": "object",
       "additionalProperties": false,
