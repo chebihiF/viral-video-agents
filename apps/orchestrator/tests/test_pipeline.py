@@ -383,3 +383,14 @@ def test_ligne_durees_conforme_et_sans_texte(classe: str, echec: str | None) -> 
 def test_contrat_ligne_refuse_un_champ_inconnu() -> None:
     run = lancer(DICTEE, Fakes().etapes(), run_id="run-15", mode="mocks")
     assert not LIGNE.is_valid({**ligne_durees(run), "video_path": "/x/final.mp4"})
+
+
+def test_mode_inconnu_refuse() -> None:
+    with pytest.raises(ValueError, match="mode invalide"):
+        lancer(DICTEE, Fakes().etapes(), run_id="run-16", mode="simule")  # type: ignore[arg-type]
+
+
+def test_ligne_durees_exige_un_mode() -> None:
+    run = lancer(DICTEE, Fakes().etapes(), run_id="run-17")
+    with pytest.raises(ValueError, match="mode invalide"):
+        ligne_durees(run)

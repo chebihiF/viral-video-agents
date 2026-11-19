@@ -67,7 +67,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EX_CONFIG
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
     out: Path = args.out
-    run = lancer(dictee, etapes_factices(), workdir=str(out), mode="mocks")
+    run = lancer(
+        dictee, etapes_factices(), workdir=str(out), mode="mocks" if args.mocks else "reel"
+    )
     out.mkdir(parents=True, exist_ok=True)
     (out / "run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")
     with open(out / "durees.jsonl", "a", encoding="utf-8") as journal:
