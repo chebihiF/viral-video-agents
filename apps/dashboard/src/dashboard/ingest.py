@@ -69,7 +69,7 @@ def _too_large() -> HTTPException:
 async def read_body(request: Request) -> bytes:
     """Lecture bornée : refuse sur Content-Length puis sur le flux réel."""
     declared = request.headers.get("content-length", "")
-    if declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+    if declared.isascii() and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
         raise _too_large()
     body = bytearray()
     async for chunk in request.stream():

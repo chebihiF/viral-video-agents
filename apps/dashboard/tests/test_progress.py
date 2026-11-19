@@ -651,6 +651,19 @@ def test_http_client_reports_rate_limit_reset(
     assert err.value.until == 5000
 
 
+@pytest.mark.parametrize("header", ["X-RateLimit-Reset", "Retry-After"])
+def test_non_ascii_digits_in_rate_limit_headers_fall_back(
+    monkeypatch: pytest.MonkeyPatch, header: str
+) -> None:
+    msg = Message()
+    msg[header] = "²"
+    answers: list[Any] = [HTTPError("u", 429, "limit", msg, None)]
+    monkeypatch.setattr(progress, "urlopen", _urlopen_from(answers, []))
+    with pytest.raises(progress.RateLimited) as err:
+        progress.HttpJson()("/repos/o/r/issues")
+    assert err.value.until > 1_000_000
+
+
 def test_plain_403_is_not_a_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
     answers: list[Any] = [HTTPError("u", 403, "interdit", Message(), None)]
     monkeypatch.setattr(progress, "urlopen", _urlopen_from(answers, []))

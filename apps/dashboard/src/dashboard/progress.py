@@ -173,9 +173,10 @@ def _rate_limit(exc: HTTPError) -> RateLimited | None:
     reset, retry = headers.get("X-RateLimit-Reset"), headers.get("Retry-After")
     if exc.code == 403 and headers.get("X-RateLimit-Remaining") != "0" and retry is None:
         return None  # 403 ordinaire (accès refusé), pas une limite
-    if reset and reset.isdigit():
+    if reset and reset.isascii() and reset.isdigit():
         return RateLimited(float(reset))
-    return RateLimited(time.time() + (float(retry) if retry and retry.isdigit() else 60.0))
+    wait = float(retry) if retry and retry.isascii() and retry.isdigit() else 60.0
+    return RateLimited(time.time() + wait)
 
 
 def _next_url(link: str | None) -> str | None:

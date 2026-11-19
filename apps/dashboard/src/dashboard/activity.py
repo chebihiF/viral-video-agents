@@ -104,6 +104,11 @@ class Filters(NamedTuple):
         return labels
 
 
+def _is_ascii_digits(raw: str) -> bool:
+    """`str.isdigit()` accepte « ² » (int() échoue) : on exige des chiffres 0-9."""
+    return raw.isascii() and raw.isdigit()
+
+
 def parse_filters(params: Mapping[str, str]) -> Filters:
     """Filtres de l'URL ; une valeur invalide est ignorée (jamais d'erreur ni d'écho brut)."""
     status = params.get("statut")
@@ -111,7 +116,7 @@ def parse_filters(params: Mapping[str, str]) -> Filters:
     return Filters(
         agent=params.get("agent") or None,
         status=status if status in STATUSES else None,
-        min_minutes=int(minutes) if minutes.isdigit() and int(minutes) < 10**6 else None,
+        min_minutes=int(minutes) if _is_ascii_digits(minutes) and int(minutes) < 10**6 else None,
     )
 
 
