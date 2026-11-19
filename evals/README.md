@@ -28,24 +28,32 @@ python3 evals/storyboard_eval.py --record /tmp/storyboard.recorded.jsonl
 
 ### Schéma, enregistrements et empreinte
 
-- Mode réel : charge `contracts/storyboard.schema.json` ; absent -> code 2 avec message clair.
-- `--dry-run` : utilise TOUJOURS `evals/cases/storyboard.test.schema.json` (fourni avec les
-  enregistrements), jamais le vrai contrat ; `--schema <fichier>` force un autre schéma.
+- Un seul schéma, `contracts/storyboard.schema.json` (#31), en réel comme en `--dry-run` ; absent ->
+  code 2 avec message clair. Plus de schéma de test. `--schema <fichier>` force un autre fichier.
 - Chaque ligne de `storyboard.recorded.jsonl` porte `schema_sha256` (sha256 court du schéma
-  canonique). Si l'empreinte diffère du schéma chargé, `--dry-run` sort en code 2 :
+  canonique). Si l'empreinte diffère du contrat chargé, `--dry-run` sort en code 2 :
   « ré-enregistrer avec --record » (pas de vert trompeur).
-- Le schéma est vérifié en entier avant l'éval (properties, items, additionalProperties) : tout
-  mot-clé non géré -> code 2 ; `additionalProperties` ne peut être qu'un booléen.
+- Le schéma est vérifié en entier avant l'éval (properties, items, `$defs`, `$ref` locaux,
+  additionalProperties) : tout mot-clé non géré -> code 2 ; `additionalProperties` ne peut être
+  qu'un booléen. Mots-clés gérés en plus : `$ref`/`$defs` (locaux), `const`, `exclusiveMinimum`.
 - `--threshold` doit être dans [0, 1], sinon code 2.
 
-### En attente du ticket #31 (contrat)
+### Prompt aligné sur le contrat (#49)
 
-`contracts/storyboard.schema.json` n'est pas encore mergé : le mode réel échoue proprement tant
-qu'il est absent. Au merge de #31 : réaligner `prompts/storyboard.v1.md` sur ses champs
-(nouvelle version si les champs changent), lancer l'éval réelle avec
-`--record evals/cases/storyboard.recorded.jsonl`, puis lancer `--dry-run --schema
-contracts/storyboard.schema.json` et retirer le schéma de test (les réponses actuelles sont
-synthétiques, dont une volontairement non conforme : `mix-12`).
+`prompts/storyboard.v1.md` est en version 1.1 : mêmes champs, noms, valeurs d'enum
+(`classification`), `schema_version` et bornes (2 à 4 plans) que le contrat. `pytest evals`
+échoue si un champ, une valeur ou une borne du contrat manque au prompt
+(`prompt_contract_gaps`) ou si l'exemple JSON du prompt n'est pas valide contre le contrat :
+changer le contrat sans le prompt casse `make check`.
+
+### Enregistrements actuels (sans GPU)
+
+`cases/storyboard.recorded.jsonl` contient des réponses **réalignées à la main** sur le contrat
+(ajout de `schema_version` "1.0" et `classification`, empreinte recalculée), pas des sorties
+réelles de Qwen3 : le dry-run vérifie le harnais et le contrat, pas le modèle. Taux dry-run :
+11/12 = 91,7 % (`mix-12` volontairement non conforme : 1 plan au lieu de 2 minimum). Le
+`--record` réel (PC GPU réveillé via `pc-gpu wake`) reste à faire : il remplacera ces réponses
+et son taux sera consigné ici avec la VRAM et le temps mesurés.
 
 `darija_storyboard.py` est conservé comme référence (non modifié).
 

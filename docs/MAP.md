@@ -110,7 +110,6 @@
 - `evals/cases/classification.recorded.jsonl`
 - `evals/cases/storyboard.jsonl`
 - `evals/cases/storyboard.recorded.jsonl`
-- `evals/cases/storyboard.test.schema.json` — données JSON
 - `evals/classification_eval.py` — Éval de la classification de sécurité enfant (libre / adouci / bloque).
 - `evals/darija_storyboard.py` — Test : Qwen3 comprend-il une scène dictée en darija et la transforme-t-il en storyboard ?
 - `evals/storyboard_eval.py` — Éval du prompt storyboard : taux de sorties JSON conformes à contracts/storyboard.schema.j
