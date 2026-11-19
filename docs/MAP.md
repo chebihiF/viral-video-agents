@@ -57,10 +57,12 @@
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
 - `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres SRT incrustés.
+- `apps/media-service/src/media_service/subtitles.py` — Sous-titres ASS mot par mot : calcul pur à partir du texte et de la durée de chaque plan.
 - `apps/media-service/tests/__init__.py`
 - `apps/media-service/tests/test_contract_montage_job.py` — Contrat contracts/montage-job.schema.json : entrée du media-service (#34).
 - `apps/media-service/tests/test_montage.py` — Montage FFmpeg (#34) : clips et voix synthétiques générés par le test (lavfi).
 - `apps/media-service/tests/test_montage_edge_cases.py` — Cas limites du montage (#34) : unicode arabe, plan unique, 0 plan, double exécution.
+- `apps/media-service/tests/test_subtitles.py` — Sous-titres ASS mot par mot (#52) : calcul pur, sans ffmpeg.
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
@@ -75,6 +77,7 @@
 - `contracts/examples/classification.libre.json` — données JSON
 - `contracts/examples/gpu-job.invalid.json` — données JSON
 - `contracts/examples/gpu-job.valid.json` — données JSON
+- `contracts/examples/montage-job.subtitles.json` — données JSON
 - `contracts/examples/montage-job.valid.json` — données JSON
 - `contracts/examples/storyboard.invalid.json` — données JSON
 - `contracts/examples/storyboard.valid.json` — données JSON

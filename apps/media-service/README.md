@@ -1,6 +1,6 @@
 # media-service
 
-Montage FFmpeg des vidéos générées (VPS) : concat des clips, voix off AAC, sous-titres SRT incrustés. Mixage musique, mot par mot et galerie : à venir.
+Montage FFmpeg des vidéos générées (VPS) : concat des clips, voix off AAC, sous-titres SRT incrustés. Mixage musique et galerie : à venir ; sous-titres mot par mot (ASS) : module prêt, branchement au montage à venir.
 
 ## Usage
 
@@ -15,6 +15,19 @@ result.video_path, result.srt_path  # MP4 + SRT à côté (même nom, extension 
 - Durée d'un plan = durée de sa voix (ffprobe) ; clip bouclé s'il est plus court, coupé s'il est plus long.
 - Sortie : MP4 H.264 + AAC, 1080x1920 (recadrage plein cadre), 24 i/s ; un cue SRT par plan.
 - Écriture atomique : fichiers temporaires dans le dossier de sortie puis `rename`. Clip/audio manquant ou FFmpeg en échec : `MontageError` nommant le plan, aucun fichier laissé.
+
+## Sous-titres mot par mot (ASS)
+
+```python
+from pathlib import Path
+from media_service.subtitles import ShotText, write_ass
+
+write_ass([ShotText("un petit chat", 3.0), ShotText("il s'envole", 2.0)], Path("final.ass"))
+```
+
+- Calcul pur (stdlib, sans GPU) : un événement par mot, durée proportionnelle à la longueur du mot, plans mis bout à bout ; bornes au centième, contiguës, sans chevauchement.
+- Fichier ASS UTF-8, 1080x1920, police `DejaVu Sans` (arabe + latin) ; mots conservés tels quels, seuls `{`, `}` et `\` sont neutralisés.
+- Contrat : champ optionnel `subtitles_path` (`.ass`) dans `montage-job.schema.json`, exemple `examples/montage-job.subtitles.json`. Pas encore lu par `montage.py` (ticket ultérieur).
 
 ## Prérequis
 

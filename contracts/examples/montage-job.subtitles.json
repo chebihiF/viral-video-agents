@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "plans": [
+    {
+      "clip_path": "/data/jobs/42/plan-1.mp4",
+      "audio_path": "/data/jobs/42/plan-1.wav",
+      "narration_fr": "Le petit chat s'envole sur son tapis magique !"
+    },
+    {
+      "clip_path": "/data/jobs/42/plan-2.mp4",
+      "audio_path": "/data/jobs/42/plan-2.wav",
+      "narration_fr": "Bonjour les oiseaux, crie-t-il en riant."
+    }
+  ],
+  "output_path": "/data/jobs/42/final.mp4",
+  "subtitles_path": "/data/jobs/42/final.ass"
+}
