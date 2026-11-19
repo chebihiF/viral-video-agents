@@ -36,13 +36,17 @@ personnelle dans le cookie. Le cookie `Secure` impose HTTPS (Traefik en prod).
 | `GET /` | session | 200 page « Accueil » (agents actifs ou en pause, dernier événement, tickets Prêt / En cours / Revue / Livré, tokens 24 h et 7 j, fil des délégations, badge si plafond atteint ; carte tickets « indisponible » si GitHub injoignable ; état vide sans événement) ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible ; jamais mis en cache. Aucun pourcentage sans légende : sans quota configuré, tokens bruts |
 | `GET /login` | public | 200 formulaire (champ `password`) |
 | `POST /login` | public, limité | voir ci-dessous |
-| `GET /activity` | session | 200 page ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
-| `GET /interactions` | session | 200 page ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
-| `GET /tokens` | session | 200 page (jauges en % du quota 5 h / semaine / week-end avec légende, par agent et par ticket ; sans quota : tokens bruts et message d'aide, jamais de % ; totaux par agent et modèle, 24 h / 7 j) ; 303 vers `/login` sans session valide ; voir [`token-usage.md`](token-usage.md) |
+| `GET /activity` | session | 200 page ; paramètres de requête optionnels `agent`, `statut`, `duree_min` (voir ci-dessous) ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible ; `no-store` |
+| `GET /interactions` | session | 200 page ; aucun paramètre de requête ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible ; `no-store` |
+| `GET /tokens` | session | 200 page (jauges en % du quota 5 h / semaine / week-end avec légende, par agent et par ticket ; sans quota : tokens bruts et message d'aide, jamais de % ; totaux par agent et modèle, 24 h / 7 j) ; 303 vers `/login` sans session valide ; 503 si la base est illisible ; aucun paramètre de requête ; aucun en-tête `Cache-Control` posé ; voir [`token-usage.md`](token-usage.md) |
+| `GET /controls` | session | 200 page (état pause / plafond, formulaires protégés par jeton CSRF) ; 303 vers `/login` sans session valide ; 503 si la base est illisible (aucune action possible) ; `no-store` ; voir [`control-api.md`](control-api.md) |
+| `POST /controls/pause` | session + CSRF | 303 vers `/controls` ; 403 jeton CSRF invalide ; 413 corps > 4 Ko ; 503 base illisible ; voir [`control-api.md`](control-api.md) |
+| `POST /controls/resume` | session + CSRF | 303 vers `/controls` ; 409 si le plafond est toujours atteint ; mêmes 403 / 413 / 503 ; voir [`control-api.md`](control-api.md) |
+| `POST /controls/cap` | session + CSRF | 303 vers `/controls` ; 422 plafond invalide (entier de 1 à 10^12) ; mêmes 403 / 413 / 503 ; voir [`control-api.md`](control-api.md) |
 | `GET /stream` | session | 200 `text/event-stream` ; **401** sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
 | `GET /static/live.js` | public | client temps réel (`EventSource`), sans dépendance ni CDN |
 | `GET /static/tokens.css` | public | feuille de style du design system |
-| `GET /static/components.css` | public | styles et placement de la navigation commune (remplace `nav.css`, #92) : barre latérale ≥ 900 px, barre d'onglets en dessous ; Accueil, Suivi, Activité, Interactions, Tokens, Contrôles ; `aria-current="page"` sur la page active ; lien « Aller au contenu » vers `#contenu` |
+| `GET /static/components.css` | public | styles et placement de la navigation commune (remplace `nav.css`, #92) : barre latérale ≥ 900 px (Accueil, Suivi, Activité, Interactions, Tokens, Contrôles), barre d'onglets en dessous (Accueil, Suivi, Activité, Tokens, puis menu « Plus » : Interactions, Contrôles) ; `aria-current="page"` sur la page active ; lien « Aller au contenu » vers `#contenu` |
 | `GET /progress` | session | 200 page « Suivi du projet » ; 303 vers `/login` sans session valide (aucune lecture GitHub ni base) |
 | `GET /api/v1/progress` | session | 200 JSON conforme à [`progress.schema.json`](progress.schema.json) ; 401 sans session valide |
 | `GET /static/progress.js` | public | rafraîchissement de `/progress` (JS natif, sans CDN) |
@@ -65,15 +69,44 @@ compte dans la limite qu'elle réussisse ou non.
 ### `GET /activity`
 
 Lit la table `events` (voir `ingest-api.md`) : les **100 derniers** événements, triés par
-`ts` décroissant. Deux vues (spec `docs/design/activity.md`) :
+`ts` décroissant. Vues (spec `docs/design/activity.md`) :
 
 - tableau « Agents » : dernier événement de chaque couple (`agent_type`, `agent_id`) ;
 - flux d'événements (`<ol aria-live="polite">`) : heure (UTC), `agent_type`, `agent_id`,
-  `hook_event_name`, `tool_name` ; champ absent affiché « — ».
+  `hook_event_name`, `tool_name` ; champ absent affiché « — » ;
+- « Qui fait quoi » : 20 sessions (agent, ticket) au plus, sur les 24 dernières heures ;
+- « Historique des 7 derniers jours » (`#history`), **filtrable** : une ligne par session
+  (`agent_type`, `agent_id`, `ticket`) avec agent, ticket (« ticket inconnu » si absent ou non
+  numérique), statut, durée (`a duré …` si terminé, `depuis …` sinon), jetons consommés (« — »
+  sans mesure) et dernier événement (UTC). Les 500 sessions les plus récentes sont lues, puis
+  filtrées, puis les **100** premières affichées. Une ligne avec au moins un événement
+  `PostToolUseFailure` est mise en évidence avec son nombre d'erreurs.
+
+Statut d'une session : « terminé » si son dernier événement est un `SubagentStop` ; sinon
+« actif » (dernier événement il y a moins de 2 min), « en attente » (2 à 15 min), « terminé »
+(au-delà de 15 min). « erreur » n'est pas un état mais un filtre (au moins une erreur).
+
+**Paramètres de requête** (méthode `GET`, formulaire `#history`, tous optionnels, combinés en ET) :
+
+| Paramètre | Valeurs valides | Défaut (absent ou vide) | Effet |
+|---|---|---|---|
+| `agent` | nom d'agent (`agent_type`, à défaut `agent_id`), tel que listé dans le menu | aucun filtre | garde les sessions de cet agent ; un nom inconnu donne zéro ligne |
+| `statut` | `actif`, `en attente`, `terminé`, `erreur` | aucun filtre | `erreur` : au moins un `PostToolUseFailure` ; les autres : statut exact |
+| `duree_min` | entier décimal de 0 à 999 999 (minutes) | aucun filtre | garde les sessions dont la durée est d'au moins ce nombre de minutes |
+
+Valeur inconnue : **ignorée, sans erreur** (toujours 200, jamais 4xx) et jamais répétée telle
+quelle dans la page : `statut` hors liste, `duree_min` non numérique, négatif, décimal ou
+≥ 1 000 000 sont traités comme absents (limite connue : un chiffre non ASCII tel que `²` fait échouer
+l'analyse, défaut suivi par #121 ; l'entrée valide reste les chiffres `0-9`) ; `agent` n'est pas validé (liste fermée absente) mais
+une valeur inconnue ne correspond à aucune session. Les filtres retenus sont rappelés
+(« Filtres actifs », lien « Effacer le filtre ») ; sans résultat : « Aucun résultat pour ce
+filtre » ; sans session : « Aucune session sur les 7 derniers jours ». Les filtres ne touchent
+ni le flux d'événements, ni le tableau « Agents », ni `GET /stream`. Pas de pagination ni de
+tri configurable.
 
 États : vide (« Aucun agent n'a encore travaillé »), erreur (bandeau `role="alert"`,
-« Réessayer »). Réponses en `Cache-Control: no-store`. Temps réel : voir `GET /stream`. Hors périmètre :
-pause, filtres, multi-comptes.
+« Réessayer »). Réponses en `Cache-Control: no-store` (pas de cache, filtres compris). Temps
+réel : voir `GET /stream`. Hors périmètre : multi-comptes.
 
 ### `GET /interactions`
 
@@ -83,7 +116,8 @@ sous-agents. Un sous-agent = un `agent_id` : premier `SubagentStart` et dernier
 `SubagentStop` de la même session ; durée = `Stop - Start` (`2 min 02 s`, `12 s`,
 `< 1 s`, `1 h 02 min`), « — » sans `Start` ou sans `Stop` ; état « ○ En cours » /
 « ● Terminé ». États vide (« Aucune interaction pour l'instant ») et erreur
-(`role="alert"`, « Réessayer ») ; `no-store`. Même mise à jour en direct que `/activity`.
+(`role="alert"`, « Réessayer ») ; `no-store`. Aucun paramètre de requête (tout paramètre est
+ignoré). Même mise à jour en direct que `/activity`.
 
 ### `GET /stream`
 
