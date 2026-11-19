@@ -94,3 +94,23 @@ L'extraction vers `chebihiF/agent-factory` (#67 à #71) attend la fin de ce spri
 - Mettre à jour les règles globales : exception « fichiers Claude commités autorisés dans
   `chebihiF/agent-factory` uniquement », et droit de push du bot étendu à ce dépôt (mêmes limites
   que pour `viral-video-agents`).
+
+## Bilan du sprint A (2026-11-19)
+Mesure sur 3 tickets B sans GPU (#51, #52, #19) et le fil du tech lead (transcripts, somme des `usage`,
+approximatif).
+
+| Indicateur | Plafond visé | Constaté |
+|---|---|---|
+| Part d'Opus dans le volume | 30 % | **73 %** (59 % de la sortie) ; hors tech lead = reviewers |
+| Tokens cumulés par ticket simple | contexte ≤ 150 k | **33 à 45 M** (#51 33,5 M ; #52 39,5 M ; #19 45,4 M) |
+| Part de `cache_read` | — | **98 %** du volume (465 M au total, sortie 1,8 M) |
+| Fil principal / sous-agents | — | 95 % / 5 % des tickets |
+
+Constats : le coût vient de la relecture du contexte à chaque tour, pas de la production ; le tech lead
+sur Opus pèse 347 M sur 465 M ; le plafond de 150 k n'est tenable que par appel, pas en cumul.
+
+Corrections livrées : routage des modèles et mesure par ticket (#19), parcours léger et reviewer
+déclenché seulement si utile (#77, #84), tech lead sur Sonnet avec passation automatique (#83),
+contrôle `make check` de la carte (#75). Effet à re-mesurer sur les prochains tickets.
+Détail : note `mesure-tokens-sprint-a.md` (dossier de notes du tech lead). Retour à 80/20 B/A après
+clôture du sprint ; l'extraction `agent-factory` (#67 à #71) devient possible.
