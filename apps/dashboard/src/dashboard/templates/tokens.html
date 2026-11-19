@@ -6,56 +6,52 @@
   <title>Tokens — Agents Dashboard</title>
   <link rel="stylesheet" href="/static/tokens.css">
   <link rel="stylesheet" href="/static/components.css">
-  <style>
-    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; }
-    main { margin: 0 auto; max-width: 48rem; padding: 2rem 1rem 4rem; }
-    table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
-    th, td { padding: .4rem .6rem; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
-    th { text-align: left; font-weight: 600; }
-    .num { text-align: right; font-variant-numeric: tabular-nums; }
-    footer { position: fixed; bottom: 1rem; font-size: .8rem; opacity: .6; }
-  </style>
 </head>
-<body>
+<body class="page">
   {% from "_empty.html" import empty %}
   {% with active="/tokens" %}{% include "_nav.html" %}{% endwith %}
-  <main id="contenu">
-  <header>
+  <main id="contenu" class="main">
+  <header class="page-head">
     <h1>Tokens</h1>
+    <p class="sub">v{{ version }}</p>
   </header>
   {% if report is none %}
-  <section class="state"><h2>Tokens indisponibles</h2><p>La base est illisible pour le moment. Recharge la page dans un instant.</p></section>
+  <section class="state" role="alert"><h2>Tokens indisponibles</h2><p>La base est illisible pour le moment. Recharge la page dans un instant.</p><p class="state-action"><a class="btn" href="/tokens">Réessayer</a></p></section>
   {% elif not report.by_agent and not report.by_model %}
+  <div role="status">
   {% call empty("Aucune donnée de tokens", "Aucune consommation n'a été enregistrée sur les 7 derniers jours.") %}Prochaine étape : lancer un agent ; sa consommation s'affichera ici (contrat <code>token-usage</code>).{% endcall %}
+  </div>
   {% else %}
   {% include "_quota.html" %}
-  <h2>Tendance</h2>
-  <p><strong>{{ cap_text }}</strong></p>
-  <table data-testid="daily">
-    <caption>Tokens par jour (7 jours, jours UTC, unité : tokens)</caption>
-    <thead><tr><th>Jour</th><th class="num">Tokens</th><th class="num">Variation vs la veille</th></tr></thead>
-    <tbody>
-      {% for d in days %}
-      <tr><td>{{ d.day }}{% if d.partial %} (jour en cours, incomplet){% endif %}</td><td class="num">{{ d.tokens | thousands }} tokens</td><td class="num">{{ d.change or "—" }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  <p><small>Variation en % des tokens du jour par rapport au jour précédent. Le plafond est celui de la page Contrôles (24 heures glissantes). Pas de coût en euros : aucune grille de prix locale.</small></p>
-  {% for title, column, rows in [("Par agent", "Agent", report.by_agent), ("Par modèle", "Modèle", report.by_model)] %}
-  <h2>{{ title }}</h2>
-  <table>
-    <thead><tr><th>{{ column }}</th><th class="num">24 h</th><th class="num">7 j</th></tr></thead>
-    <tbody>
-      {% for row in rows %}
-      <tr><td>{{ row.label }}</td><td class="num">{{ row.last_24h | thousands }}</td><td class="num">{{ row.last_7d | thousands }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% endfor %}
-  <p><small>Tous types confondus (entrée, sortie, cache). « (fil principal) » : tokens hors sous-agent nommé.</small></p>
+  <section class="card" aria-labelledby="trend-title">
+    <h2 id="trend-title">Tendance</h2>
+    <p><strong>{{ cap_text }}</strong></p>
+    <div class="table-wrap">
+      <table data-testid="daily">
+        <caption>Tokens par jour (7 jours, jours UTC, unité : tokens)</caption>
+        <thead><tr><th>Jour</th><th class="num">Tokens</th><th class="num">Variation vs la veille</th></tr></thead>
+        <tbody>
+          {% for d in days %}
+          <tr><td>{{ d.day }}{% if d.partial %} (jour en cours, incomplet){% endif %}</td><td class="num">{{ d.tokens | thousands }} tokens</td><td class="num">{{ d.change or "—" }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p>Variation en % des tokens du jour par rapport au jour précédent. Le plafond est celui de la page Contrôles (24 heures glissantes). Pas de coût en euros : aucune grille de prix locale.</p>
+  </section>
+  <div class="table-wrap">
+    <table>
+      <caption>Par modèle</caption>
+      <thead><tr><th>Modèle</th><th class="num">24 h</th><th class="num">7 j</th></tr></thead>
+      <tbody>
+        {% for row in report.by_model %}
+        <tr><td>{{ row.label }}</td><td class="num">{{ row.last_24h | thousands }}</td><td class="num">{{ row.last_7d | thousands }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p>Tous types confondus (entrée, sortie, cache).</p>
   {% endif %}
   </main>
-  <footer>v{{ version }}</footer>
 </body>
 </html>

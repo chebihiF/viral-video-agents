@@ -276,3 +276,41 @@ def test_tokens_page_unreadable_database_is_503(
     resp = client.get("/tokens")
     assert resp.status_code == 503
     assert "indisponible" in resp.text.lower()
+
+
+# Refonte (#128)
+STATIC = Path(auth.__file__).parent / "static"
+TEMPLATE = Path(auth.__file__).parent / "templates" / "tokens.html"
+
+
+def test_tokens_template_has_no_local_style_and_uses_components() -> None:
+    source = TEMPLATE.read_text(encoding="utf-8")
+    assert "<style" not in source
+    for cls in ("page-head", "main", "table-wrap", "num"):
+        assert cls in source
+    assert ".num" in (STATIC / "components.css").read_text(encoding="utf-8")
+
+
+def test_tokens_page_has_a_single_by_agent_table_and_keeps_models(db_path: Path) -> None:
+    seed([(H, "backend", "opus", "input", 10)])
+    text = logged_in().get("/tokens").text
+    assert text.count("Par agent") == 1
+    assert "Par modèle" in text and "opus" in text
+
+
+def test_tokens_error_state_is_an_alert(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_a: object, **_k: object) -> None:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(tokens, "totals", boom)
+    assert 'role="alert"' in logged_in().get("/tokens").text
+
+
+def test_tokens_empty_state_is_a_status(db_path: Path) -> None:
+    assert 'role="status"' in logged_in().get("/tokens").text
+
+
+def test_table_wrap_has_no_forced_min_width() -> None:
+    css = (STATIC / "components.css").read_text(encoding="utf-8")
+    rule = next(line for line in css.splitlines() if line.startswith(".table-wrap table"))
+    assert "min-width" not in rule
