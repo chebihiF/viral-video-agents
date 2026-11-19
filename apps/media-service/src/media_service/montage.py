@@ -61,7 +61,10 @@ def _exact_keys(data: Any, keys: set[str], where: str) -> Mapping[str, Any]:
 
 def parse_job(data: Any) -> MontageJob:
     """Valide un montage-job (contrat v1.0) ; refuse tout écart."""
-    root = _exact_keys(data, {"schema_version", "plans", "output_path"}, "montage-job")
+    optional = {"subtitles_path"} & set(data) if isinstance(data, Mapping) else set()
+    root = _exact_keys(data, {"schema_version", "plans", "output_path"} | optional, "montage-job")
+    if optional:
+        _text(root["subtitles_path"], "subtitles_path")  # contrat seul ; non utilisé ici
     if root["schema_version"] != SCHEMA_VERSION:
         raise MontageError(f"schema_version {root['schema_version']!r} non supportée")
     raw_plans = root["plans"]
