@@ -27,7 +27,7 @@ write_ass([ShotText("un petit chat", 3.0), ShotText("il s'envole", 2.0)], Path("
 
 - Calcul pur (stdlib, sans GPU) : un événement par mot, durée proportionnelle à la longueur du mot, plans mis bout à bout ; bornes au centième, contiguës, sans chevauchement.
 - Fichier ASS UTF-8, 1080x1920, police `DejaVu Sans` (arabe + latin) ; mots conservés tels quels, seuls `{`, `}` et `\` sont neutralisés.
-- Contrat : champ optionnel `subtitles_path` (`.ass`) dans `montage-job.schema.json`, exemple `examples/montage-job.subtitles.json`. Pas encore lu par `montage.py` (ticket ultérieur).
+- Contrat : champ optionnel `subtitles_path` (`.ass`) dans `montage-job.schema.json`, exemple `examples/montage-job.subtitles.json`. Lu par `montage.py` : si `subtitles_path` est fourni, le filtre `ass` incruste l'ASS (le SRT reste écrit à côté) ; fichier absent : `MontageError` nommant le chemin ; sans le champ, SRT incrusté comme avant.
 
 ## Voix off (Piper)
 

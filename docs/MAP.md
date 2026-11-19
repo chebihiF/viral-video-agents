@@ -77,7 +77,7 @@
 - `apps/media-service/README.md` — media-service
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
-- `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres SRT incrustés.
+- `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres ASS ou SRT incrustés.
 - `apps/media-service/src/media_service/subtitles.py` — Sous-titres ASS mot par mot : calcul pur à partir du texte et de la durée de chaque plan.
 - `apps/media-service/src/media_service/tts.py` — Voix off par plan avec Piper (CPU) : un WAV et sa durée par plan.
 - `apps/media-service/tests/__init__.py`
@@ -89,8 +89,11 @@
 - `apps/orchestrator/README.md` — orchestrator
 - `apps/orchestrator/pyproject.toml`
 - `apps/orchestrator/src/orchestrator/__init__.py` — Orchestrateur du pipeline vidéo (#53).
+- `apps/orchestrator/src/orchestrator/__main__.py` — CLI de l'orchestrateur (#138) : `python -m orchestrator run --mocks --dictee-file F --out 
+- `apps/orchestrator/src/orchestrator/mocks.py` — Étapes factices valides (#138) : aucune génération réelle, aucun fichier écrit, pas de GPU
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
 - `apps/orchestrator/src/orchestrator/steps_llm.py` — Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
+- `apps/orchestrator/tests/test_cli.py` — CLI orchestrateur (#138) : 4 scénarios Gherkin, mode mocks, run.json validé par le contrat
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
 - `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
