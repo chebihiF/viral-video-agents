@@ -232,7 +232,7 @@ def test_same_agent_id_in_two_sessions_counts_twice(client: TestClient) -> None:
 
 def test_singular_labels() -> None:
     stat = interactions.TicketStat(4, 0, 1, 1)
-    assert stat.line == "ticket #4 · durée moins d'une minute · 1 sous-agent · 1 session"
+    assert stat.line == "ticket #4 · durée < 1 min · 1 sous-agent · 1 session"
 
 
 def test_ticket_stats_error_gives_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -241,3 +241,50 @@ def test_ticket_stats_error_gives_503(client: TestClient, monkeypatch: pytest.Mo
 
     monkeypatch.setattr(interactions, "load_ticket_stats", broken)
     assert client.get("/interactions").status_code == 503
+
+
+# Scénario : tableau par ticket conforme à la maquette (#127)
+ISSUES = "https://github.com/chebihiF/viral-video-agents/issues"
+
+
+def test_ticket_number_links_to_issue(client: TestClient) -> None:
+    tev(1, 30, "SessionStart", 93, "A")
+    html = client.get("/interactions").text
+    assert f'<a href="{ISSUES}/93"' in html and ">#93</a>" in html
+
+
+def test_ticket_numeric_columns_right_aligned_in_table_wrap(client: TestClient) -> None:
+    tev(1, 30, "SessionStart", 93, "A")
+    html = client.get("/interactions").text
+    section = html.split('id="tickets-title"', 1)[1].split("</section>", 1)[0]
+    assert 'class="table-wrap"' in section
+    assert section.count('class="num"') >= 6  # 3 en-têtes + 3 cellules
+    assert ".num {" in html and "text-align: right" in html
+
+
+def test_legend_counts_events_without_ticket_over_7_days(client: TestClient) -> None:
+    tev(1, 30, "SessionStart", 93, "A")
+    for n in (2, 3, 4):
+        tev(n, 20, "PreToolUse", None, "A")
+    tev(5, 60 * 24 * 10, "PreToolUse", None, "A")  # hors fenêtre : non compté
+    html = client.get("/interactions").text
+    assert "Événements sans ticket exclus (3 sur 7 jours)" in html
+
+
+def test_legend_with_zero_untracked(client: TestClient) -> None:
+    tev(1, 30, "SessionStart", 93, "A")
+    html = client.get("/interactions").text
+    assert "Événements sans ticket exclus (0 sur 7 jours)" in html
+
+
+def test_ticket_section_has_explicit_empty_state(client: TestClient) -> None:
+    tev(1, 30, "SessionStart", None, "A")
+    html = client.get("/interactions").text
+    assert 'id="tickets-empty-title"' in html
+    assert "Aucun ticket sur les 7 derniers jours" in html
+    assert "Tickets triés par durée décroissante" not in html
+
+
+@pytest.mark.parametrize(("seconds", "label"), [(0, "< 1 min"), (59, "< 1 min"), (60, "1 min")])
+def test_ticket_duration_under_one_minute(seconds: int, label: str) -> None:
+    assert interactions.TicketStat(1, seconds, 0, 1).duration_label == label
