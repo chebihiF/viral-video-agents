@@ -90,7 +90,9 @@
 - `apps/orchestrator/pyproject.toml`
 - `apps/orchestrator/src/orchestrator/__init__.py` — Orchestrateur du pipeline vidéo (#53).
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
+- `apps/orchestrator/src/orchestrator/steps_llm.py` — Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
+- `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
