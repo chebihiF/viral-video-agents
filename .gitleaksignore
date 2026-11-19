@@ -2,3 +2,5 @@
 5f3802a920daabae62f71477e3d42d3d21a0ccac:tools/agents/tests/test_handoff.py:aws-access-token:198
 5f3802a920daabae62f71477e3d42d3d21a0ccac:tools/agents/tests/test_handoff.py:generic-api-key:196
 b54510b50130d78414d96146f3dfe2911cfedbb7:tools/agents/tests/test_handoff.py:generic-api-key:196
+# Faux positif : jeton factice du test de check_hooks (#170), fragmenté depuis.
+5a6699bf58a7887e981575309ed6dc0d38f4a679:tools/telemetry/tests/test_check_hooks.py:generic-api-key:18

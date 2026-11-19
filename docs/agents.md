@@ -160,6 +160,14 @@ Câblage local (`.claude/settings.json`, jamais commité), à côté des autres 
 - Aucun polling : l'alerte arrive à la fin du run, soit en moins de 10 min dans le cas normal.
 - L'Auto-fix de l'app (monitor de PR) reste complémentaire pour relancer la session de la PR ; il se règle dans l'app, pas ici.
 
+## Brancher les hooks
+
+1. Ouvrir [`docs/examples/hooks-settings.example.json`](examples/hooks-settings.example.json) (aucun secret).
+2. Fusionner son bloc `"hooks"` dans votre `.claude/settings.json` local (jamais commité) en retirant les appels à l'ancien `log_event.sh`.
+3. Exporter `VVA_INGEST_URL` et `VVA_INGEST_TOKEN` (shell, ou bloc `"env"` des réglages) ; `VVA_CONTROL_URL` pour la pause.
+4. Lancer `make telemetry-check` : code 0 = hooks et variables en place (jamais de valeur affichée) ; `make telemetry-check LIVE=1` envoie en plus un événement factice.
+5. Sinon, le message en français dit quoi corriger ; relancer jusqu'au vert, puis ouvrir le dashboard.
+
 ## Limites
 
 - Échec d'une tâche : noté à la main (`fail`) par le tech lead ; la télémétrie ne le détecte
