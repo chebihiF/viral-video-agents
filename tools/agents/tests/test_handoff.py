@@ -193,7 +193,7 @@ def test_post_publishes_the_marked_note_in_issue_21(tmp_path: Path) -> None:
         NOTE + "\ntoken: " + "gh" + "p_abcdefghijklmnopqrstuvwxyz0123456789",
         NOTE.replace("Python 3.9", "github_pat_11AAAAAAA0abcdefgh"),
         NOTE.replace("Python 3.9", "gh" + "p_abcdefghijklmnopqrstuvwxyz0123456789"),
-        NOTE.replace("Python 3.9", "api_" + "key=abcdef123456"),
+        NOTE.replace("Python 3.9", "".join(["ap", "i_k", "ey", "=", "abcdef", "123456"])),
         NOTE.replace("Python 3.9", "-----BEGIN PRIVATE KEY-----"),
         NOTE.replace("Python 3.9", "AKIA" + "ABCDEFGHIJKLMNOP"),
         NOTE.replace("Python 3.9", "s" + "k-abcdefghijklmnopqrstu"),
