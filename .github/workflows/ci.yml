@@ -43,6 +43,21 @@ jobs:
       - name: docs/MAP.md à jour
         run: python3 infra/scripts/gen_map.py --check
 
+  b-sans-gpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - run: uv sync --frozen
+      - name: contrats et garde-fou fichiers Claude
+        run: uv run pytest tests/contracts infra/scripts/test_no_claude_tracked.py
+      - name: evals --dry-run (sans réseau ni GPU)
+        run: |
+          uv run python evals/classification_eval.py --dry-run
+          uv run python evals/storyboard_eval.py --dry-run
+
   gitleaks:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -78,7 +93,7 @@ jobs:
 
   ci-ok:
     if: always()
-    needs: [pr-title, quality, gitleaks, audit, build]
+    needs: [pr-title, quality, b-sans-gpu, gitleaks, audit, build]
     runs-on: ubuntu-latest
     steps:
       - run: |
