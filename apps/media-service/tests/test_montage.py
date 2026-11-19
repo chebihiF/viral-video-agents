@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 
+from media_service import montage as montage_module
 from media_service.montage import (
     MontageError,
     MontageJob,
@@ -16,9 +17,11 @@ from media_service.montage import (
     build_srt,
     escape_filter_value,
     format_srt_time,
+    parse_job,
     probe_duration,
     run_montage,
 )
+from media_service.subtitles import ShotText, write_ass
 
 pytestmark = pytest.mark.skipif(
     (shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None)
@@ -289,3 +292,79 @@ def test_escape_filter_value_escapes_both_levels() -> None:
     assert escape_filter_value("/a b/c.srt") == "/a b/c.srt"
     assert escape_filter_value("a:b") == r"a\\:b"
     assert escape_filter_value("a,b[1];c'd") == r"a\,b\[1\]\;c\\\'d"
+
+
+def _spy_commands(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
+    seen: list[list[str]] = []
+    real_run = montage_module._run
+
+    def spy(cmd: list[str], timeout: int, what: str) -> subprocess.CompletedProcess[str]:
+        seen.append(cmd)
+        return real_run(cmd, timeout, what)
+
+    monkeypatch.setattr(montage_module, "_run", spy)
+    return seen
+
+
+def _ass(path: Path) -> Path:
+    return write_ass([ShotText("le petit chat", 3.0), ShotText("bonjour les oiseaux", 3.0)], path)
+
+
+def _graph(cmd: list[str]) -> str:
+    return cmd[cmd.index("-filter_complex") + 1]
+
+
+def test_subtitles_path_burns_ass_filter_and_keeps_srt(
+    assets: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _spy_commands(monkeypatch)
+    job = make_job(assets, tmp_path / "out.mp4")
+    ass = _ass(tmp_path / "final.ass")
+    result = run_montage(MontageJob(job.plans, job.output_path, subtitles_path=ass))
+
+    info = probe(result.video_path)
+    video = next(s for s in info["streams"] if s["codec_type"] == "video")
+    assert (video["width"], video["height"]) == (1080, 1920)
+    graph = _graph(next(c for c in seen if c[0] == "ffmpeg"))
+    assert "[vc]ass=filename=" in graph
+    assert "subtitles=" not in graph
+    assert result.srt_path.is_file()
+
+
+def test_without_subtitles_path_srt_is_burned_as_before(
+    assets: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen = _spy_commands(monkeypatch)
+    run_montage(make_job(assets, tmp_path / "out.mp4"))
+    graph = _graph(next(c for c in seen if c[0] == "ffmpeg"))
+    assert "[vc]subtitles=filename=" in graph
+    assert "ass=filename" not in graph.replace("subtitles=filename", "")
+
+
+def test_missing_ass_file_names_the_path_and_leaves_no_file(assets: Path, tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    out_dir.mkdir()
+    job = make_job(assets, out_dir / "out.mp4")
+    missing = tmp_path / "absent.ass"
+    with pytest.raises(MontageError, match=r"sous-titres.*absent\.ass"):
+        run_montage(MontageJob(job.plans, job.output_path, subtitles_path=missing))
+    assert list(out_dir.iterdir()) == []
+
+
+def test_ass_path_with_space_apostrophe_and_colon(assets: Path, tmp_path: Path) -> None:
+    folder = tmp_path / "d'un: dossier"
+    folder.mkdir()
+    ass = _ass(folder / "sous titres: l'été.ass")
+    job = make_job(assets, tmp_path / "out.mp4")
+    result = run_montage(MontageJob(job.plans, job.output_path, subtitles_path=ass))
+    assert result.video_path.is_file()
+
+
+def test_parse_job_reads_subtitles_path_and_defaults_to_none() -> None:
+    base = {
+        "schema_version": "1.0",
+        "plans": [{"clip_path": "c.mp4", "audio_path": "a.wav", "narration_fr": "x"}],
+        "output_path": "o.mp4",
+    }
+    assert parse_job(base).subtitles_path is None
+    assert parse_job({**base, "subtitles_path": "s.ass"}).subtitles_path == Path("s.ass")

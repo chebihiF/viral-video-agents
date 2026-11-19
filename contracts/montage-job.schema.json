@@ -24,7 +24,7 @@
       "pattern": "^[^\\u0000]+\\.mp4$"
     },
     "subtitles_path": {
-      "description": "Optionnel (rétrocompatible) : sous-titres ASS mot par mot générés par media_service.subtitles ; le branchement dans le montage viendra dans un ticket ultérieur.",
+      "description": "Optionnel (rétrocompatible) : sous-titres ASS mot par mot générés par media_service.subtitles ; incrustés à la place du SRT par le montage (le SRT reste écrit à côté). Fichier absent : MontageError nommant le chemin.",
       "type": "string",
       "pattern": "^(?!\\s)[^\\u0000]*[^\\u0000/\\s]\\.ass$"
     }
