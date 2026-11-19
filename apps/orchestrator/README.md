@@ -30,3 +30,19 @@ run["etat"], run.get("video_path")  # ok | bloque | erreur
 - Clips de 49 images (2 s à 24 i/s) ; le montage les boucle sur la durée de la voix.
 - Aucun texte de dictée, texte adouci ni message d'exception dans l'état ou les logs (`run=… etape=… statut=… duree_s=…`).
 - Les dossiers (`<workdir>/<run_id>/voix`, `final.mp4`) sont créés par les étapes, pas par l'orchestrateur.
+
+## Étapes LLM réelles (#137)
+
+```python
+from orchestrator.steps_llm import classifier_ollama, client_depuis_env, storyboard_ollama
+
+client = client_depuis_env()  # OLLAMA_URL = racine du serveur, ex. http://hote:11434
+etapes = Etapes(classifier_ollama(client), storyboard_ollama(client), voix, image, clip, montage)
+```
+
+- `POST <OLLAMA_URL>/api/chat`, modèle `qwen3:8b`, `think: false`, `temperature: 0`, `seed: 42`, `format` = schéma du contrat (sans les règles conditionnelles, vérifiées après).
+- Prompts : bloc `text` de `prompts/classification.v1.md` (dictée encadrée par `<dictee>…</dictee>`, balises internes neutralisées) ; corps de `prompts/storyboard.v1.md` (texte autorisé tel quel).
+- Sortie validée contre `contracts/classification.schema.json` / `storyboard.schema.json` par un validateur stdlib aligné sur `jsonschema` (testé) ; mot-clé de schéma non géré = `ErreurConfiguration`.
+- Échec fermé : sortie illisible, hors schéma, NaN ou réponse > 1 Mo → un seul nouvel essai, puis `SortieNonConforme` ; serveur injoignable → `OllamaInjoignable` ; `OLLAMA_URL` vide ou non http(s) → `ErreurConfiguration`. Jamais de classification « libre » par défaut : le run passe en « erreur ».
+- Ni dictée ni sortie du modèle dans les logs ou les exceptions (sans `__cause__` ni `__context__`).
+- Transport injectable `(url, corps, timeout) -> octets` : faux Ollama en test, aucun appel réseau.
