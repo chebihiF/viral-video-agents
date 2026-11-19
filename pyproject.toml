@@ -16,7 +16,7 @@ orchestrator = { workspace = true }
 dev = [
   "dashboard",
   "media-service",
-  "orchestrator",
+  "orchestrator[media]",
   "ruff>=0.8",
   "mypy>=1.13",
   "pytest>=8.3",
