@@ -24,7 +24,7 @@ ORDER = [
     ("/tokens", "Tokens"),
     ("/controls", "Contrôles"),
 ]
-PAGES = [href for href, _ in ORDER[1:]]
+PAGES = [href for href, _ in ORDER]
 
 
 def unreachable_github(path: str) -> Any:
@@ -109,13 +109,15 @@ def test_css_has_mobile_tabbar_without_overflow_and_touch_targets() -> None:
     assert "min-height: var(--size-touch)" in css
 
 
-def test_home_link_target_is_reachable(client: TestClient) -> None:
+def test_home_link_is_active_on_the_home_page(client: TestClient) -> None:
     resp = client.get("/")
-    assert resp.status_code == 303
-    assert resp.headers["location"] == "/progress"
+    assert resp.status_code == 200
+    entries = links(navs(resp.text)["sidenav"])
+    assert [(h, label) for h, label, current in entries if current] == [("/", "Accueil")]
+    assert 'aria-current="page"' in resp.text
 
 
 def test_pages_share_one_nav_partial() -> None:
-    for name in ("progress", "activity", "tokens", "controls", "interactions"):
+    for name in ("home", "progress", "activity", "tokens", "controls", "interactions"):
         text = (PKG / "templates" / f"{name}.html").read_text(encoding="utf-8")
         assert text.count('include "_nav.html"') == 1

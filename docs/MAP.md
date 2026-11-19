@@ -60,6 +60,7 @@
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
 - `apps/dashboard/tests/test_live.py` — « Qui fait quoi » en direct (#101) : agents, ticket, état, durée sur /activity.
 - `apps/dashboard/tests/test_main.py` — Accueil, redirections et navigation commune (#58).
+- `apps/dashboard/tests/test_nav.py` — Navigation commune du dashboard (#99) : page active, mobile, clavier.
 - `apps/dashboard/tests/test_otlp.py` — Réception OTLP/HTTP JSON des métriques de tokens (#7).
 - `apps/dashboard/tests/test_progress.py` — Suivi visuel du projet (#26) : /progress et /api/v1/progress. GitHub est toujours mocké.
 - `apps/dashboard/tests/test_quota.py` — Quota de tokens réglable par le parent (#100) : fenêtre de 5 h et semaine, jamais inventé.

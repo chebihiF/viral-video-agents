@@ -25,7 +25,7 @@
   </style>
 </head>
 <body>
-  <main data-stream data-last-id="{{ home.last_id if home else 0 }}" data-refresh="#home">
+  <main id="contenu" data-stream data-last-id="{{ home.last_id if home else 0 }}" data-refresh="#home">
     <header>
       <h1>Accueil</h1>
       {% with active="/" %}{% include "_nav.html" %}{% endwith %}
