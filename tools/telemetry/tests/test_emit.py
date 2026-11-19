@@ -241,7 +241,13 @@ def emitted_in(tmp_path: Path, branch: str) -> dict[str, Any]:
 
 # Scénario : branche feat/93-accueil -> ticket 93
 @pytest.mark.parametrize(
-    ("branch", "ticket"), [("feat/93-accueil", 93), ("fix/7-bug", 7), ("chore/120-ci", 120)]
+    ("branch", "ticket"),
+    [
+        ("feat/93-accueil", 93),
+        ("fix/7-bug", 7),
+        ("chore/120-ci", 120),
+        ("ci/999999999-x", 999_999_999),
+    ],
 )
 def test_ticket_comes_from_branch(tmp_path: Path, branch: str, ticket: int) -> None:
     line = emitted_in(tmp_path, branch)
@@ -250,7 +256,9 @@ def test_ticket_comes_from_branch(tmp_path: Path, branch: str, ticket: int) -> N
 
 
 # Scénario : branche sans numéro -> ticket absent, ingestion 2xx
-@pytest.mark.parametrize("branch", ["main", "feat/accueil", "feat/93", "wip/93-x"])
+@pytest.mark.parametrize(
+    "branch", ["main", "feat/accueil", "feat/93", "wip/93-x", "feat/1234567890-trop-long"]
+)
 def test_branch_without_number_has_no_ticket(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, branch: str
 ) -> None:

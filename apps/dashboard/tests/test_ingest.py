@@ -327,7 +327,7 @@ def test_event_without_ticket_is_stored_null(
 
 
 # Scénario : ticket négatif ou textuel refusé (contrat)
-@pytest.mark.parametrize("bad", [-1, 0, "93", "#93", True, 9.5])
+@pytest.mark.parametrize("bad", [-1, 0, "93", "#93", True, 9.5, 2**31, 2**63])
 def test_invalid_ticket_is_422(client: TestClient, db_path: Path, bad: object) -> None:
     assert client.post(URL, json=event(ticket=bad), headers=auth()).status_code == 422
     assert count_events(db_path) == 0
@@ -366,4 +366,10 @@ def test_contract_ticket_is_positive_integer() -> None:
     spec = contract["properties"]["ticket"]
     assert spec["type"] == ["integer", "null"]
     assert spec["minimum"] == 1
+    assert spec["maximum"] == 2**31 - 1  # INTEGER SQLite et entier 32 bits côté clients
     assert "ticket" not in contract["required"]
+
+
+def test_largest_ticket_is_accepted(client: TestClient, db_path: Path) -> None:
+    assert client.post(URL, json=event(ticket=2**31 - 1), headers=auth()).status_code == 202
+    assert stored_tickets(db_path) == [("evt-1", 2**31 - 1)]

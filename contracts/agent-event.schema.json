@@ -44,7 +44,8 @@
     "ticket": {
       "description": "Optionnel (#100) : numéro du ticket en cours, lu dans la branche `<type>/<n>-…` ; absent hors branche de ticket. Anciens événements : NULL.",
       "type": ["integer", "null"],
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 2147483647
     }
   }
 }

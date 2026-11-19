@@ -26,7 +26,7 @@ DEADLINE_S = 0.8
 REQUIRED = {"hook_event_name": 64, "session_id": 128}
 OPTIONAL = {"agent_type": 128, "agent_id": 128, "tool_name": 128}
 # même motif que tools/agents/token_report.py : seul le numéro sort de la branche (#100)
-BRANCH = re.compile(r"^(?:feat|fix|chore|docs|test|ci)/(\d+)-")
+BRANCH = re.compile(r"^(?:feat|fix|chore|docs|test|ci)/(\d{1,9})-")
 GIT_TIMEOUT_S = 0.4
 
 
@@ -46,7 +46,7 @@ def ticket_of(cwd: Any) -> int | None:
         return None
     try:
         out = subprocess.run(  # noqa: S603 - git local, liste d'arguments sans shell
-            ["git", "-C", cwd, "branch", "--show-current"],  # noqa: S607
+            ["git", "-c", "core.fsmonitor=", "-C", cwd, "branch", "--show-current"],  # noqa: S607
             capture_output=True,
             text=True,
             timeout=GIT_TIMEOUT_S,

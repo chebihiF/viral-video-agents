@@ -22,10 +22,10 @@ Taille maximale du corps : **256 Ko** (262 144 octets), contrôlée sur `Content
 puis sur le flux réellement lu (lecture bornée). `ts` doit être une **chaîne** date-time
 ISO 8601 avec fuseau (un nombre est refusé) ; il est stocké normalisé en UTC.
 
-`ticket` (#100) est optionnel et rétrocompatible : entier JSON ≥ 1 (`"93"`, `0`, `-1`,
+`ticket` (#100) est optionnel et rétrocompatible : entier JSON de 1 à 2 147 483 647 (`"93"`, `0`, `-1`,
 `true` ou `9.5` sont refusés en 422), absent ou `null` hors branche de ticket. Le hook
 d'envoi (`tools/telemetry/hook_emit.py`) le déduit de la branche git du `cwd` du hook
-(`feat|fix|chore|docs|test|ci/<n>-…`, même motif que `tools/agents/token_report.py`) et
+(`feat|fix|chore|docs|test|ci/<n>-…`, n de 1 à 9 chiffres, même motif que `tools/agents/token_report.py`) et
 n'écrit que le nombre, jamais le nom de branche.
 
 Tout champ hors schéma (ex. `prompt`) est refusé. Un lot est **atomique** : si un seul

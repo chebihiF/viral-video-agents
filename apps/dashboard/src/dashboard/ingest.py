@@ -17,6 +17,7 @@ from dashboard import db
 
 MAX_BATCH = 100
 MAX_BODY_BYTES = 256 * 1024
+MAX_TICKET = 2**31 - 1  # contrat : entier 32 bits signé
 
 Id = Annotated[str, Field(min_length=1, max_length=128, strict=True)]
 OptionalName = Annotated[str | None, Field(max_length=128, strict=True)]
@@ -34,7 +35,7 @@ class AgentEvent(BaseModel):
     agent_type: OptionalName = None
     agent_id: OptionalName = None
     tool_name: OptionalName = None
-    ticket: Annotated[int | None, Field(ge=1, strict=True)] = None
+    ticket: Annotated[int | None, Field(ge=1, le=MAX_TICKET, strict=True)] = None
 
     def row(self) -> db.EventRow:
         values = self.model_dump()
