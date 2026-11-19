@@ -55,4 +55,5 @@ files = ["apps/dashboard/src", "apps/media-service/src", "apps/orchestrator/src"
 testpaths = ["apps/dashboard/tests", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "tools/telemetry/tests", "tools/agents/tests", "evals", "apps/gpu-worker/tests"]
 pythonpath = ["infra/scripts", "tools/telemetry", "tools/agents", "evals", "apps/gpu-worker"]
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = ["e2e: parcours de bout en bout avec mocks (ffmpeg local, sans GPU ni réseau)"]
 addopts = "-q --no-header -p no:cacheprovider"
