@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0",
+  "output_dir": "/data/jobs/42/voix",
+  "plans": [
+    {
+      "plan_id": "plan-1",
+      "texte": "Le petit chat s'envole sur son tapis magique !",
+      "langue": "fr"
+    },
+    {
+      "plan_id": "plan-2",
+      "texte": "Bonjour les oiseaux, crie-t-il en riant.",
+      "langue": "fr"
+    }
+  ]
+}
