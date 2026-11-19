@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -161,3 +162,129 @@ def test_static_tokens_served(client: TestClient) -> None:
     resp = client.get("/static/tokens.css")
     assert resp.status_code == 200
     assert "--color-bg" in resp.text
+
+
+# Historique filtrable (#94)
+def ago(minutes: float) -> str:
+    return (datetime.now(UTC) - timedelta(minutes=minutes)).isoformat()
+
+
+def add(agent: str, ticket: int | None, start_min: float, end_min: float, **kw: Any) -> None:
+    """Un agent travaille sur un ticket de `start_min` à `end_min` minutes dans le passé."""
+    hooks = kw.get("hooks", ["PreToolUse", "SubagentStop" if kw.get("stop") else "PostToolUse"])
+    stamps = [ago(start_min), ago(end_min)]
+    rows = [
+        (f"h-{agent}-{ticket}-{i}-{start_min}", ts, hook, "s", agent, f"id-{agent}", "Bash", ticket)
+        for i, (ts, hook) in enumerate(zip(stamps, hooks, strict=True))
+    ]
+    with db.connect() as conn:
+        db.insert_events(conn, rows)
+
+
+def history(html: str) -> str:
+    return html.split('id="history"', 1)[1].split("</section>", 1)[0]
+
+
+def history_rows(html: str) -> list[str]:
+    return re.findall(r'<tr class="history-row[^"]*"[^>]*>.*?</tr>', history(html), re.S)
+
+
+def test_history_shows_agent_ticket_status_duration_in_words(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    text = history(client.get("/activity").text)
+    for expected in ("qa", "ticket #94", "terminé", "a duré 20 min"):
+        assert expected in text, expected
+    assert "Historique" in text
+
+
+def test_filter_by_agent_keeps_only_that_agent(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    add("backend", 95, 60, 30, stop=True)
+    rows = history_rows(client.get("/activity?agent=qa").text)
+    assert len(rows) == 1 and "qa" in rows[0] and "backend" not in rows[0]
+
+
+def test_filter_by_status_and_active_filter_is_displayed(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    add("backend", 95, 1, 0.5)
+    html = client.get("/activity?statut=actif").text
+    rows = history_rows(html)
+    assert len(rows) == 1 and "backend" in rows[0]
+    assert "Filtres actifs" in html and "statut : actif" in html
+
+
+def test_filter_by_minimum_duration(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)  # 20 min
+    add("backend", 95, 60, 55, stop=True)  # 5 min
+    html = client.get("/activity?duree_min=10").text
+    rows = history_rows(html)
+    assert len(rows) == 1 and "qa" in rows[0]
+    assert "au moins 10 min" in html
+
+
+def test_filter_without_result_offers_to_clear_it(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    html = client.get("/activity?agent=inconnu").text
+    assert "Aucun résultat pour ce filtre" in history(html)
+    assert '<a href="/activity">Effacer le filtre</a>' in history(html)
+    assert history_rows(html) == []
+
+
+def test_invalid_filters_are_ignored(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    resp = client.get("/activity?statut=bidon&duree_min=abc")
+    assert resp.status_code == 200 and len(history_rows(resp.text)) == 1
+
+
+def test_errors_are_highlighted_with_a_count(client: TestClient) -> None:
+    add("qa", 94, 60, 40, hooks=["PreToolUse", "PostToolUseFailure"])
+    add("backend", 95, 60, 30, stop=True)
+    rows = history_rows(client.get("/activity").text)
+    failed = next(r for r in rows if "qa" in r)
+    assert "history-row--error" in failed and "1 erreur" in failed
+    assert "history-row--error" not in next(r for r in rows if "backend" in r)
+
+
+def test_filter_by_error_status(client: TestClient) -> None:
+    add("qa", 94, 60, 40, hooks=["PreToolUse", "PostToolUseFailure"])
+    add("backend", 95, 60, 30, stop=True)
+    rows = history_rows(client.get("/activity?statut=erreur").text)
+    assert len(rows) == 1 and "qa" in rows[0]
+
+
+def test_history_shows_real_tokens_with_unit(client: TestClient) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    with db.connect() as conn:
+        db.insert_token_usage(
+            conn,
+            [
+                ("p1", ago(50), "s", "id-qa", "sonnet", "input", 1200),
+                ("p2", ago(30), "s", "id-qa", "sonnet", "input", 9999),  # hors de la période
+            ],
+        )
+    assert "1 200 jetons" in history(client.get("/activity").text)
+
+
+def test_history_values_are_escaped_and_agent_form_is_labelled(client: TestClient) -> None:
+    add("<b>x</b>", 1, 60, 40, stop=True)
+    html = client.get("/activity?agent=<i>").text
+    assert "<b>x</b>" not in html and "<i>" not in history(html)
+    assert re.search(r'<label for="f-agent">', html)
+
+
+def test_history_is_bounded_to_the_last_7_days(client: TestClient) -> None:
+    add("old", 1, 60 * 24 * 8, 60 * 24 * 8 - 5, stop=True)
+    add("qa", 94, 60, 40, stop=True)
+    rows = history_rows(client.get("/activity").text)
+    assert len(rows) == 1 and "qa" in rows[0]
+
+
+def test_history_unreadable_database_is_503(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def broken(*a: object, **k: object) -> list[object]:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(activity, "load_history", broken)
+    seed(1)
+    assert client.get("/activity").status_code == 503
