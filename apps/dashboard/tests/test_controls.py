@@ -250,6 +250,98 @@ def test_lowering_the_cap_below_usage_pauses(db_path: Path) -> None:
     assert body["paused"] is True and body["reason"] == "plafond"
 
 
+# --- Page utile (#97) : agents, confirmation, quota, historique ----------------------------
+def seed_event(
+    hook: str, age: timedelta, agent: str = "qa", ticket: int | None = 97, tool: str | None = None
+) -> None:
+    ts = (datetime.now(UTC) - age).isoformat(timespec="microseconds")
+    with db.connect() as conn:
+        db.insert_events(conn, [(f"e-{hook}-{age}", ts, hook, "s1", agent, "ag-1", tool, ticket)])
+
+
+def section(page: str, title: str) -> str:
+    match = re.search(rf"<h2[^>]*>{title}</h2>(.*?)(?=<h2|</main>)", page, re.S)
+    assert match, title
+    return match.group(1)
+
+
+def test_agents_listed_with_ticket_and_state(db_path: Path) -> None:
+    seed_event("PreToolUse", timedelta(seconds=10), "qa", 97)
+    seed_event("PreToolUse", timedelta(minutes=5), "reviewer", None)
+    agents = section(logged_in().get("/controls").text, "Agents")
+    pattern = r"qa</strong> ·\s*<span>ticket #97</span> ·\s*<span[^>]*>[^<]*actif"
+    assert re.search(pattern, agents)
+    assert "reviewer" in agents and "ticket inconnu" in agents and "en attente" in agents
+
+
+def test_agents_show_paused_state_when_paused(db_path: Path) -> None:
+    seed_event("PreToolUse", timedelta(seconds=10))
+    client = logged_in()
+    post(client, "pause")
+    agents = section(client.get("/controls").text, "Agents")
+    assert "en pause" in agents and "actif" not in agents
+
+
+def test_finished_agents_are_not_listed(db_path: Path) -> None:
+    seed_event("SubagentStop", timedelta(seconds=10), "devops")
+    assert "devops" not in section(logged_in().get("/controls").text, "Agents")
+
+
+def test_empty_database_shows_empty_state_and_keeps_controls(db_path: Path) -> None:
+    page = logged_in().get("/controls").text
+    assert 'class="state"' in page
+    assert 'action="/controls/pause"' in page and 'action="/controls/cap"' in page
+
+
+def test_pause_needs_an_explicit_confirmation_first(db_path: Path) -> None:
+    page = logged_in().get("/controls").text
+    warning = "Les agents s'arrêteront après leur étape en cours"
+    assert warning in page
+    assert page.index(warning) < page.index('action="/controls/pause"')
+    assert "Confirmer la pause" in page
+
+
+def test_pause_result_is_displayed(db_path: Path) -> None:
+    client = logged_in()
+    post(client, "pause")
+    page = client.get("/controls").text
+    assert "Résultat" in page and "Agents en pause (motif : manuel)" in page
+
+
+def test_quota_is_labelled_with_unit_and_current_value(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("VVA_QUOTA_5H_TOKENS", "200000")
+    seed_tokens(50_000, age=timedelta(hours=1))
+    cap = section(logged_in().get("/controls").text, "Plafond de tokens")
+    assert f"{tokens.thousands(200_000)} tokens par 5 h" in cap
+    assert f"{tokens.thousands(50_000)}" in cap
+
+
+def test_quota_not_configured_says_so_without_percent(db_path: Path) -> None:
+    cap = section(logged_in().get("/controls").text, "Plafond de tokens")
+    assert "Quota par 5 h non configuré" in cap and "VVA_QUOTA_5H_TOKENS" in cap
+    assert "%" not in cap
+
+
+def test_history_lists_date_action_result(db_path: Path) -> None:
+    seed_event("SubagentStart", timedelta(minutes=30), "qa", 97)
+    seed_event("PostToolUseFailure", timedelta(minutes=20), "qa", 97, tool="Bash")
+    seed_event("SubagentStop", timedelta(minutes=10), "qa", 97)
+    history = section(logged_in().get("/controls").text, "Historique des actions")
+    for head in ("Date", "Action", "Résultat"):
+        assert f">{head}</th>" in history
+    assert "qa démarre" in history and "lancé" in history
+    assert "Bash" in history and "échec" in history
+    assert "qa se termine" in history and "terminé" in history
+    assert history.index("se termine") < history.index("démarre")  # plus récent en haut
+
+
+def test_history_without_action_says_so(db_path: Path) -> None:
+    history = section(logged_in().get("/controls").text, "Historique des actions")
+    assert "Aucune action" in history
+
+
 # --- Échec sûr (pages fermées) ----------------------------------------------------------------
 def test_unreadable_db_is_503_for_page_post_and_api(
     db_path: Path, monkeypatch: pytest.MonkeyPatch
