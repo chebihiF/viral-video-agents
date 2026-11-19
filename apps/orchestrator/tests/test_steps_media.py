@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import logging
 import shutil
@@ -248,3 +249,14 @@ def test_montage_job_hors_contrat_sans_fuite(tmp_path: Path) -> None:
     with pytest.raises(Exception) as err:  # noqa: B017, PT011
         montage_reel()(job)
     assert SECRET not in str(err.value)
+
+
+def test_steps_media_n_importe_aucun_nom_prive_de_tts() -> None:
+    source = (RACINE / "apps/orchestrator/src/orchestrator/steps_media.py").read_text("utf-8")
+    noms = [
+        alias.name
+        for noeud in ast.walk(ast.parse(source))
+        if isinstance(noeud, ast.ImportFrom) and noeud.module == "media_service.tts"
+        for alias in noeud.names
+    ]
+    assert noms and not [n for n in noms if n.startswith("_")]
