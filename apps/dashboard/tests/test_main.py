@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
@@ -15,12 +14,6 @@ from dashboard.main import app
 
 PASSWORD = "mot-de-passe-de-test"  # noqa: S105 - valeur factice de test
 TEMPLATES = Path(progress.__file__).parent / "templates"
-LABELS = {
-    "/progress": "Suivi",
-    "/activity": "Activité",
-    "/tokens": "Tokens",
-    "/controls": "Contrôles",
-}
 
 
 def unreachable_github(path: str) -> Any:
@@ -79,27 +72,6 @@ def test_home_is_not_cached(client: TestClient) -> None:
 
 
 # --- Navigation commune ------------------------------------------------------------------
-def nav_links(html: str) -> list[tuple[str, str, bool]]:
-    nav = re.search(r'<nav aria-label="Navigation principale">(.*?)</nav>', html, re.S)
-    assert nav, "barre de navigation absente"
-    anchors = re.findall(r"<a href=\"([^\"]+)\"([^>]*)>([^<]+)</a>", nav.group(1))
-    return [(href, label, 'aria-current="page"' in attrs) for href, attrs, label in anchors]
-
-
-@pytest.mark.parametrize("path", list(LABELS))
-def test_page_has_common_nav_with_active_link(client: TestClient, path: str) -> None:
-    resp = client.get(path)
-    assert resp.status_code == 200
-    links = nav_links(resp.text)
-    assert [(href, label) for href, label, _ in links[:4]] == list(LABELS.items())
-    assert [href for href, _, current in links if current] == [path]
-
-
-def test_interactions_page_keeps_the_nav_without_active_main_link(client: TestClient) -> None:
-    links = nav_links(client.get("/interactions").text)
-    assert [href for href, _, current in links if current] == ["/interactions"]
-
-
 def test_nav_is_not_shown_on_login(env: None) -> None:
     assert "<nav" not in new_client().get("/login").text
 

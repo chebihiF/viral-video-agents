@@ -8,7 +8,8 @@
   <link rel="stylesheet" href="/static/components.css">
   <style>
     :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-    body { margin: 0 auto; max-width: 48rem; padding: 2rem 1rem 4rem; }
+    body { margin: 0; }
+    main { margin: 0 auto; max-width: 48rem; padding: 2rem 1rem 4rem; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 2rem; }
     th, td { padding: .4rem .6rem; border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
     th { text-align: left; font-weight: 600; }
@@ -18,8 +19,9 @@
 </head>
 <body>
   {% from "_empty.html" import empty %}
+  {% with active="/tokens" %}{% include "_nav.html" %}{% endwith %}
+  <main id="contenu">
   <header>
-    {% with active="/tokens" %}{% include "_nav.html" %}{% endwith %}
     <h1>Tokens</h1>
   </header>
   {% if not report.by_agent and not report.by_model %}
@@ -39,6 +41,7 @@
   {% endfor %}
   <p><small>Tous types confondus (entrée, sortie, cache). « (fil principal) » : tokens hors sous-agent nommé.</small></p>
   {% endif %}
+  </main>
   <footer>v{{ version }}</footer>
 </body>
 </html>

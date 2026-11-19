@@ -29,10 +29,10 @@
 </head>
 <body>
   {% from "_empty.html" import empty %}
-  <main{% if last_id is not none %} data-stream data-last-id="{{ last_id }}" data-refresh="#sessions"{% endif %}>
+  {% with active="/interactions" %}{% include "_nav.html" %}{% endwith %}
+  <main id="contenu"{% if last_id is not none %} data-stream data-last-id="{{ last_id }}" data-refresh="#sessions"{% endif %}>
     <header>
       <h1>Interactions entre agents</h1>
-      {% with active="/interactions" %}{% include "_nav.html" %}{% endwith %}
       <p id="live-status" role="status"></p>
     </header>
     {% if error_at %}
