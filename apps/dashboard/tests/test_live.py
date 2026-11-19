@@ -34,12 +34,6 @@ def client(db_file: Path) -> TestClient:
     return c
 
 
-def add_ticket_column() -> None:
-    """Simule le champ `ticket` de #100 (absent du schéma tant que #100 n'est pas livré)."""
-    with db.connect() as conn, conn:
-        conn.execute("ALTER TABLE events ADD COLUMN ticket INTEGER")
-
-
 def put(
     n: int,
     ago: timedelta,
@@ -75,7 +69,6 @@ def minutes(n: float) -> timedelta:
 
 # Scénario : agent actif sur un ticket
 def test_active_agent_shows_ticket_state_and_duration(db_file: Path) -> None:
-    add_ticket_column()
     put(1, minutes(12))
     put(2, timedelta(seconds=30))
     [row] = rows_at()
@@ -88,7 +81,6 @@ def test_active_agent_shows_ticket_state_and_duration(db_file: Path) -> None:
 
 
 def test_page_shows_the_line(client: TestClient) -> None:
-    add_ticket_column()
     now = datetime.now(UTC)
     put(1, minutes(12) + timedelta(seconds=5), now=now)
     put(2, timedelta(seconds=30), now=now)
@@ -143,14 +135,13 @@ def test_waiting_agent_shows_last_event_time(db_file: Path) -> None:
 
 
 # Scénario : ticket inconnu
-def test_event_without_ticket_column_is_unknown_ticket(client: TestClient) -> None:
-    put(1, timedelta(seconds=5), now=datetime.now(UTC))
+def test_event_without_ticket_is_unknown_ticket(client: TestClient) -> None:
+    put(1, timedelta(seconds=5), ticket=None, now=datetime.now(UTC))
     html = text_of(client.get("/activity").text)
     assert "dev-backend · ticket inconnu · actif" in html
 
 
 def test_event_with_null_ticket_is_unknown_ticket(db_file: Path) -> None:
-    add_ticket_column()
     put(1, timedelta(seconds=5), ticket=None)
     assert rows_at()[0].ticket is None
 
@@ -158,7 +149,6 @@ def test_event_with_null_ticket_is_unknown_ticket(db_file: Path) -> None:
 # Durée : depuis le premier événement de l'agent sur ce ticket
 @pytest.mark.parametrize("raw", ["#93", "93a", ""])
 def test_non_numeric_ticket_is_unknown_ticket(db_file: Path, raw: str) -> None:
-    add_ticket_column()
     put(1, timedelta(seconds=5), ticket=raw)  # type: ignore[arg-type]
     assert rows_at()[0].ticket is None
 
@@ -170,7 +160,6 @@ def test_events_older_than_the_window_are_ignored(db_file: Path) -> None:
 
 
 def test_agent_on_two_tickets_gives_two_rows(db_file: Path) -> None:
-    add_ticket_column()
     put(1, minutes(60), ticket=90)
     put(2, minutes(50), ticket=90)
     put(3, minutes(10), ticket=93)

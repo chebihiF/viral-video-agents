@@ -1,8 +1,8 @@
 """« Qui fait quoi » (#101) : un état par agent et par ticket, dérivé de la table `events`.
 
 États : actif (dernier événement < 2 min), en attente (2 à 15 min), terminé (dernier événement
-`SubagentStop`, ou plus de 15 min). Le ticket vient de la colonne `ticket` si elle existe (#100) ;
-sinon, ou si elle est vide, il est inconnu. Métadonnées uniquement : aucun contenu de prompt.
+`SubagentStop`, ou plus de 15 min). Le ticket vient de la colonne `ticket` (#100) ;
+si elle est vide, il est inconnu. Métadonnées uniquement : aucun contenu de prompt.
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ STOP_EVENT = "SubagentStop"
 UNKNOWN_AGENT = "agent inconnu"
 
 _SELECT = (
-    "SELECT agent_type, agent_id, {ticket}, MIN(ts), MAX(ts), "
+    "SELECT agent_type, agent_id, ticket, MIN(ts), MAX(ts), "
     "MAX(CASE WHEN hook_event_name = ? THEN ts END) "
-    "FROM events WHERE ts >= ? GROUP BY {group} "
+    "FROM events WHERE ts >= ? GROUP BY agent_type, agent_id, ticket "
     "ORDER BY MAX(ts) DESC LIMIT ?"
 )
 
@@ -35,10 +35,6 @@ class LiveRow:
     state: str
     duration: str
     last_label: str
-
-
-def _has_ticket_column(conn: sqlite3.Connection) -> bool:
-    return any(row[1] == "ticket" for row in conn.execute("PRAGMA table_info(events)"))
 
 
 def _parse(ts: str | None) -> datetime | None:
@@ -103,13 +99,8 @@ def _row(raw: tuple[str | None, ...], now: datetime) -> LiveRow | None:
 
 def agent_rows(conn: sqlite3.Connection, now: datetime) -> list[LiveRow]:
     """Une ligne par (agent, ticket), la plus récente d'abord ; `now` est injecté."""
-    has_ticket = _has_ticket_column(conn)
-    sql = _SELECT.format(
-        ticket="ticket" if has_ticket else "NULL",
-        group="agent_type, agent_id, ticket" if has_ticket else "agent_type, agent_id",
-    )
     since = (now - HISTORY_WINDOW).astimezone(UTC).isoformat()
-    rows = (_row(raw, now) for raw in conn.execute(sql, (STOP_EVENT, since, MAX_ROWS)))
+    rows = (_row(raw, now) for raw in conn.execute(_SELECT, (STOP_EVENT, since, MAX_ROWS)))
     return [row for row in rows if row is not None]
 
 

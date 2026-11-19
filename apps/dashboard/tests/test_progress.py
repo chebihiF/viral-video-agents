@@ -145,7 +145,7 @@ def ago(**delta: float) -> str:
 def seed(*events: tuple[str, str, str, str, str | None]) -> None:
     """(ts, hook, agent_type, agent_id, tool)."""
     rows = [
-        (f"e{i}", ts, hook, "sess", agent, agent_id, tool)
+        (f"e{i}", ts, hook, "sess", agent, agent_id, tool, None)
         for i, (ts, hook, agent, agent_id, tool) in enumerate(events)
     ]
     with db.connect() as conn:
