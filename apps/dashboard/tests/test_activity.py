@@ -237,6 +237,14 @@ def test_invalid_filters_are_ignored(client: TestClient) -> None:
     assert resp.status_code == 200 and len(history_rows(resp.text)) == 1
 
 
+@pytest.mark.parametrize("value", ["²", "٣", "１２", "1²"])
+def test_non_ascii_digits_in_duree_min_are_ignored(client: TestClient, value: str) -> None:
+    add("qa", 94, 60, 40, stop=True)
+    resp = client.get("/activity", params={"duree_min": value})
+    assert resp.status_code == 200 and len(history_rows(resp.text)) == 1
+    assert value not in resp.text
+
+
 def test_errors_are_highlighted_with_a_count(client: TestClient) -> None:
     add("qa", 94, 60, 40, hooks=["PreToolUse", "PostToolUseFailure"])
     add("backend", 95, 60, 30, stop=True)
