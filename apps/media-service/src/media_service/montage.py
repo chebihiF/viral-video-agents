@@ -1,5 +1,6 @@
-"""Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres incrustés
-(ASS mot par mot si `subtitles_path`, sinon SRT).
+"""Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres ASS ou SRT incrustés.
+
+Avec `subtitles_path` : ASS mot par mot (#52) ; sinon SRT.
 
 Contrat d'entrée : contracts/montage-job.schema.json. Stdlib uniquement ; FFmpeg et
 ffprobe système sont appelés avec une liste d'arguments (jamais de shell) et des chemins
