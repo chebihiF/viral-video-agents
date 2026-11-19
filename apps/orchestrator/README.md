@@ -43,3 +43,19 @@ make run-mock [DICTEE=F]                                        # sortie dans .v
 - Sans `--mocks` : « étapes réelles non configurées », code 78.
 - `--mocks` (`mocks.py`) : étapes factices, sans GPU ni fichier ; le mot-clé `MOCK-BLOQUE` dans la dictée la fait classer « bloque ». `video_path` est fictif.
 - La dictée n'est ni écrite, ni affichée, ni journalisée (logs `run=… etape=…` sur stderr).
+
+## Étapes LLM réelles (#137)
+
+```python
+from orchestrator.steps_llm import classifier_ollama, client_depuis_env, storyboard_ollama
+
+client = client_depuis_env()  # OLLAMA_URL = racine du serveur, ex. http://hote:11434
+etapes = Etapes(classifier_ollama(client), storyboard_ollama(client), voix, image, clip, montage)
+```
+
+- `POST <OLLAMA_URL>/api/chat`, modèle `qwen3:8b`, `think: false`, `temperature: 0`, `seed: 42`, `format` = schéma du contrat (sans les règles conditionnelles, vérifiées après).
+- Prompts : bloc `text` de `prompts/classification.v1.md` (dictée encadrée par `<dictee>…</dictee>`, balises internes neutralisées) ; corps de `prompts/storyboard.v1.md` (texte autorisé tel quel).
+- Sortie validée contre `contracts/classification.schema.json` / `storyboard.schema.json` par un validateur stdlib aligné sur `jsonschema` (testé) ; mot-clé de schéma non géré = `ErreurConfiguration`.
+- Échec fermé : sortie illisible, hors schéma, NaN ou réponse > 1 Mo → un seul nouvel essai, puis `SortieNonConforme` ; serveur injoignable → `OllamaInjoignable` ; `OLLAMA_URL` vide ou non http(s) → `ErreurConfiguration`. Jamais de classification « libre » par défaut : le run passe en « erreur ».
+- Ni dictée ni sortie du modèle dans les logs ou les exceptions (sans `__cause__` ni `__context__`).
+- Transport injectable `(url, corps, timeout) -> octets` : faux Ollama en test, aucun appel réseau.
