@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check mapcheck build map run bootstrap ticket status
+.PHONY: help sync lint fmt type test audit check mapcheck build map run run-mock bootstrap ticket status
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -41,6 +41,10 @@ map: ## Régénère docs/MAP.md
 
 run: ## Dashboard en local sur :8000
 	$(UV) uvicorn dashboard.main:app --reload
+
+run-mock: ## Parcours simulé : DICTEE=fichier (défaut : dictée d'exemple), sortie dans .venv/run-mock
+	printf 'Un petit chat vole sur un tapis magique.' > .venv/dictee-mock.txt
+	$(UV) python -m orchestrator run --mocks --dictee-file $(or $(DICTEE),.venv/dictee-mock.txt) --out .venv/run-mock
 
 bootstrap: ## Copie .claude/ et CLAUDE.md du checkout principal (VVA_MAIN=chemin)
 	infra/scripts/bootstrap_worktree.sh
