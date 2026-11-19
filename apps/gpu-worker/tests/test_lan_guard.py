@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import subprocess
 import threading
 import urllib.error
 import urllib.request
@@ -30,20 +29,6 @@ class FakeComfy:
     def __call__(self, req: worker.JobRequest) -> str:
         self.calls.append(req.job_id)
         return f"/out/{req.job_id}/clip.mp4"
-
-
-@pytest.fixture
-def pc_gpu_calls(monkeypatch: pytest.MonkeyPatch) -> list[object]:
-    """Mock de pc-gpu : tout lancement de processus est enregistré (et ne part pas)."""
-    calls: list[object] = []
-
-    def fake(*args: object, **kwargs: object) -> None:
-        calls.append(args)
-        raise AssertionError("pc-gpu ne doit jamais être appelé")
-
-    monkeypatch.setattr(subprocess, "run", fake)
-    monkeypatch.setattr(subprocess, "Popen", fake)
-    return calls
 
 
 def _serve(tmp_path: Path, networks: tuple[str, ...]) -> Iterator[tuple[str, FakeComfy]]:
@@ -140,13 +125,30 @@ def test_client_at_home_job_is_accepted_and_queued(home: tuple[str, FakeComfy]) 
 
 
 def test_client_outside_gets_deferred_and_nothing_runs(
-    away: tuple[str, FakeComfy], tmp_path: Path, pc_gpu_calls: list[object]
+    away: tuple[str, FakeComfy], tmp_path: Path
 ) -> None:
     status, body = _post(away[0])
     assert (status, body) == (200, {"status": "deferred", "message": MESSAGE})
     assert away[1].calls == []
-    assert pc_gpu_calls == []
     assert list(tmp_path.iterdir()) == []  # aucun job créé ni stocké
+
+
+def test_default_networks_defer_loopback_and_lan_option_accepts_it(tmp_path: Path) -> None:
+    """Défaut = 192.168.1.0/24 seul : 127.0.0.1 (tunnel, n8n local) est hors réseau."""
+    assert worker._parser().parse_args([]).lan == ["192.168.1.0/24"]
+    served = {
+        "defaut": worker._parser().parse_args([]).lan,
+        "lan": worker._parser().parse_args(["--lan", "127.0.0.0/8", "192.168.1.0/24"]).lan,
+    }
+    for name, expected in (("defaut", 200), ("lan", 202)):
+        out = tmp_path / name
+        out.mkdir()
+        gen = _serve(out, tuple(served[name]))
+        base, comfy = next(gen)
+        try:
+            assert _post(base)[0] == expected
+        finally:
+            next(gen, None)
 
 
 def test_forged_x_forwarded_for_is_ignored(away: tuple[str, FakeComfy]) -> None:

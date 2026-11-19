@@ -244,7 +244,7 @@ def make_server(
     return ThreadingHTTPServer((HOST, port), _handler(jobs, networks))
 
 
-def main() -> None:
+def _parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--comfy-url", default="http://127.0.0.1:8188")
@@ -253,7 +253,11 @@ def main() -> None:
     p.add_argument(
         "--lan", nargs="+", default=list(lan_guard.LAN_NETWORKS), help="réseaux autorisés (CIDR)"
     )
-    a = p.parse_args()
+    return p
+
+
+def main() -> None:
+    a = _parser().parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
     out = a.out.resolve()
     jobs = JobQueue(ComfyRunner(a.comfy_url, a.workflow, out), out)
