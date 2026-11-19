@@ -42,6 +42,7 @@
     </div>
     {% else %}
     <div id="sessions">
+      {% if sessions or delegation_groups %}{% include "_delegations.html" %}{% endif %}
       {% for s in sessions %}
       <section class="panel" aria-labelledby="session-{{ loop.index }}">
         <h2 id="session-{{ loop.index }}">Session <code>{{ s.session_id }}</code></h2>
