@@ -29,7 +29,9 @@ Le jeton reste dans l'environnement local (trousseau, `~/.zshenv`…), jamais da
 Ce fichier n'est **pas** versionné : seul cet exemple l'est. Les variables `VVA_*` doivent être
 visibles des hooks (bloc `"env"` du même fichier, ou `~/.zshenv`).
 
-- `SubagentStart`, `SubagentStop`, `PostToolUse` : `hook_emit.py` écrit une ligne par événement.
+- `SubagentStart`, `SubagentStop`, `PostToolUse`, `PostToolUseFailure` : `hook_emit.py` écrit une ligne par
+  événement. `PostToolUseFailure` alimente le statut « Erreur » de `/activity` ; le message d'erreur
+  et les arguments de l'outil ne sont jamais copiés (liste blanche de champs).
 - `PreToolUse` : `pretool_gate.py` applique la pause (`VVA_CONTROL_URL`, `VVA_INGEST_TOKEN`).
 - `Stop` : `ship.py --background` envoie les lignes en attente à chaque fin de tour (le verrou évite les envois concurrents).
   Il rend la main aussitôt (code 0, aucune sortie, stdin ignoré), puis expédie dans un
@@ -49,6 +51,10 @@ visibles des hooks (bloc `"env"` du même fichier, ou `~/.zshenv`).
         "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\"" }] }
     ],
     "PostToolUse": [
+      { "matcher": "*", "hooks": [{ "type": "command", "timeout": 2,
+        "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\"" }] }
+    ],
+    "PostToolUseFailure": [
       { "matcher": "*", "hooks": [{ "type": "command", "timeout": 2,
         "command": "python3 \"$CLAUDE_PROJECT_DIR/tools/telemetry/hook_emit.py\"" }] }
     ],
