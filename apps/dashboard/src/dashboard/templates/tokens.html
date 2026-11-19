@@ -22,8 +22,9 @@
     <h1>Tokens</h1>
   </header>
   {% if not report.by_agent and not report.by_model %}
-  <p>Aucune donnée sur les 7 derniers jours.</p>
+  <section class="state"><h2>Aucune donnée</h2><p>Aucun token reçu sur les 7 derniers jours.</p></section>
   {% else %}
+  {% include "_quota.html" %}
   {% for title, column, rows in [("Par agent", "Agent", report.by_agent), ("Par modèle", "Modèle", report.by_model)] %}
   <h2>{{ title }}</h2>
   <table>

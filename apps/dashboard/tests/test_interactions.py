@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -177,3 +177,67 @@ def test_contract_documents_interactions() -> None:
     ).read_text()
     for needle in ("/interactions", "SubagentStart", "SubagentStop", "20 dernières sessions"):
         assert needle in text, needle
+
+
+# Scénario : durée et sous-agents par ticket (#95)
+RECENT = datetime.now(UTC).replace(microsecond=0)
+
+
+def tev(
+    n: int, minutes_ago: int, name: str, ticket: int | None, session: str, agent: str = ""
+) -> None:
+    ts = (RECENT - timedelta(minutes=minutes_ago)).isoformat()
+    row = (f"t{n}", ts, name, session, "backend" if agent else None, agent or None, None, ticket)
+    seed(row)
+
+
+def test_ticket_row_shows_duration_subagents_and_sessions(client: TestClient) -> None:
+    tev(1, 190, "SessionStart", 93, "A")
+    for i in range(4):
+        tev(10 + i, 180 - i, "SubagentStart", 93, "A" if i < 2 else "B", f"x{i}")
+    tev(20, 0, "SubagentStop", 93, "B", "x3")
+    html = client.get("/interactions").text
+    assert "ticket #93 · durée 3 h 10 · 4 sous-agents · 2 sessions" in html
+
+
+def test_ticket_table_sorted_by_duration_with_explicit_headers(client: TestClient) -> None:
+    tev(1, 30, "SessionStart", 5, "A")
+    tev(2, 0, "SessionEnd", 5, "A")
+    tev(3, 300, "SessionStart", 7, "B")
+    tev(4, 0, "SessionEnd", 7, "B")
+    html = client.get("/interactions").text
+    assert html.index("ticket #7 ") < html.index("ticket #5 ")
+    for header in ("Durée (h min)", "Sous-agents lancés (nombre)", "Sessions (nombre)"):
+        assert header in html, header
+    assert "%" not in html.split("Durée (h min)", 1)[1]
+
+
+def test_tickets_without_number_or_too_old_are_ignored(client: TestClient) -> None:
+    tev(1, 10, "SessionStart", None, "A")
+    tev(2, 60 * 24 * 10, "SessionStart", 8, "A")
+    assert "ticket #8" not in client.get("/interactions").text
+    with db.connect() as conn:
+        assert interactions.load_ticket_stats(conn, datetime.now(UTC)) == []
+
+
+def test_same_agent_id_in_two_sessions_counts_twice(client: TestClient) -> None:
+    tev(1, 10, "SubagentStart", 9, "A", "same")
+    tev(2, 9, "SubagentStart", 9, "B", "same")
+    tev(3, 8, "SubagentStart", 9, "B", "same")
+    with db.connect() as conn:
+        (stat,) = interactions.load_ticket_stats(conn, datetime.now(UTC))
+    assert (stat.subagents, stat.sessions) == (2, 2)
+    assert stat.line == "ticket #9 · durée 2 min · 2 sous-agents · 2 sessions"
+
+
+def test_singular_labels() -> None:
+    stat = interactions.TicketStat(4, 0, 1, 1)
+    assert stat.line == "ticket #4 · durée moins d'une minute · 1 sous-agent · 1 session"
+
+
+def test_ticket_stats_error_gives_503(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(conn: sqlite3.Connection, now: datetime) -> list[interactions.TicketStat]:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(interactions, "load_ticket_stats", broken)
+    assert client.get("/interactions").status_code == 503
