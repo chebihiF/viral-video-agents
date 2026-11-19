@@ -13,7 +13,8 @@ escalation:
 # Label GitHub du ticket -> modèle.
 labels:
   complex: opus
-# Agents à modèle fixe (jamais promus ni rétrogradés).
+# Agents à modèle fixe (jamais promus ni rétrogradés). Opus : label complex (ticket) et reviewer.
 agents:
   scout: haiku
   reviewer: opus
+  tech-lead: sonnet # session principale : Sonnet par défaut, jamais promue (#83)

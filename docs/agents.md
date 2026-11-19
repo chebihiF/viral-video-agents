@@ -63,6 +63,7 @@ Priorité : agent à modèle fixe > label du ticket > escalade > défaut.
 | défaut | Sonnet |
 | agent `scout` | Haiku (toujours) |
 | agent `reviewer` | Opus (toujours) |
+| agent `tech-lead` (session principale) | Sonnet (toujours) |
 | label `complex` | Opus |
 | 2 échecs notés pour le même agent sur le même ticket | Opus pour la relance |
 
@@ -81,6 +82,43 @@ rapport liste ces promotions ; un usage d'Opus par un agent routé ailleurs sans
 Les fichiers d'agents (`.claude/agents/*.md`) restent locaux et ne sont jamais commités : leur
 champ `model` doit égaler le modèle de base du routage. `tools/agents/tests` le vérifie quand
 ces fichiers sont présents sur le poste (test ignoré en CI).
+
+## Passation automatique (#83)
+
+Quand le contexte d'une session gonfle, la note de passation et la session suivante sont
+automatiques. Outil : `tools/agents/bin/handoff.sh` (`tools/agents/handoff.py`, stdlib, Python
+3.9). Le tech lead reste sur Sonnet par défaut (`tech-lead: sonnet` du routage) ; Opus seulement
+pour le label `complex` (agents d'implémentation) et le `reviewer`.
+
+```sh
+tools/agents/bin/handoff.sh check                      # hook UserPromptSubmit (JSON sur stdin)
+tools/agents/bin/handoff.sh post  --note-file note.md   # valider et poster dans #21
+tools/agents/bin/handoff.sh latest                      # dernière note marquée de #21
+tools/agents/bin/handoff.sh relay --note-file note.md   # post, puis session neuve
+```
+
+- **Seuil** : contexte = dernier `usage` du fil principal du transcript (input + cache lu +
+  cache créé ; les sous-agents sont ignorés). L'alerte douce à 100 000 tokens est gérée ailleurs :
+  `check` ne fait rien en dessous de **150 000**. Au seuil, une seule fois par session (marqueur
+  `~/.vva/handoff/<session>.done`, `VVA_HANDOFF_DIR`), il émet `additionalContext` : le tech lead
+  écrit la note puis lance `relay`. `check` ne bloque jamais (exit 0, silencieux si erreur).
+- **Note** (contrat) : ≤ 10 lignes, rubriques `Fait`, `Reste`, `Fichiers clés`, `Pièges` en début
+  de ligne ; refusée si elle contient un motif de secret (`token: …`, `api_key=…`, `ghp_…`,
+  `-----BEGIN`, chaîne alphanumérique de 32+ caractères…). Aucune donnée d'enfant.
+- **Poste** : commentaire de #21 commençant par `<!-- passation -->` (`gh`, dépôt
+  `HANDOFF_REPO`). `latest` ne renvoie que la dernière note marquée, d'un auteur de
+  `HANDOFF_AUTHORS` (défaut `chebihiF,infinitySoftMA`), jamais l'historique.
+- **Relais** : `relay` poste, puis lance `claude -p` (surchargeable : `HANDOFF_CMD`) détaché, le
+  prompt (la dernière note seule) sur stdin. Si le démarrage est refusé ou échoue dans les 5 s :
+  la note reste postée, une ligne sur stderr prévient le parent, exit 0. La sortie de la session
+  relayée va dans `~/.vva/handoff/relay.log` (600, jamais le prompt).
+
+Câblage à faire par le parent (`.claude/settings.json`, local, jamais commité) :
+
+```json
+"UserPromptSubmit": [{ "hooks": [{ "type": "command", "timeout": 5,
+  "command": "\"$CLAUDE_PROJECT_DIR/tools/agents/bin/handoff.sh\" check" }] }]
+```
 
 ## Limites
 
