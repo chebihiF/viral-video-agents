@@ -120,6 +120,23 @@ Câblage à faire par le parent (`.claude/settings.json`, local, jamais commité
   "command": "\"$CLAUDE_PROJECT_DIR/tools/agents/bin/handoff.sh\" check" }] }]
 ```
 
+## Skill /ticket (#15)
+
+Boucle d'un ticket « Prêt » jusqu'à « Livré », sans intervention du parent :
+[`tools/agents/skills/ticket/SKILL.md`](../tools/agents/skills/ticket/SKILL.md) (contrat en 8
+étapes) et [`checklist.md`](../tools/agents/skills/ticket/checklist.md) (DoD de
+[`SCRUM.md`](SCRUM.md), qui reste la source de vérité).
+
+- Arrêt sans rien modifier si le ticket porte `stop-agents`.
+- Cartes du Project : En cours → Revue → Livré ; PR `Closes #<n>` par `infinitySoftMA` depuis
+  `feat/<n>-<slug>`, merge squash quand les checks sont verts.
+- 2 échecs de `make check` : arrêt, carte « En cours », aucun merge, cause rapportée.
+- Rapport final ≤ 15 lignes.
+
+Version versionnée et générique : le poste l'installe en copiant le dossier dans
+`.claude/skills/ticket/` (local, jamais commité). `tools/agents/tests/test_skill_ticket.py`
+vérifie frontmatter, étapes, scénarios, checklist, absence de chemin machine et de secret.
+
 ## Limites
 
 - Échec d'une tâche : noté à la main (`fail`) par le tech lead ; la télémétrie ne le détecte

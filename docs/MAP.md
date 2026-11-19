@@ -142,7 +142,10 @@
 - `tools/agents/bin/token-report.sh` — Tokens par ticket, agent et modèle, ≤ 15 lignes, compteurs seuls (#19). Voir docs/agents.m
 - `tools/agents/config/model-routing.yml` — Routage des modèles des agents (#19) : source de vérité, lue par tools/agents/token_report
 - `tools/agents/handoff.py` — Passation automatique de session au seuil de contexte (#83). Voir docs/agents.md.
+- `tools/agents/skills/ticket/SKILL.md` — ticket
+- `tools/agents/skills/ticket/checklist.md` — Checklist /ticket — Definition of Done
 - `tools/agents/tests/test_handoff.py` — Passation automatique de session au seuil de contexte (#83). gh et claude sont injectés.
+- `tools/agents/tests/test_skill_ticket.py` — Skill versionné /ticket : boucle ticket -> Livré (#15). Lecture des fichiers seulement.
 - `tools/agents/tests/test_token_report.py` — Mesure des tokens par ticket et routage des modèles (#19).
 - `tools/agents/token_report.py` — Tokens par ticket, agent et modèle ; routage des modèles (#19). Voir docs/agents.md.
 - `tools/telemetry/README.md` — Télémétrie des agents (émetteur Mac, #4)
