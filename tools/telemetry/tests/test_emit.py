@@ -70,6 +70,20 @@ def post_tool_use() -> dict[str, Any]:
     }
 
 
+def post_tool_use_failure() -> dict[str, Any]:
+    return {
+        "hook_event_name": "PostToolUseFailure",
+        "session_id": "sess-1",
+        "agent_id": "agent-42",
+        "agent_type": "dev-backend",
+        "tool_name": "Bash",
+        "error": f"Command failed: {SENSITIVE}",
+        "is_interrupt": False,
+        "tool_input": {"command": f"echo {SENSITIVE}"},
+        "tool_use_id": "toolu_2",
+    }
+
+
 # Scénario : hook écrit un événement
 def test_subagent_start_appends_line(tmp_path: Path) -> None:
     target = tmp_path / "t" / "events.jsonl"
@@ -118,8 +132,32 @@ def test_post_tool_use_has_no_sensitive_content(tmp_path: Path) -> None:
     }
 
 
+# Scénario : échec d'outil (#116), statut « Erreur » du dashboard
+def test_post_tool_use_failure_is_emitted_without_error_text(tmp_path: Path) -> None:
+    target = tmp_path / "events.jsonl"
+    proc, _ = run_hook(json.dumps(post_tool_use_failure()), tmp_path, target)
+    assert proc.returncode == 0
+    assert SENSITIVE not in target.read_text(encoding="utf-8")
+    [line] = lines(target)
+    assert line["hook_event_name"] == "PostToolUseFailure"
+    assert (line["agent_type"], line["agent_id"], line["tool_name"]) == (
+        "dev-backend",
+        "agent-42",
+        "Bash",
+    )
+    assert set(line) == {
+        "event_id",
+        "ts",
+        "hook_event_name",
+        "session_id",
+        "agent_type",
+        "agent_id",
+        "tool_name",
+    }
+
+
 # Contrat : la ligne est conforme à contracts/agent-event.schema.json
-@pytest.mark.parametrize("payload", [subagent_start(), post_tool_use()])
+@pytest.mark.parametrize("payload", [subagent_start(), post_tool_use(), post_tool_use_failure()])
 def test_line_matches_contract(tmp_path: Path, payload: dict[str, Any]) -> None:
     target = tmp_path / "events.jsonl"
     run_hook(json.dumps(payload), tmp_path, target)
