@@ -10,3 +10,5 @@ Closes #
 - [ ] `make check` vert
 - [ ] Docs / ADR / contrats à jour, `make map` lancé
 - [ ] Aucun secret ni donnée d'enfant
+- [ ] Capture de la prod avec vraies données jointe (tickets dashboard), mobile 360 px et bureau, ou N/A hors dashboard.
+  Déposée dans le ticket/#21, jamais dans le dépôt ; aucune donnée d'enfant ni secret visible.
