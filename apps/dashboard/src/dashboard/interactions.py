@@ -11,7 +11,7 @@ from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from dashboard import activity, auth, db
+from dashboard import activity, auth, db, delegations
 
 MAX_SESSIONS = 20
 START, STOP = "SubagentStart", "SubagentStop"
@@ -124,10 +124,11 @@ def load_sessions(conn: sqlite3.Connection) -> list[Session]:
     ]
 
 
-def load_page() -> tuple[int, list[Session]]:
+def load_page() -> tuple[int, list[Session], list[delegations.TicketGroup]]:
     with db.connect() as conn:
         cursor = activity.last_id(conn)  # avant la lecture : aucun trou possible
-        return cursor, load_sessions(conn)
+        sessions = load_sessions(conn)
+        return cursor, sessions, delegations.load_groups(conn, datetime.now(UTC))
 
 
 def _page(request: Request, status: int, context: dict[str, object]) -> HTMLResponse:
@@ -143,9 +144,19 @@ async def interactions_page(request: Request) -> Response:
     if not auth.is_authenticated(request):
         return RedirectResponse("/login", status_code=303)
     try:
-        cursor, sessions = await run_in_threadpool(load_page)
+        cursor, sessions, groups = await run_in_threadpool(load_page)
     except sqlite3.Error as exc:
         log.warning("lecture des interactions impossible : %s", type(exc).__name__)
         failed_at = datetime.now(UTC).strftime("%H:%M:%S")
-        return _page(request, 503, {"error_at": failed_at, "sessions": [], "last_id": None})
-    return _page(request, 200, {"error_at": None, "sessions": sessions, "last_id": cursor})
+        return _page(
+            request,
+            503,
+            {"error_at": failed_at, "sessions": [], "delegation_groups": [], "last_id": None},
+        )
+    context: dict[str, object] = {
+        "error_at": None,
+        "sessions": sessions,
+        "delegation_groups": groups,
+        "last_id": cursor,
+    }
+    return _page(request, 200, context)

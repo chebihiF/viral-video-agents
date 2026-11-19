@@ -21,8 +21,10 @@
 - `apps/dashboard/src/dashboard/auth.py` — Connexion au dashboard (contrat : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/controls.py` — Pause des agents et plafond de tokens (contrat : contracts/control-api.md).
 - `apps/dashboard/src/dashboard/db.py` — Persistance SQLite des événements d'agents et des tokens (stdlib `sqlite3`).
+- `apps/dashboard/src/dashboard/delegations.py` — Délégations (#102) : qui lance quel sous-agent, dans l'ordre, groupé par ticket.
 - `apps/dashboard/src/dashboard/ingest.py` — POST /api/v1/events : ingestion authentifiée (contrat : contracts/ingest-api.md).
 - `apps/dashboard/src/dashboard/interactions.py` — GET /interactions : sessions, sous-agents et durée (contrat : contracts/dashboard-routes.m
+- `apps/dashboard/src/dashboard/live.py` — « Qui fait quoi » (#101) : un état par agent et par ticket, dérivé de la table `events`.
 - `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (routes : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/otlp.py` — POST /v1/metrics : tokens Claude Code en OTLP/HTTP JSON (contrat : contracts/token-usage.m
 - `apps/dashboard/src/dashboard/progress.py` — GET /progress et GET /api/v1/progress : avancement du projet et travail des agents (#26).
@@ -31,6 +33,8 @@
 - `apps/dashboard/src/dashboard/static/progress.js` — Actualisation de /progress toutes les 60 s (sans dépendance : ni CDN, ni bibliothèque).
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
+- `apps/dashboard/src/dashboard/templates/_delegations.html`
+- `apps/dashboard/src/dashboard/templates/_live.html`
 - `apps/dashboard/src/dashboard/templates/_nav.html`
 - `apps/dashboard/src/dashboard/templates/activity.html`
 - `apps/dashboard/src/dashboard/templates/controls.html`
@@ -43,10 +47,12 @@
 - `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
 - `apps/dashboard/tests/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
 - `apps/dashboard/tests/test_controls.py` — Contrôles pause et plafond de tokens (#8) : /controls, POST protégés (CSRF), /api/v1/contr
+- `apps/dashboard/tests/test_delegations.py` — Interactions (#102) : qui délègue à qui, fil chronologique groupé par ticket.
 - `apps/dashboard/tests/test_design_tokens.py` — Design system (#92) : contrastes WCAG AA et rétrocompatibilité de tokens.css.
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
+- `apps/dashboard/tests/test_live.py` — « Qui fait quoi » en direct (#101) : agents, ticket, état, durée sur /activity.
 - `apps/dashboard/tests/test_main.py` — Accueil, redirections et navigation commune (#58).
 - `apps/dashboard/tests/test_otlp.py` — Réception OTLP/HTTP JSON des métriques de tokens (#7).
 - `apps/dashboard/tests/test_progress.py` — Suivi visuel du projet (#26) : /progress et /api/v1/progress. GitHub est toujours mocké.

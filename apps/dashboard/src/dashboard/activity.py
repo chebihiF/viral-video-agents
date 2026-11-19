@@ -11,7 +11,7 @@ from fastapi import APIRouter, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
-from dashboard import auth, db
+from dashboard import auth, db, live
 
 MAX_EVENTS = 100
 _SELECT = (
@@ -83,6 +83,7 @@ async def activity_page(request: Request) -> Response:
     try:
         cursor = await run_in_threadpool(load_last_id)  # avant la lecture : aucun trou possible
         events = await run_in_threadpool(load_events)
+        live_rows = await run_in_threadpool(live.load_rows, datetime.now(UTC))
     except sqlite3.Error as exc:
         log.warning("lecture des événements impossible : %s", type(exc).__name__)
         failed_at = datetime.now(UTC).strftime("%H:%M:%S")
@@ -90,6 +91,7 @@ async def activity_page(request: Request) -> Response:
             "error_at": failed_at,
             "events": [],
             "agents": [],
+            "live_rows": [],
             "last_id": None,
         }
         return _page(request, 503, error)
@@ -97,6 +99,7 @@ async def activity_page(request: Request) -> Response:
         "error_at": None,
         "events": events,
         "agents": agents(events),
+        "live_rows": live_rows,
         "last_id": cursor,
     }
     return _page(request, 200, context)
