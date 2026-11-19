@@ -51,20 +51,33 @@ def test_mode_reel_sans_contrat(
 ) -> None:
     monkeypatch.setattr(ev, "CONTRACT", tmp_path / "absent.schema.json")
     assert ev.main([]) == 2
-    err = capsys.readouterr().err
-    assert "schéma absent" in err
-    assert ev.main(["--dry-run"]) == 0  # le schéma de test prend le relais
+    assert "schéma absent" in capsys.readouterr().err
+    assert ev.main(["--dry-run"]) == 2  # un seul schéma : pas de schéma de test de secours
 
 
-def test_dry_run_n_utilise_jamais_le_vrai_contrat(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-) -> None:
+def test_schema_unique(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    """Scénario « schéma unique » : le dry-run valide contre le contrat réel, plus de schéma de test."""
+    assert not (ev.ROOT / "evals" / "cases" / "storyboard.test.schema.json").exists()
+    assert not hasattr(ev, "TEST_SCHEMA")
+    assert ev.main(["--dry-run"]) == 0
+    assert "schema=contracts/storyboard.schema.json" in capsys.readouterr().out
+    # un autre état du contrat -> empreinte différente -> code 2, pas de vert trompeur
     other = tmp_path / "storyboard.schema.json"
     other.write_text('{"type": "object", "required": ["zzz"]}', encoding="utf-8")
-    monkeypatch.setattr(ev, "CONTRACT", other)
-    assert ev.main(["--dry-run"]) == 0
-    # --schema explicite : empreinte différente -> code 2, pas de vert trompeur
     assert ev.main(["--dry-run", "--schema", str(other)]) == 2
+
+
+def test_enregistrements_conformes_au_contrat_sauf_cas_limite() -> None:
+    """Les réponses enregistrées sont réalignées sur le contrat ; seul mix-12 est non conforme."""
+    schema = ev.load_schema()[0]
+    bad = {
+        r["id"]
+        for r in ev.read_jsonl(ev.RECORDED)
+        if ev.check_response(str(r["response"]), schema)
+    }
+    assert bad == {"mix-12"}
+    for r in ev.read_jsonl(ev.RECORDED):
+        assert json.loads(r["response"]).get("classification") in {"libre", "adouci", "bloque"}
 
 
 def test_empreinte_differente_code_2(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -108,7 +121,6 @@ def test_reponse_ollama_non_objet(monkeypatch: pytest.MonkeyPatch) -> None:
             return b"[1, 2]"
 
     monkeypatch.setattr(ev.urllib.request, "urlopen", lambda *_a, **_k: Resp())
-    monkeypatch.setattr(ev, "CONTRACT", ev.TEST_SCHEMA)
     assert ev.main([]) == 1  # TypeError attrapé : cas en échec, pas de traceback
 
 
@@ -125,7 +137,6 @@ def test_mode_reel_appelle_ollama_avec_temperature_0_et_seed(
         return str(good)
 
     monkeypatch.setattr(ev, "ask_ollama", fake_ask)
-    monkeypatch.setattr(ev, "CONTRACT", ev.TEST_SCHEMA)
     assert ev.main(["--record", str(tmp_path / "r.jsonl")]) == 0
     assert len(sent) == 12
     assert sent[0] == {"seed": 42, "model": "qwen3:8b", "url": ev.OLLAMA_URL, "system": True}
@@ -215,7 +226,6 @@ def test_reproductible_mode_reel(
         return str(by_dictee[dictee])
 
     monkeypatch.setattr(ev, "ask_ollama", fake_ask)
-    monkeypatch.setattr(ev, "CONTRACT", ev.TEST_SCHEMA)
     code1 = ev.main([])
     out1 = capsys.readouterr().out
     code2 = ev.main([])
@@ -227,8 +237,8 @@ def test_reproductible_mode_reel(
 
 def test_seuil_bornes_exactes() -> None:
     """Scénario « seuil » : 90 % exact passe, en dessous échoue (pas d'arrondi)."""
-    schema = ev.load_schema(dry_run=False, explicit=ev.TEST_SCHEMA)[0]
-    ok_raw = str(ev.read_jsonl(ev.RECORDED)[0]["response"])  # conforme au schéma de test
+    schema = ev.load_schema()[0]
+    ok_raw = str(ev.read_jsonl(ev.RECORDED)[0]["response"])  # conforme au contrat
 
     def responder_factory(n_ok: int) -> Callable[[dict[str, object]], str]:
         def responder(case: dict[str, object]) -> str:
@@ -247,7 +257,7 @@ def test_seuil_bornes_exactes() -> None:
 
 def test_timeout_compte_comme_echec_sans_crash() -> None:
     """Cas limite « timeout » : une erreur réseau/timeout est un cas en échec listé, pas un crash."""
-    schema = ev.load_schema(dry_run=False, explicit=ev.TEST_SCHEMA)[0]
+    schema = ev.load_schema()[0]
 
     def responder(case: dict[str, object]) -> str:
         if case["id"] == "c1":
@@ -259,3 +269,85 @@ def test_timeout_compte_comme_echec_sans_crash() -> None:
     assert rep["succes"] is False
     assert [f["id"] for f in rep["echecs"]] == ["c1"]
     assert "appel échoué" in rep["echecs"][0]["erreurs"][0]
+
+
+def test_validate_ref_const_exclusive_minimum() -> None:
+    schema = {
+        "type": "object",
+        "properties": {"v": {"const": "1.0"}, "p": {"$ref": "#/$defs/P"}},
+        "$defs": {"P": {"type": "number", "exclusiveMinimum": 0}},
+    }
+    ev.check_schema(schema)
+    assert ev.validate({"v": "1.0", "p": 3}, schema) == []
+    assert ev.validate({"v": "2.0", "p": 3}, schema) != []
+    assert ev.validate({"v": "1.0", "p": 0}, schema) != []
+    assert ev.validate({"v": "1.0", "p": "3"}, schema) != []
+    with pytest.raises(ev.ConfigError, match="introuvable"):
+        ev.check_schema({"properties": {"x": {"$ref": "#/$defs/Absent"}}})
+    with pytest.raises(ev.ConfigError, match="non local"):
+        ev.check_schema({"properties": {"x": {"$ref": "http://x/y.json"}}})
+
+
+def test_contrat_reel_valide_un_storyboard_complet() -> None:
+    schema = ev.load_schema()[0]
+    ok = {
+        "schema_version": "1.0",
+        "compris_fr": "a",
+        "recap_darija": "b",
+        "classification": "adouci",
+        "plans": [
+            {"image_prompt": "i", "motion_prompt": "m", "narration_fr": "n", "duree_s": 3},
+            {"image_prompt": "i", "motion_prompt": "m", "narration_fr": "n"},
+        ],
+    }
+    assert ev.validate(ok, schema) == []
+    assert ev.validate({**ok, "classification": "autre"}, schema) != []
+    assert ev.validate({**ok, "schema_version": "2.0"}, schema) != []
+    assert ev.validate({k: v for k, v in ok.items() if k != "classification"}, schema) != []
+    bad_plan = {"image_prompt": "i", "motion_prompt": "m", "narration_fr": "n", "duree_s": 0}
+    assert ev.validate({**ok, "plans": [bad_plan, bad_plan]}, schema) != []
+
+
+def _prompt_text() -> str:
+    return ev.PROMPT.read_text(encoding="utf-8")
+
+
+def test_prompt_aligne_sur_le_contrat() -> None:
+    """Scénario « prompt aligné » : champs, valeurs et bornes du contrat figurent dans le prompt."""
+    schema = ev.load_schema()[0]
+    assert ev.prompt_contract_gaps(_prompt_text(), schema) == []
+    assert "version: v1.1" in _prompt_text()
+
+
+def test_prompt_exemple_json_valide_contre_le_contrat() -> None:
+    schema = ev.load_schema()[0]
+    example = [ln for ln in _prompt_text().splitlines() if ln.startswith('{"schema_version"')]
+    assert len(example) == 1
+    assert ev.validate(json.loads(example[0]), schema) == []
+
+
+def test_changer_le_contrat_sans_le_prompt_fait_echouer() -> None:
+    """Un champ, une valeur d'enum ou une borne ajoutés au contrat sans toucher au prompt -> écart."""
+    base = ev.load_schema()[0]
+    prompt = _prompt_text()
+
+    champ = json.loads(json.dumps(base))
+    champ["required"].append("ambiance_sonore")
+    champ["properties"]["ambiance_sonore"] = {"type": "string"}
+    assert any("ambiance_sonore" in g for g in ev.prompt_contract_gaps(prompt, champ))
+
+    plan = json.loads(json.dumps(base))
+    plan["$defs"]["Plan"]["properties"]["camera_fr"] = {"type": "string"}
+    assert any("camera_fr" in g for g in ev.prompt_contract_gaps(prompt, plan))
+
+    enum = json.loads(json.dumps(base))
+    enum["properties"]["classification"]["enum"].append("suspendu")
+    assert any("suspendu" in g for g in ev.prompt_contract_gaps(prompt, enum))
+
+    borne = json.loads(json.dumps(base))
+    borne["properties"]["plans"]["maxItems"] = 7
+    assert any("maxItems=7" in g for g in ev.prompt_contract_gaps(prompt, borne))
+
+    version = json.loads(json.dumps(base))
+    version["properties"]["schema_version"]["const"] = "2.0"
+    assert any("2.0" in g for g in ev.prompt_contract_gaps(prompt, version))

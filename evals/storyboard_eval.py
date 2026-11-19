@@ -2,9 +2,9 @@
 """Éval du prompt storyboard : taux de sorties JSON conformes à contracts/storyboard.schema.json.
 
 Mode réel : Ollama (Qwen3 8B), température 0, seed fixe, une requête à la fois (une seule étape GPU).
-Mode --dry-run : rejoue evals/cases/storyboard.recorded.jsonl, aucun accès réseau, avec le schéma
-de test (evals/cases/storyboard.test.schema.json) ; code 2 si les enregistrements ont été faits
-avec un autre schéma (empreinte sha256).
+Mode --dry-run : rejoue evals/cases/storyboard.recorded.jsonl, aucun accès réseau, contre le même
+contrat ; code 2 si les enregistrements ont été faits avec un autre état du contrat (empreinte
+sha256). Un seul schéma, jamais de schéma de test.
 Code de sortie : 0 si taux >= seuil, 1 sinon (liste des cas en échec), 2 si erreur de configuration.
 """
 
@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import sys
 import time
 import urllib.request
@@ -23,7 +24,6 @@ ROOT = Path(__file__).resolve().parent.parent
 CASES = ROOT / "evals" / "cases" / "storyboard.jsonl"
 RECORDED = ROOT / "evals" / "cases" / "storyboard.recorded.jsonl"
 CONTRACT = ROOT / "contracts" / "storyboard.schema.json"
-TEST_SCHEMA = ROOT / "evals" / "cases" / "storyboard.test.schema.json"
 PROMPT = ROOT / "prompts" / "storyboard.v1.md"
 
 OLLAMA_URL = "http://127.0.0.1:11434"
@@ -33,6 +33,10 @@ THRESHOLD = 0.90
 
 _ANNOTATIONS = {"$schema", "$id", "$comment", "title", "description", "default", "examples"}
 _SUPPORTED = {
+    "$defs",
+    "$ref",
+    "const",
+    "exclusiveMinimum",
     "type",
     "required",
     "properties",
@@ -70,8 +74,24 @@ def _type_ok(value: Any, expected: str) -> bool:
     return isinstance(value, py)
 
 
-def check_schema(schema: Any, path: str = "$") -> None:
+def resolve_ref(ref: Any, root: dict[str, Any]) -> dict[str, Any]:
+    """Résout un `$ref` local (`#/$defs/Nom`) ; ConfigError sinon."""
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        raise ConfigError(f"$ref non local non géré : {ref!r}")
+    node: Any = root
+    for part in ref[2:].split("/"):
+        if not isinstance(node, dict) or part not in node:
+            raise ConfigError(f"$ref introuvable : {ref!r}")
+        node = node[part]
+    if not isinstance(node, dict):
+        raise ConfigError(f"$ref ne désigne pas un sous-schéma : {ref!r}")
+    return node
+
+
+def check_schema(schema: Any, path: str = "$", root: dict[str, Any] | None = None) -> None:
     """Parcours unique du schéma : ConfigError sur tout mot-clé ou forme non gérés."""
+    if root is None:
+        root = schema if isinstance(schema, dict) else {}
     if not isinstance(schema, dict):
         raise ConfigError(f"sous-schéma invalide (objet attendu) à {path}")
     unknown = set(schema) - _SUPPORTED - _ANNOTATIONS
@@ -87,9 +107,18 @@ def check_schema(schema: Any, path: str = "$") -> None:
         if not isinstance(schema["properties"], dict):
             raise ConfigError(f"properties doit être un objet à {path}")
         for name, sub in schema["properties"].items():
-            check_schema(sub, f"{path}.{name}")
+            check_schema(sub, f"{path}.{name}", root)
     if "items" in schema:
-        check_schema(schema["items"], f"{path}[]")
+        check_schema(schema["items"], f"{path}[]", root)
+    if "$defs" in schema:
+        if not isinstance(schema["$defs"], dict):
+            raise ConfigError(f"$defs doit être un objet à {path}")
+        for name, sub in schema["$defs"].items():
+            check_schema(sub, f"{path}.$defs.{name}", root)
+    if "$ref" in schema:
+        resolve_ref(schema["$ref"], root)
+    if "exclusiveMinimum" in schema and not isinstance(schema["exclusiveMinimum"], int | float):
+        raise ConfigError(f"exclusiveMinimum doit être un nombre à {path}")
 
 
 def schema_fingerprint(schema: dict[str, Any]) -> str:
@@ -97,9 +126,14 @@ def schema_fingerprint(schema: dict[str, Any]) -> str:
     return hashlib.sha256(canon.encode()).hexdigest()[:12]
 
 
-def validate(value: Any, schema: dict[str, Any], path: str = "$") -> list[str]:
+def validate(
+    value: Any, schema: dict[str, Any], path: str = "$", root: dict[str, Any] | None = None
+) -> list[str]:
     """Valide `value` contre un sous-ensemble de JSON Schema ; renvoie la liste des erreurs."""
+    root = schema if root is None else root
     errors: list[str] = []
+    if "$ref" in schema:
+        errors += validate(value, resolve_ref(schema["$ref"], root), path, root)
     expected = schema.get("type")
     if expected is not None:
         types = expected if isinstance(expected, list) else [expected]
@@ -107,6 +141,15 @@ def validate(value: Any, schema: dict[str, Any], path: str = "$") -> list[str]:
             return [f"{path}: type {types} attendu, reçu {type(value).__name__}"]
     if "enum" in schema and value not in schema["enum"]:
         errors.append(f"{path}: valeur hors enum {schema['enum']}")
+    if "const" in schema and (value != schema["const"] or type(value) is not type(schema["const"])):
+        errors.append(f"{path}: valeur attendue {schema['const']!r}")
+    if (
+        "exclusiveMinimum" in schema
+        and isinstance(value, int | float)
+        and not isinstance(value, bool)
+        and value <= schema["exclusiveMinimum"]
+    ):
+        errors.append(f"{path}: valeur <= {schema['exclusiveMinimum']}")
     if isinstance(value, str):
         if len(value) < schema.get("minLength", 0):
             errors.append(f"{path}: longueur < {schema['minLength']}")
@@ -119,7 +162,7 @@ def validate(value: Any, schema: dict[str, Any], path: str = "$") -> list[str]:
             errors.append(f"{path}: {len(value)} éléments > maxItems {schema['maxItems']}")
         if "items" in schema:
             for i, item in enumerate(value):
-                errors += validate(item, schema["items"], f"{path}[{i}]")
+                errors += validate(item, schema["items"], f"{path}[{i}]", root)
     if isinstance(value, dict):
         props = schema.get("properties", {})
         for name in schema.get("required", []):
@@ -127,32 +170,52 @@ def validate(value: Any, schema: dict[str, Any], path: str = "$") -> list[str]:
                 errors.append(f"{path}: champ requis absent : {name}")
         for name, sub in props.items():
             if name in value:
-                errors += validate(value[name], sub, f"{path}.{name}")
+                errors += validate(value[name], sub, f"{path}.{name}", root)
         if schema.get("additionalProperties") is False:
             errors += [f"{path}: champ inattendu : {n}" for n in value if n not in props]
     return errors
 
 
-def load_schema(dry_run: bool, explicit: Path | None) -> tuple[dict[str, Any], str]:
-    """Réel : le contrat. Dry-run : le schéma de test fourni avec les enregistrements, jamais le
-    vrai contrat (sauf --schema explicite)."""
-    if explicit is not None:
-        path = explicit
-    elif dry_run:
-        path = TEST_SCHEMA
-    elif CONTRACT.exists():
-        path = CONTRACT
-    else:
-        raise ConfigError(
-            f"schéma absent : {CONTRACT} (ticket #31 non mergé). "
-            "L'éval réelle exige le vrai contrat ; --dry-run utilise un schéma de test."
-        )
+def load_schema(explicit: Path | None = None) -> tuple[dict[str, Any], str]:
+    """Toujours le contrat réel (`--schema` explicite pour un autre fichier)."""
+    path = explicit if explicit is not None else CONTRACT
+    if not path.exists():
+        raise ConfigError(f"schéma absent : {path}")
     try:
         schema = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ConfigError(f"schéma illisible : {path} ({exc})") from exc
     check_schema(schema)
     return schema, str(path.relative_to(ROOT) if path.is_relative_to(ROOT) else path)
+
+
+def _quoted(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def prompt_contract_gaps(prompt: str, schema: dict[str, Any]) -> list[str]:
+    """Ce que le prompt ne dit pas du contrat : champs (requis et optionnels), valeurs d'enum et
+    de const, bornes minItems/maxItems. Liste vide = prompt aligné."""
+    gaps: list[str] = []
+
+    def walk(node: dict[str, Any], where: str) -> None:
+        node = {**resolve_ref(node["$ref"], schema), **node} if "$ref" in node else node
+        for name, sub in node.get("properties", {}).items():
+            if not re.search(rf"(?<![\w]){re.escape(name)}(?![\w])", prompt):
+                gaps.append(f"champ {where}.{name} absent du prompt")
+            walk(sub, f"{where}.{name}")
+        values = list(node.get("enum", [])) + ([node["const"]] if "const" in node else [])
+        for val in values:
+            if str(val) not in prompt:
+                gaps.append(f"valeur {_quoted(val)} ({where}) absente du prompt")
+        for key in ("minItems", "maxItems"):
+            if key in node and str(node[key]) not in prompt:
+                gaps.append(f"borne {key}={node[key]} ({where}) absente du prompt")
+        if "items" in node:
+            walk(node["items"], f"{where}[]")
+
+    walk(schema, "$")
+    return gaps
 
 
 def read_jsonl(path: Path) -> list[dict[str, Any]]:
@@ -266,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        schema, schema_name = load_schema(args.dry_run, args.schema)
+        schema, schema_name = load_schema(args.schema)
         cases = read_jsonl(args.cases)
         if args.dry_run:
             fingerprint = schema_fingerprint(schema)
