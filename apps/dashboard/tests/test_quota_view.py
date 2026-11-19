@@ -159,6 +159,7 @@ def test_unconfigured_quota_shows_raw_tokens_and_help(db_path: Path) -> None:
     v = view(NONE)
     assert not v.configured
     assert v.five_hours.percent is None and v.five_hours.level is None
+    assert v.missing == [quota.ENV_5H, quota.ENV_WEEK]
     assert v.five_hours.help == "quota non configuré : renseigner VVA_QUOTA_5H_TOKENS"
     assert v.week.help == "quota non configuré : renseigner VVA_QUOTA_WEEK_TOKENS"
     assert v.weekend.help == v.week.help
@@ -169,6 +170,7 @@ def test_partial_quota_only_five_hours(db_path: Path) -> None:
     seed([(H, "s", "qa", 100_000)])
     v = view(quota.Quota(five_hours=1_000_000, week=None))
     assert v.five_hours.percent == 10 and v.week.percent is None and v.week.help
+    assert v.missing == [quota.ENV_WEEK]
     assert v.by_agent[0].last_7d.percent is None
 
 
@@ -201,10 +203,12 @@ def test_page_shows_percent_legend_and_tables(
     assert "sess-secret" not in text
 
 
-def test_page_without_quota_shows_help_not_percent(db_path: Path) -> None:
+def test_page_without_quota_shows_one_note_not_percent(db_path: Path) -> None:
     seed([(H, "s", "backend", 420_000)], now=datetime.now(UTC))
     text = logged_in().get("/tokens").text
-    assert "quota non configuré : renseigner VVA_QUOTA_5H_TOKENS" in text
+    assert text.count('role="note"') == 1
+    note = text.split('role="note"', 1)[1].split("</div>", 1)[0]
+    assert "Quota non configuré" in note and quota.ENV_5H in note and quota.ENV_WEEK in note
     assert "% du quota" not in text and "420" in text
 
 
@@ -282,8 +286,39 @@ def test_legend_names_levels_and_thresholds(db_path: Path, monkeypatch: pytest.M
     assert "plus de 90 %" not in text
 
 
-def test_unconfigured_gauges_keep_muted_badge_without_meter(db_path: Path) -> None:
+def test_unconfigured_gauges_have_no_meter_nor_repeated_badge(db_path: Path) -> None:
     seed([(H, "s", "backend", 420_000)], now=datetime.now(UTC))
     text = logged_in().get("/tokens").text
-    assert 'role="meter"' not in text and "badge--muted" in text
+    assert 'role="meter"' not in text and "badge--muted" not in text
+    assert "quota non configuré : renseigner" not in text
+    assert text.count("420") >= 3  # tokens bruts conservés dans chaque jauge
     assert "Marge restante avant plafond" not in text
+
+
+def test_partial_quota_note_names_only_missing_variable(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv(quota.ENV_5H, "1000000")
+    seed([(H, "s", "backend", 420_000)], now=datetime.now(UTC))
+    text = logged_in().get("/tokens").text
+    note = text.split('role="note"', 1)[1].split("</div>", 1)[0]
+    assert text.count('role="note"') == 1 and quota.ENV_WEEK in note and quota.ENV_5H not in note
+
+
+def test_configured_quota_has_no_note(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    assert 'role="note"' not in gauges_page(monkeypatch, 420_000)
+
+
+# #129 : légende par libellés (pas par couleurs) et fenêtre glissante sans reset
+def legend(text: str) -> str:
+    return text.split("Légende", 1)[1].split("</details>", 1)[0]
+
+
+def test_legend_uses_labels_not_colours(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    text = legend(gauges_page(monkeypatch, 420_000))
+    assert "orange" not in text and "rouge" not in text and "vert" not in text
+
+
+def test_legend_explains_there_is_no_reset(db_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    page = gauges_page(monkeypatch, 420_000)
+    assert "pas de remise à zéro" in legend(page) and "reset" not in page

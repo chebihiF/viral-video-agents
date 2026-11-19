@@ -73,6 +73,7 @@ class Margin:
 @dataclass(frozen=True)
 class QuotaView:
     configured: bool
+    missing: list[str]  # variables d'environnement de quota à renseigner
     five_hours: Gauge
     week: Gauge
     weekend: Gauge
@@ -109,6 +110,12 @@ def gauge(used: int, limit: int | None, quota_label: str, raw_label: str, env: s
         f"{percent} % du quota {quota_label} {detail}",
         None,
     )
+
+
+def missing_env(quota: Quota) -> list[str]:
+    """Variables à renseigner pour les fenêtres sans quota (ordre : 5 h, semaine)."""
+    named = ((ENV_5H, quota.five_hours), (ENV_WEEK, quota.week))
+    return [env for env, limit in named if limit is None]
 
 
 def margins(five_hours: Gauge, week: Gauge) -> list[Margin]:
@@ -187,6 +194,7 @@ def build(conn: sqlite3.Connection, now: datetime, quota: Quota) -> QuotaView:
     window_margins = margins(five_hours, week)
     return QuotaView(
         configured=quota.configured,
+        missing=missing_env(quota),
         five_hours=five_hours,
         week=week,
         weekend=weekend_gauge,

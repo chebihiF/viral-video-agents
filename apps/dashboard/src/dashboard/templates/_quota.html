@@ -30,7 +30,6 @@
   {% else %}
   <p class="pct">{{ g.used | thousands }}</p>
   <p>{{ g.text }}</p>
-  <p class="muted"><span class="badge badge--muted">{{ g.help }}</span></p>
   {% endif %}
 </section>
 {%- endmacro %}
@@ -54,6 +53,9 @@
 </div>
 {%- endmacro %}
 <div class="quota">
+  {% if quota.missing %}
+  <div class="banner banner--info" role="note">Quota non configuré : renseigner {{ quota.missing | join(" et ") }}. Sans quota, seuls les tokens bruts sont affichés, jamais de pourcentage.</div>
+  {% endif %}
   <div class="gauges">
     {{ gauge_card("Fenêtre de 5 heures", quota.five_hours) }}
     {{ gauge_card("Semaine", quota.week) }}
@@ -76,11 +78,11 @@
       <dt>Quota</dt>
       <dd>Nombre de tokens que tu t'autorises sur une fenêtre, réglé par <code>VVA_QUOTA_5H_TOKENS</code> et <code>VVA_QUOTA_WEEK_TOKENS</code>. Sans quota, seuls les tokens bruts sont affichés, jamais de pourcentage.</dd>
       <dt>Fenêtre de 5 heures</dt>
-      <dd>Glissante : les tokens des 5 dernières heures jusqu'à maintenant.</dd>
+      <dd>Glissante : les tokens des 5 dernières heures jusqu'à maintenant. Il n'y a pas de remise à zéro : les tokens sortent de la fenêtre au fil de l'eau.</dd>
       <dt>Semaine et week-end</dt>
       <dd>Semaine : les 7 derniers jours glissants. Week-end : la part de ces 7 jours tombée un samedi ou un dimanche (heures UTC), comparée au quota de la semaine.</dd>
       <dt>Niveaux et repères</dt>
-      <dd><span class="badge badge--ok">● Normal</span> moins de 70 % · <span class="badge badge--warn">▲ Attention</span> de 70 % à moins de 90 % (orange) · <span class="badge badge--danger">■ Critique</span> à partir de 90 % (rouge), part du quota consommée. Les repères à 70 % et à 90 % sont tracés sur chaque barre.</dd>
+      <dd><span class="badge badge--ok">● Normal</span> moins de 70 % · <span class="badge badge--warn">▲ Attention</span> de 70 % à moins de 90 % · <span class="badge badge--danger">■ Critique</span> à partir de 90 %, part du quota consommée. Les repères à 70 % et à 90 % sont tracés sur chaque barre.</dd>
       <dt>Marge restante</dt>
       <dd>Tokens encore disponibles avant le plafond de chaque fenêtre ; le week-end, inclus dans la semaine, n'a pas de marge propre.</dd>
       <dt>Tous types confondus</dt>

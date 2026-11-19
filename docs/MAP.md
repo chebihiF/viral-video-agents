@@ -132,6 +132,7 @@
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
 - `docs/design/refonte.md` — Refonte du dashboard — spec (#92, couvre #93 à #99)
+- `docs/design/tokens.md` — Écran « Tokens » (`/tokens`) — spec alignée sur le réel (#129, écarts #118)
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
