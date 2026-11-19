@@ -17,6 +17,7 @@
     #sessions { display: grid; gap: var(--space-5); }
     .panel { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); min-width: 0; }
     .scroll { overflow-x: auto; }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
     table { width: 100%; border-collapse: collapse; font-size: var(--font-size-data); font-variant-numeric: tabular-nums; }
     .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     th { text-align: left; font-size: var(--font-size-label); color: var(--color-text-muted); font-weight: 600; padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); }
@@ -46,26 +47,29 @@
       {% if ticket_stats %}
       <section class="panel" aria-labelledby="tickets-title">
         <h2 id="tickets-title">Durée et sous-agents par ticket</h2>
-        <p class="muted">7 derniers jours. Durée : de la première à la dernière activité du ticket. Les événements sans numéro de ticket ne sont pas comptés.</p>
-        <div class="scroll">
+        <p class="muted">7 derniers jours. Durée : de la première à la dernière activité du ticket.</p>
+        <div class="table-wrap">
           <table>
             <caption class="sr-only">Tickets triés par durée décroissante</caption>
             <thead>
-              <tr><th scope="col">Ticket</th><th scope="col">Durée (h min)</th><th scope="col">Sous-agents lancés (nombre)</th><th scope="col">Sessions (nombre)</th></tr>
+              <tr><th scope="col">Ticket</th><th scope="col" class="num">Durée (h min)</th><th scope="col" class="num">Sous-agents lancés (nombre)</th><th scope="col" class="num">Sessions (nombre)</th></tr>
             </thead>
             <tbody>
               {% for t in ticket_stats %}
               <tr title="{{ t.line }}">
-                <th scope="row">ticket #{{ t.ticket }}</th>
-                <td>{{ t.duration_label }}</td>
-                <td>{{ t.subagents }}</td>
-                <td>{{ t.sessions }}</td>
+                <th scope="row"><a href="{{ t.url }}" rel="noopener noreferrer">#{{ t.ticket }}</a></th>
+                <td class="num">{{ t.duration_label }}</td>
+                <td class="num">{{ t.subagents }}</td>
+                <td class="num">{{ t.sessions }}</td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
+        <p class="muted">Événements sans ticket exclus ({{ untracked }} sur 7 jours).</p>
       </section>
+      {% elif sessions or delegation_groups %}
+      {% call empty("Aucun ticket sur les 7 derniers jours", "Aucun événement des 7 derniers jours ne porte de numéro de ticket : la durée par ticket apparaîtra dès qu'un agent travaille sur un ticket.", "tickets-empty-title") %}Événements sans ticket exclus ({{ untracked }} sur 7 jours).{% endcall %}
       {% endif %}
       {% for s in sessions %}
       <section class="panel" aria-labelledby="session-{{ loop.index }}">
