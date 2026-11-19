@@ -1,6 +1,8 @@
 /* components.css — composants du dashboard (ticket #92). Utilise UNIQUEMENT les jetons de tokens.css. */
 * { box-sizing: border-box; }
 .app { font-family: var(--font-sans); font-size: var(--font-size-body); line-height: var(--line-height-body); color: var(--color-text); background: var(--color-bg); min-height: 100%; display: grid; grid-template-columns: var(--nav-width) minmax(0, 1fr); }
+.page { margin: 0; font-family: var(--font-sans); font-size: var(--font-size-body); line-height: var(--line-height-body); color: var(--color-text); background: var(--color-bg); min-height: 100%; }
+.page h1, .page h2, .page p { margin: 0; }
 .app h1, .app h2, .app h3, .app p { margin: 0; }
 .app a { color: var(--color-accent); }
 .skip-link { position: absolute; left: var(--space-2); top: -100px; background: var(--color-accent); color: var(--color-on-accent); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); z-index: 20; }
@@ -76,10 +78,11 @@
 
 /* Tableau (défile dans son conteneur) */
 .table-wrap { overflow-x: auto; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); background: var(--color-surface); }
-.table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--font-size-data); min-width: 560px; }
+.table-wrap table { width: 100%; border-collapse: collapse; font-size: var(--font-size-data); }
 .table-wrap caption { text-align: left; padding: var(--space-3) var(--space-4); font-weight: 700; font-size: var(--font-size-heading); }
 .table-wrap th { text-align: left; background: var(--color-surface-2); padding: var(--space-2) var(--space-4); font-size: var(--font-size-label); text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted); }
 .table-wrap td { padding: var(--space-3) var(--space-4); border-top: 1px solid var(--color-border-subtle); }
+.num, .table-wrap th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table-wrap tbody tr:hover { background: var(--color-surface-2); }
 
 /* États : vide, chargement, erreur, pause, temps réel */
