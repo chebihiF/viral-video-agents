@@ -49,7 +49,7 @@ known-first-party = ["dashboard", "media_service", "orchestrator", "next_version
 python_version = "3.12"
 strict = true
 files = ["apps/dashboard/src", "apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "tools/telemetry", "tools/agents", "evals/classification_eval.py", "evals/test_classification_eval.py",
-  "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py"]
+  "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py", "apps/gpu-worker/lan_guard.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["apps/dashboard/tests", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "tools/telemetry/tests", "tools/agents/tests", "evals", "apps/gpu-worker/tests"]

@@ -72,6 +72,8 @@
 - `apps/dashboard/tests/test_tokens.py` — Page /tokens : totaux par agent et par modèle sur 24 h et 7 jours (#7).
 - `apps/gpu-worker/README.md` — gpu-worker
 - `apps/gpu-worker/comfy_run.py` — Lance un workflow ComfyUI (format API) et attend le résultat.
+- `apps/gpu-worker/lan_guard.py` — Garde réseau local (#158) : le PC GPU n'est utilisé que depuis la maison.
+- `apps/gpu-worker/tests/test_lan_guard.py` — lan_guard (#158) : le PC GPU n'est joignable que depuis le réseau local (aucun appel réel 
 - `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
 - `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
 - `apps/media-service/README.md` — media-service

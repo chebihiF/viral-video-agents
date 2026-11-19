@@ -13,6 +13,9 @@ Scripts exécutés sur le PC GPU (ComfyUI, Ollama, TTS). Bibliothèque standard 
 python3 apps/gpu-worker/worker.py --port 8765 --comfy-url http://127.0.0.1:8188
 ```
 
+- Garde réseau (`lan_guard.py`, #158) : seule l'adresse du socket compte (`X-Forwarded-For` ignoré) ;
+  hors réseaux autorisés, `POST /jobs` répond `200 {"status":"deferred","message":...}`, sans file ni rendu.
+  Défaut `192.168.1.0/24` seul (échec fermé), donc le tunnel/n8n local en `127.0.0.1` est « hors réseau ».
 - Écoute `127.0.0.1` uniquement (WireGuard plus tard, hors périmètre).
 - `POST /jobs` : job valide -> `202` + état ; invalide (dont `frames` hors 4n+1) -> `422`, rien n'est lancé.
 - `GET /jobs/{job_id}` -> `200` + `queued|running|done|failed` (`output_path` ou `error`) ; inconnu -> `404`.
@@ -28,6 +31,16 @@ python3 apps/gpu-worker/worker.py --port 8765 --comfy-url http://127.0.0.1:8188
 - `image_path` est relatif à `ComfyUI/input` ; le clip est écrit dans `--out/<job_id>/`.
 - Journaux et sortie : `job_id` seulement (aucun prompt ni chemin : données d'enfant) ;
   `comfy_run.run` n'écrit plus rien sur stdout (le résumé n'est affiché qu'en CLI).
+
+## Lancement
+
+```sh
+python3 apps/gpu-worker/worker.py --port 8765 --lan 127.0.0.0/8 192.168.1.0/24
+```
+
+Derrière un tunnel ou n8n, le worker voit l'IP de n8n (ici `127.0.0.1`), pas celle de l'enfant :
+la garde ne prouve donc pas à elle seule « hors maison ». Le vrai contrôle se fait à l'entrée
+(n8n / interface enfant #36) ; le worker n'est qu'une défense en profondeur.
 
 ## Tests
 
