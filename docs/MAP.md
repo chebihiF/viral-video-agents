@@ -28,8 +28,8 @@
 - `apps/dashboard/src/dashboard/main.py` — Point d'entrée FastAPI du dashboard (routes : contracts/dashboard-routes.md).
 - `apps/dashboard/src/dashboard/otlp.py` — POST /v1/metrics : tokens Claude Code en OTLP/HTTP JSON (contrat : contracts/token-usage.m
 - `apps/dashboard/src/dashboard/progress.py` — GET /progress et GET /api/v1/progress : avancement du projet et travail des agents (#26).
+- `apps/dashboard/src/dashboard/static/components.css`
 - `apps/dashboard/src/dashboard/static/live.js` — Temps réel : flux SSE /stream (EventSource, reprise automatique par Last-Event-ID).
-- `apps/dashboard/src/dashboard/static/nav.css`
 - `apps/dashboard/src/dashboard/static/progress.js` — Actualisation de /progress toutes les 60 s (sans dépendance : ni CDN, ni bibliothèque).
 - `apps/dashboard/src/dashboard/static/tokens.css`
 - `apps/dashboard/src/dashboard/stream.py` — GET /stream : flux SSE des événements d'agents (contrat : contracts/dashboard-routes.md).
@@ -48,6 +48,7 @@
 - `apps/dashboard/tests/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
 - `apps/dashboard/tests/test_controls.py` — Contrôles pause et plafond de tokens (#8) : /controls, POST protégés (CSRF), /api/v1/contr
 - `apps/dashboard/tests/test_delegations.py` — Interactions (#102) : qui délègue à qui, fil chronologique groupé par ticket.
+- `apps/dashboard/tests/test_design_tokens.py` — Design system (#92) : contrastes WCAG AA et rétrocompatibilité de tokens.css.
 - `apps/dashboard/tests/test_ensure_token.py` — Le script de déploiement crée le jeton d'ingestion une seule fois, en 600.
 - `apps/dashboard/tests/test_ingest.py` — Ingestion authentifiée des événements d'agents (#3).
 - `apps/dashboard/tests/test_interactions.py` — Interactions entre agents (#6) : sessions, sous-agents (SubagentStart/Stop) et durée.
@@ -118,6 +119,7 @@
 - `docs/design/README.md` — Design system du dashboard
 - `docs/design/activity.md` — Écran « Activité des agents »
 - `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
+- `docs/design/refonte.md` — Refonte du dashboard — spec (#92, couvre #93 à #99)
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
