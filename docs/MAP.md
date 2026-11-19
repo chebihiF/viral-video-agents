@@ -93,9 +93,11 @@
 - `apps/orchestrator/src/orchestrator/mocks.py` — Étapes factices valides (#138) : aucune génération réelle, aucun fichier écrit, pas de GPU
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
 - `apps/orchestrator/src/orchestrator/steps_llm.py` — Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
+- `apps/orchestrator/src/orchestrator/steps_media.py` — Étapes média réelles : voix (Piper) et montage (ASS + FFmpeg), sans GPU (#136).
 - `apps/orchestrator/tests/test_cli.py` — CLI orchestrateur (#138) : 4 scénarios Gherkin, mode mocks, run.json validé par le contrat
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
 - `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
+- `apps/orchestrator/tests/test_steps_media.py` — Étapes voix (Piper) et montage réelles (#136) : faux Piper, lavfi, sans fuite de texte.
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
