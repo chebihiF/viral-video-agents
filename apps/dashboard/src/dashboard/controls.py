@@ -15,7 +15,7 @@ import os
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import parse_qs
 
@@ -25,12 +25,19 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
-from dashboard import auth, db, ingest, tokens
+from dashboard import auth, db, ingest, live, quota, quota_view, tokens
 
 REASON_MANUAL = "manuel"
 REASON_CAP = "plafond"
 MAX_FORM_BYTES = 4096
 MAX_CAP_TOKENS = 10**12
+HISTORY_DAYS = 7
+HISTORY_SHOWN = 20
+HISTORY_EVENTS = ("SubagentStart", "SubagentStop", "PostToolUseFailure")
+_HISTORY = (
+    "SELECT ts, hook_event_name, agent_type, agent_id, tool_name, ticket FROM events "
+    "WHERE ts >= ? AND hook_event_name IN (?, ?, ?) ORDER BY ts DESC, rowid DESC LIMIT ?"
+)
 
 TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 TEMPLATES.env.filters["thousands"] = tokens.thousands
@@ -74,6 +81,73 @@ def current_state(conn: sqlite3.Connection, now: datetime) -> ControlState:
     )
 
 
+@dataclass(frozen=True)
+class AgentRow:
+    agent: str
+    ticket: int | None
+    state: str  # « actif », « en attente » ou « en pause » (pause globale)
+
+
+@dataclass(frozen=True)
+class HistoryRow:
+    date: str
+    action: str
+    result: str
+
+
+@dataclass(frozen=True)
+class PageData:
+    state: ControlState
+    agents: list[AgentRow]
+    history: list[HistoryRow]
+    quota_5h: quota_view.Gauge
+    quota_configured: bool
+
+
+def agents_now(conn: sqlite3.Connection, now: datetime, paused: bool) -> list[AgentRow]:
+    """Agents non terminés (#101) ; en pause globale, tous sont « en pause »."""
+    rows = [row for row in live.agent_rows(conn, now) if row.state != "terminé"]
+    return [AgentRow(r.agent, r.ticket, "en pause" if paused else r.state) for r in rows]
+
+
+def _history_row(raw: tuple[str | None, ...]) -> HistoryRow | None:
+    ts, hook, agent_type, agent_id, tool, ticket = raw
+    at = live.parse_ts(ts)
+    if at is None:
+        return None
+    who = agent_type or agent_id or live.UNKNOWN_AGENT
+    number = live.ticket_number(ticket)
+    where = "" if number is None else f" (ticket #{number})"
+    date = at.astimezone(UTC).strftime("%Y-%m-%d %H:%M") + " UTC"
+    if hook == "SubagentStart":
+        return HistoryRow(date, f"{who} démarre{where}", "lancé")
+    if hook == "SubagentStop":
+        return HistoryRow(date, f"{who} se termine{where}", "terminé")
+    return HistoryRow(date, f"{who} : outil {tool or 'inconnu'} en échec{where}", "échec")
+
+
+def history(conn: sqlite3.Connection, now: datetime) -> list[HistoryRow]:
+    """Dernières actions des agents (démarrage, fin, échec d'outil), la plus récente en haut."""
+    since = (now - timedelta(days=HISTORY_DAYS)).astimezone(UTC).isoformat()
+    cursor = conn.execute(_HISTORY, (since, *HISTORY_EVENTS, HISTORY_SHOWN))
+    rows = (_history_row(raw) for raw in cursor)
+    return [row for row in rows if row is not None]
+
+
+def load_page(now: datetime) -> PageData:
+    with db.connect() as conn:
+        state = current_state(conn, now)
+        configured = quota.read_quota()
+        view = quota_view.build(conn, now, configured)
+        return PageData(
+            state=state,
+            agents=agents_now(conn, now, state.paused),
+            history=history(conn, now),
+            quota_5h=view.five_hours,
+            quota_configured=configured.five_hours is not None,
+        )
+
+
 def load_state() -> ControlState:
     with db.connect() as conn:
         return current_state(conn, datetime.now(UTC))
@@ -108,7 +182,8 @@ async def _read_form(request: Request) -> dict[str, str] | None:
 def _page(request: Request, csrf: str, status: int, message: str | None = None) -> HTMLResponse:
     context: dict[str, object] = {"csrf": csrf, "message": message}
     try:
-        context["state"] = load_state()
+        data = load_page(datetime.now(UTC))
+        context.update(state=data.state, agents=data.agents, history=data.history, quota=data)
     except sqlite3.Error as exc:
         log.warning("lecture des contrôles impossible : %s", type(exc).__name__)
         context.update(state=None, message=None, error_at=datetime.now(UTC).strftime("%H:%M:%S"))

@@ -73,10 +73,11 @@ def test_activity_points_to_the_ingest_contract(client: TestClient) -> None:
     assert "ingest-api" in state
 
 
-def test_controls_with_empty_database_is_200(client: TestClient) -> None:
+def test_controls_with_empty_database_shows_state_and_keeps_controls(client: TestClient) -> None:
     resp = client.get("/controls")
     assert resp.status_code == 200
-    assert 'class="state"' not in resp.text
+    assert len(STATE.findall(resp.text)) == 1
+    assert 'action="/controls/pause"' in resp.text  # le parent garde la main sans données
 
 
 # Scénario : GitHub injoignable

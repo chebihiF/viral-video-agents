@@ -13,64 +13,91 @@
     header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
     h1 { font-size: var(--font-size-title); margin: 0; }
     h2 { font-size: var(--font-size-heading); margin: 0 0 var(--space-3); }
-    .panel { background: var(--color-surface); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg); padding: var(--space-4); }
+    .card p { margin: 0 0 var(--space-3); }
     .muted { color: var(--color-text-muted); }
-    .banner { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid; font-weight: 600; }
-    .banner-ok { background: var(--color-ok-bg); border-color: var(--color-ok); color: var(--color-ok); }
-    .banner-warn { background: var(--color-warn-bg); border-color: var(--color-warn); color: var(--color-warn); }
-    .banner-danger { background: var(--color-danger-bg); border-color: var(--color-danger); color: var(--color-danger); }
     form { display: grid; gap: var(--space-3); margin: var(--space-3) 0 0; }
     label { font-size: var(--font-size-label); color: var(--color-text-muted); }
     input[type="number"] { min-height: 36px; padding: var(--space-2) var(--space-3); border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); font: inherit; font-variant-numeric: tabular-nums; }
-    button { min-height: 36px; border: 0; border-radius: var(--radius-md); background: var(--color-accent); color: var(--color-on-accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0 var(--space-4); }
+    button.btn { cursor: pointer; font: inherit; font-weight: 600; }
     button.danger { background: var(--color-danger); color: var(--color-surface); }
-    meter { width: 100%; height: 16px; }
+    details.confirm > summary { display: inline-block; cursor: pointer; list-style: none; }
+    details.confirm > summary::-webkit-details-marker { display: none; }
+    details.confirm[open] > summary { margin-bottom: var(--space-3); }
+    .agents { list-style: none; margin: 0; padding: 0; display: grid; }
+    .agents li { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--color-border-subtle); }
+    .agents li:last-child { border-bottom: 0; }
     .num { font-variant-numeric: tabular-nums; }
+    meter { width: 100%; height: 16px; }
   </style>
 </head>
 <body>
+  {% from "_empty.html" import empty %}
   {% with active="/controls" %}{% include "_nav.html" %}{% endwith %}
   <main id="contenu">
     <header>
       <h1>Contrôles</h1>
     </header>
     {% if error_at %}
-    <div class="banner banner-danger" role="alert">
-      <strong>Erreur :</strong> l'état des agents est indisponible (tentative à <time>{{ error_at }}</time> UTC).
-      Aucune action n'est possible. <a href="/controls">Réessayer</a>
+    <div class="banner banner--danger" role="alert">
+      <span><strong>Erreur :</strong> l'état des agents est indisponible (tentative à <time>{{ error_at }}</time> UTC).
+      Aucune action n'est possible.</span> <a class="btn" href="/controls">Réessayer</a>
     </div>
     {% else %}
-    {% if message %}<div class="banner banner-danger" role="alert">{{ message }}</div>{% endif %}
+    {% if message %}<div class="banner banner--danger" role="alert">{{ message }}</div>{% endif %}
     {% if state.paused and state.reason == "plafond" %}
-    <div class="banner banner-danger" role="alert">
+    <div class="banner banner--danger" role="alert">
       ▲ Plafond atteint : {{ state.tokens_24h | thousands }} / {{ state.cap_tokens | thousands }} tokens sur 24 h. Agents en pause (motif : plafond).
     </div>
     {% elif state.paused %}
-    <div class="banner banner-warn" role="status">❚❚ Agents en pause (motif : manuel).</div>
+    <div class="banner banner--warn" role="status">❚❚ Agents en pause (motif : manuel).</div>
     {% else %}
-    <div class="banner banner-ok" role="status">● Agents actifs.</div>
+    <div class="banner banner--info" role="status">● Agents actifs.</div>
     {% endif %}
+    <p class="muted" role="status">Résultat : {{ "agents en pause" if state.paused else "agents en marche" }} depuis le <time datetime="{{ state.updated_at }}">{{ state.updated_at[:16] | replace("T", " ") }}</time> UTC.</p>
 
-    <section class="panel" aria-labelledby="pause-title">
-      <h2 id="pause-title">Pause</h2>
-      <p class="muted">Les agents s'arrêtent à leur prochain appel d'outil, et repartent au suivant après la reprise.</p>
-      {% if state.paused %}
-      <form method="post" action="/controls/resume">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button type="submit">Reprendre les agents</button>
-      </form>
+    <section class="card" aria-labelledby="agents-title">
+      <h2 id="agents-title">Agents</h2>
+      {% if agents %}
+      <ul class="agents">
+        {% for a in agents %}
+        <li><strong>{{ a.agent }}</strong> · <span>{% if a.ticket is none %}ticket inconnu{% else %}ticket #{{ a.ticket }}{% endif %}</span> · <span class="badge {{ 'badge--warn' if a.state == 'en pause' else ('badge--ok' if a.state == 'actif' else 'badge--muted') }}">{{ "❚❚" if a.state == "en pause" else ("●" if a.state == "actif" else "○") }} {{ a.state }}</span></li>
+        {% endfor %}
+      </ul>
       {% else %}
-      <form method="post" action="/controls/pause">
-        <input type="hidden" name="csrf" value="{{ csrf }}">
-        <button type="submit" class="danger">Mettre en pause</button>
-      </form>
+      {% call empty("Aucun agent actif", "Aucun agent n'a émis d'événement ces 15 dernières minutes.", "agents-empty") %}Prochaine étape : lancer un agent sur un ticket ; il apparaîtra ici (contrat <code>ingest-api</code>).{% endcall %}
       {% endif %}
     </section>
 
-    <section class="panel" aria-labelledby="cap-title">
+    <section class="card" aria-labelledby="pause-title">
+      <h2 id="pause-title">Pause</h2>
+      {% if state.paused %}
+      <p class="muted">Les agents repartent à leur prochain appel d'outil après la reprise.</p>
+      <form method="post" action="/controls/resume">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button type="submit" class="btn btn--primary">Reprendre les agents</button>
+      </form>
+      {% else %}
+      <details class="confirm">
+        <summary class="btn">Mettre en pause</summary>
+        <p><strong>Les agents s'arrêteront après leur étape en cours.</strong> Ils repartiront après la reprise.</p>
+        <form method="post" action="/controls/pause">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button type="submit" class="btn danger">Confirmer la pause</button>
+        </form>
+      </details>
+      {% endif %}
+    </section>
+
+    <section class="card" aria-labelledby="cap-title">
       <h2 id="cap-title">Plafond de tokens</h2>
+      {% if quota.quota_configured %}
+      <p class="num"><strong>Quota : {{ quota.quota_5h.limit | thousands }} tokens par 5 h</strong><br>
+        Consommation actuelle : {{ quota.quota_5h.text }}.</p>
+      {% else %}
+      <p class="num">Quota par 5 h non configuré : {{ quota.quota_5h.text }}. {{ quota.quota_5h.help }}.</p>
+      {% endif %}
       <p class="num">
-        <label for="usage">Consommation sur 24 h glissantes</label><br>
+        <label for="usage">Consommation sur 24 h glissantes (plafond qui met les agents en pause)</label><br>
         <meter id="usage" min="0" max="{{ state.cap_tokens }}" value="{{ [state.tokens_24h, state.cap_tokens] | min }}">{{ state.tokens_24h | thousands }}</meter><br>
         {{ state.tokens_24h | thousands }} / {{ state.cap_tokens | thousands }} tokens
       </p>
@@ -78,8 +105,27 @@
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <label for="cap_tokens">Plafond (tokens sur 24 h, tous agents)</label>
         <input id="cap_tokens" name="cap_tokens" type="number" inputmode="numeric" min="1" step="1" value="{{ state.cap_tokens }}" required>
-        <button type="submit">Enregistrer le plafond</button>
+        <button type="submit" class="btn btn--primary">Enregistrer le plafond</button>
       </form>
+    </section>
+
+    <section class="card" aria-labelledby="history-title">
+      <h2 id="history-title">Historique des actions</h2>
+      {% if history %}
+      <div class="table-wrap">
+        <table>
+          <caption class="muted">Dernières actions des agents, 7 derniers jours (heures UTC)</caption>
+          <thead><tr><th scope="col">Date</th><th scope="col">Action</th><th scope="col">Résultat</th></tr></thead>
+          <tbody>
+            {% for h in history %}
+            <tr><td class="num">{{ h.date }}</td><td>{{ h.action }}</td><td>{{ h.result }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="muted">Aucune action d'agent enregistrée sur les 7 derniers jours.</p>
+      {% endif %}
     </section>
     {% endif %}
   </main>
