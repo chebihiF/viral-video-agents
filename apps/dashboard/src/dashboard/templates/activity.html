@@ -49,8 +49,10 @@
       <p class="muted">Lancez un agent sur un ticket : ses événements apparaîtront ici dès sa première action.</p>
     </section>
     {% else %}
+    <div id="agents">
+    {% if live_rows %}{% include "_live.html" %}{% endif %}
     <div class="layout">
-      <section id="agents" class="panel" aria-labelledby="agents-title">
+      <section id="agents-table" class="panel" aria-labelledby="agents-title">
         <h2 id="agents-title">Agents</h2>
         <div class="scroll">
           <table>
@@ -84,6 +86,7 @@
           {% endfor %}
         </ol>
       </aside>
+    </div>
     </div>
     {% endif %}
   </main>
