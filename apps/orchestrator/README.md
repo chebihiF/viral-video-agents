@@ -54,9 +54,10 @@ etapes = Etapes(classifier_ollama(client), storyboard_ollama(client), voix, imag
 ```
 
 - `POST <OLLAMA_URL>/api/chat`, modèle `qwen3:8b`, `think: false`, `temperature: 0`, `seed: 42`, `format` = schéma du contrat (sans les règles conditionnelles, vérifiées après).
-- Prompts : bloc `text` de `prompts/classification.v1.md` (dictée encadrée par `<dictee>…</dictee>`, balises internes neutralisées) ; corps de `prompts/storyboard.v1.md` (texte autorisé tel quel).
-- Sortie validée contre `contracts/classification.schema.json` / `storyboard.schema.json` par un validateur stdlib aligné sur `jsonschema` (testé) ; mot-clé de schéma non géré = `ErreurConfiguration`.
-- Échec fermé : sortie illisible, hors schéma, NaN ou réponse > 1 Mo → un seul nouvel essai, puis `SortieNonConforme` ; serveur injoignable → `OllamaInjoignable` ; `OLLAMA_URL` vide ou non http(s) → `ErreurConfiguration`. Jamais de classification « libre » par défaut : le run passe en « erreur ».
+- Prompts : bloc `text` de `prompts/classification.v1.md` (dictée normalisée NFKC, encadrée par `<dictee>…</dictee>`, tout `<` `>` de la dictée remplacé par `‹` `›`) ; corps de `prompts/storyboard.v1.md` (texte autorisé tel quel).
+- Sortie validée contre `contracts/classification.schema.json` / `storyboard.schema.json` par un validateur stdlib aligné sur `jsonschema` (testé) ; mot-clé ou `type` de schéma non géré = `ErreurConfiguration`.
+- Échec fermé : sortie illisible, hors schéma, NaN, JSON trop imbriqué ou réponse > 1 Mo → `SortieNonConforme` ; serveur injoignable ou redirection (jamais suivie) → `OllamaInjoignable` ; proxy d'environnement (`HTTP(S)_PROXY`) ignoré ; `OLLAMA_URL` vide ou non http(s) → `ErreurConfiguration`. Jamais de classification « libre » par défaut : le run passe en « erreur ».
+- Pas de nouvel essai (décision #143) : à `temperature: 0` et seed fixe, la même requête rend la même réponse ; un retry doublerait l'attente (2 × 300 s) sans chance de succès. Échec fermé, 300 s au plus.
 - Ni dictée ni sortie du modèle dans les logs ou les exceptions (sans `__cause__` ni `__context__`).
 - Transport injectable `(url, corps, timeout) -> octets` : faux Ollama en test, aucun appel réseau.
 
