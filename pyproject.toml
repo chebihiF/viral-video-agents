@@ -5,16 +5,18 @@ description = "Monorepo — appli familiale de vidéos animées générées par 
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
-members = ["apps/dashboard", "apps/media-service"]
+members = ["apps/dashboard", "apps/media-service", "apps/orchestrator"]
 
 [tool.uv.sources]
 dashboard = { workspace = true }
 media-service = { workspace = true }
+orchestrator = { workspace = true }
 
 [dependency-groups]
 dev = [
   "dashboard",
   "media-service",
+  "orchestrator",
   "ruff>=0.8",
   "mypy>=1.13",
   "pytest>=8.3",
@@ -37,7 +39,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
 ignore = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["dashboard", "media_service", "next_version", "hook_emit", "ship", "token_report"]
+known-first-party = ["dashboard", "media_service", "orchestrator", "next_version", "hook_emit", "ship", "token_report"]
 
 [tool.ruff.lint.per-file-ignores]
 "apps/gpu-worker/*" = ["S310", "S110", "E501"]
@@ -46,11 +48,11 @@ known-first-party = ["dashboard", "media_service", "next_version", "hook_emit", 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["apps/dashboard/src", "apps/media-service/src", "infra/scripts", "tools/telemetry", "tools/agents", "evals/classification_eval.py", "evals/test_classification_eval.py",
+files = ["apps/dashboard/src", "apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "tools/telemetry", "tools/agents", "evals/classification_eval.py", "evals/test_classification_eval.py",
   "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps/dashboard/tests", "apps/media-service/tests", "infra/scripts", "tools/telemetry/tests", "tools/agents/tests", "evals", "apps/gpu-worker/tests"]
+testpaths = ["apps/dashboard/tests", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "tools/telemetry/tests", "tools/agents/tests", "evals", "apps/gpu-worker/tests"]
 pythonpath = ["infra/scripts", "tools/telemetry", "tools/agents", "evals", "apps/gpu-worker"]
 filterwarnings = ["ignore::DeprecationWarning"]
 addopts = "-q --no-header -p no:cacheprovider"

@@ -1,0 +1,32 @@
+# orchestrator
+
+Orchestrateur Python du pipeline vidéo (#53) : classification, storyboard, voix, image, clip, montage pour une dictée. Étapes injectables (factices en test, réelles ensuite via n8n / gpu-worker / media-service), stdlib seule, importable en Python 3.9+.
+
+## Usage
+
+```python
+from orchestrator.pipeline import Etapes, lancer
+
+etapes = Etapes(classifier, storyboard, voix, image, clip, montage)
+run = lancer(dictee, etapes, workdir="/data/jobs")  # run_id optionnel (sinon aléatoire)
+run["etat"], run.get("video_path")  # ok | bloque | erreur
+```
+
+| Étape | Signature | Contrat |
+|---|---|---|
+| `classifier` | `(dictee) -> classification` | `classification.schema.json` |
+| `storyboard` | `(texte) -> storyboard` | `storyboard.schema.json` |
+| `voix` | `(tts_job) -> TtsResult` | `tts-job.schema.json` |
+| `image` (GPU) | `(job_id, image_prompt) -> image_path` | `image_path` du `gpu-job` |
+| `clip` (GPU) | `(gpu_job) -> clip_path` | `gpu-job.schema.json` |
+| `montage` | `(montage_job) -> video_path` | `montage-job.schema.json` |
+
+- Sortie : [`contracts/pipeline-run.schema.json`](../../contracts/pipeline-run.schema.json) (exemple `contracts/examples/pipeline-run.ok.json`).
+- `libre` : le storyboard reçoit la dictée ; `adouci` : le `texte_adouci`, jamais la dictée ; `bloque` : aucune étape de génération, run « bloque ».
+- Échec d'une étape (exception ou sortie hors contrat) : run « erreur », dernière étape en `statut: erreur`, suivantes non appelées ; seul le type de l'exception est journalisé.
+- GPU en série : verrou commun à tous les runs du processus (`GPU_LOCK`, injectable via `gpu_lock`), pris une fois pour toute la phase `image` (tous les plans), puis une fois pour la phase `clip` : un seul changement de modèle ComfyUI, plans d'un run non entrelacés avec un autre run.
+- `job_id` GPU distincts par étape (clé d'idempotence du gpu-job) : `<run_id>-img-<n>`, `<run_id>-clip-<n>`.
+- Sorties vérifiées : `image` doit rendre un `image_path` conforme au gpu-job (relatif, sans `..`) ; `clip` et les WAV un chemin non vide sans NUL ni segment `..` ; WAV associés aux plans par `plan_id` (manquant ou doublon : erreur de l'étape `voix`).
+- Clips de 49 images (2 s à 24 i/s) ; le montage les boucle sur la durée de la voix.
+- Aucun texte de dictée, texte adouci ni message d'exception dans l'état ou les logs (`run=… etape=… statut=… duree_s=…`).
+- Les dossiers (`<workdir>/<run_id>/voix`, `final.mp4`) sont créés par les étapes, pas par l'orchestrateur.

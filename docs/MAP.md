@@ -67,6 +67,11 @@
 - `apps/media-service/tests/test_montage_edge_cases.py` — Cas limites du montage (#34) : unicode arabe, plan unique, 0 plan, double exécution.
 - `apps/media-service/tests/test_subtitles.py` — Sous-titres ASS mot par mot (#52) : calcul pur, sans ffmpeg.
 - `apps/media-service/tests/test_tts.py` — TTS Piper (#51) : faux binaire Piper (WAV silencieux de durée connue), aucun texte loggé.
+- `apps/orchestrator/README.md` — orchestrator
+- `apps/orchestrator/pyproject.toml`
+- `apps/orchestrator/src/orchestrator/__init__.py` — Orchestrateur du pipeline vidéo (#53).
+- `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
+- `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
@@ -84,12 +89,14 @@
 - `contracts/examples/gpu-job.valid.json` — données JSON
 - `contracts/examples/montage-job.subtitles.json` — données JSON
 - `contracts/examples/montage-job.valid.json` — données JSON
+- `contracts/examples/pipeline-run.ok.json` — données JSON
 - `contracts/examples/storyboard.invalid.json` — données JSON
 - `contracts/examples/storyboard.valid.json` — données JSON
 - `contracts/examples/tts-job.json` — données JSON
 - `contracts/gpu-job.schema.json` — données JSON
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
 - `contracts/montage-job.schema.json` — données JSON
+- `contracts/pipeline-run.schema.json` — données JSON
 - `contracts/progress.schema.json` — données JSON
 - `contracts/storyboard.schema.json` — données JSON
 - `contracts/token-usage.md` — Métriques de tokens (OTLP/HTTP JSON)
