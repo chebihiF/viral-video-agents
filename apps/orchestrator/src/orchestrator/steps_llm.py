@@ -136,7 +136,10 @@ def classifier_ollama(client: ClientOllama, racine: Path = RACINE) -> Callable[[
 
 
 def storyboard_ollama(client: ClientOllama, racine: Path = RACINE) -> Callable[[str], Job]:
-    """Étape `storyboard` : texte autorisé -> storyboard.schema.json (prompt storyboard.v1)."""
+    """Étape `storyboard` : texte autorisé -> storyboard.schema.json (prompt storyboard.v1).
+
+    Le texte (dictée ou `texte_adouci` produit par le modèle) est cadré comme la dictée (#147).
+    """
     corps = _FRONT_MATTER.fullmatch(_lire(racine / "prompts" / "storyboard.v1.md"))
     if not corps:
         raise ErreurConfiguration("prompt de storyboard sans en-tête")
@@ -145,7 +148,7 @@ def storyboard_ollama(client: ClientOllama, racine: Path = RACINE) -> Callable[[
         corps.group(1).strip(),
         charger_schema(racine / "contracts" / "storyboard.schema.json"),
     )
-    return lambda texte: _demander(client, consigne, texte)
+    return lambda texte: _demander(client, consigne, encadrer(texte))
 
 
 def encadrer(dictee: str) -> str:

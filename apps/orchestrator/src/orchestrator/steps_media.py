@@ -19,7 +19,7 @@ from typing import Any
 from media_service.montage import MontageError, probe_duration, run_montage
 from media_service.montage import parse_job as parse_montage_job
 from media_service.subtitles import ShotText, SubtitleError, write_ass
-from media_service.tts import SCHEMA_VERSION, TtsError, _config, synthetiser
+from media_service.tts import SCHEMA_VERSION, TtsError, synthetiser, verifier_configuration
 from media_service.tts import parse_job as parse_tts_job
 from orchestrator.pipeline import Job
 from orchestrator.steps_llm import ErreurConfiguration
@@ -93,7 +93,7 @@ def montage_reel() -> Callable[[Job], str]:
 
 def _verifier_configuration(env: Mapping[str, str]) -> None:
     try:
-        _config(env)
+        verifier_configuration(env)
     except TtsError as exc:
         message = str(exc)  # « PIPER_BIN … » / « PIPER_MODEL … » : jamais de texte de dictée
     else:
