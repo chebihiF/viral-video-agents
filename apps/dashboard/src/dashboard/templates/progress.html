@@ -44,7 +44,6 @@
     ul, ol { list-style: none; margin: 0; padding: 0; }
     [role="alert"] { padding: var(--space-3) var(--space-4); border-radius: var(--radius-md); border: 1px solid var(--color-danger); background: var(--color-danger-bg); color: var(--color-danger); }
     [role="alert"] a { color: inherit; font-weight: 600; }
-    .empty { text-align: center; padding: var(--space-5) var(--space-4); }
     .soon { border: 1px dashed var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); color: var(--color-text-muted); }
     .global { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-5); }
     .ring { width: 120px; height: 120px; flex: none; }
@@ -73,8 +72,8 @@
     .card { border: 1px solid var(--color-border-subtle); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); background: var(--color-surface-2); }
     .card-head { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); flex-wrap: wrap; }
     .card-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); font-size: var(--font-size-small); color: var(--color-text-muted); }
-    .state { font-size: var(--font-size-small); font-weight: 600; white-space: nowrap; }
-    .state-active { color: var(--color-ok); }
+    .agent-state { font-size: var(--font-size-small); font-weight: 600; white-space: nowrap; }
+    .agent-state-active { color: var(--color-ok); }
     .pulse { display: inline-block; width: 10px; height: 10px; border-radius: var(--radius-pill); background: var(--color-ok); margin-right: var(--space-1); animation: pulse 1.6s ease-in-out infinite; }
     .steps { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--font-size-small); }
     .steps li { color: var(--color-text-muted); }
@@ -94,6 +93,7 @@
   </style>
 </head>
 <body>
+  {% from "_empty.html" import empty %}
   {% with active="/progress" %}{% include "_nav.html" %}{% endwith %}
   <main id="contenu">
     <div id="live">
@@ -111,8 +111,10 @@
       {% set t = p.totals.counts %}
       {% set total = t.delivered + t.review + t.in_progress + t.ready + t.backlog %}
       <section class="panel" aria-label="Avancement global">
-        {% if total == 0 %}
-        <div class="empty"><h2>Aucun ticket</h2><p class="muted">Les tickets du dépôt apparaîtront ici dès leur lecture.</p></div>
+        {% if total == 0 and error_at %}
+        {% call empty("GitHub indisponible", "Les tickets ne peuvent pas être lus pour le moment : indisponible, réessai dans 60 s.") %}<a class="btn" href="/progress">Réessayer maintenant</a>{% endcall %}
+        {% elif total == 0 %}
+        {% call empty("Aucun ticket", "Aucun ticket n'a été trouvé dans le dépôt.") %}Prochaine étape : créer un ticket (issue) sur GitHub ; il apparaîtra ici à la prochaine lecture.{% endcall %}
         {% else %}
         <div class="global">
           <svg class="ring" viewBox="0 0 120 120" role="img" aria-label="Avancement global : {{ p.totals.percent }} pour cent, {{ plural(t.delivered, 'livré', 'livrés') }} sur {{ total }} tickets">
@@ -138,6 +140,8 @@
             <h2 id="epics-title">Par épique</h2>
             {% if p.epics %}
             <ul class="rows">{% for e in p.epics %}{{ bar(e.title, e.counts, e.percent) }}{% endfor %}</ul>
+            {% elif error_at %}
+            <p class="muted">Indisponible, réessai dans 60 s.</p>
             {% else %}
             <p class="muted">Aucun ticket</p>
             {% endif %}
@@ -155,7 +159,7 @@
             <article class="card" aria-label="{{ a.name }}">
               <div class="card-head">
                 <strong>{{ a.name }}</strong>
-                {% if a.active %}<span class="state state-active"><span class="pulse" aria-hidden="true"></span>Actif</span>{% else %}<span class="state muted">○ Inactif</span>{% endif %}
+                {% if a.active %}<span class="agent-state agent-state-active"><span class="pulse" aria-hidden="true"></span>Actif</span>{% else %}<span class="agent-state muted">○ Inactif</span>{% endif %}
               </div>
               <div class="card-meta">
                 <span>Modèle : <code>{{ a.model or "—" }}</code></span>
@@ -190,6 +194,8 @@
           </li>
           {% endfor %}
         </ol>
+        {% elif error_at %}
+        <p class="muted">Indisponible, réessai dans 60 s.</p>
         {% else %}
         <p class="muted">Aucune livraison</p>
         {% endif %}
