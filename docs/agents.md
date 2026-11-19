@@ -150,6 +150,16 @@ Câblage local (`.claude/settings.json`, jamais commité), à côté des autres 
   "command": "\"$CLAUDE_PROJECT_DIR/tools/agents/bin/cr.sh\" record" }] }]
 ```
 
+## CI rouge (#76)
+
+- Chaque job de `ci.yml` a `timeout-minutes: 15`.
+- `.github/workflows/ci-watch.yml` (déclenché par `workflow_run` de `ci`, sans checkout du code de la PR) :
+  si la CI échoue, il pose le label `ci-rouge` sur la PR, la commente avec le **nom** des jobs en échec
+  (jamais de log) et ajoute une ligne dans #21. Si un job a atteint le timeout (≥ 14,5 min) lors de la
+  première tentative, il relance une fois les jobs en échec (`gh run rerun --failed`) et signale quand même (une relance par `GITHUB_TOKEN` ne redéclenche pas `ci-watch`). Le label est retiré au vert.
+- Aucun polling : l'alerte arrive à la fin du run, soit en moins de 10 min dans le cas normal.
+- L'Auto-fix de l'app (monitor de PR) reste complémentaire pour relancer la session de la PR ; il se règle dans l'app, pas ici.
+
 ## Limites
 
 - Échec d'une tâche : noté à la main (`fail`) par le tech lead ; la télémétrie ne le détecte

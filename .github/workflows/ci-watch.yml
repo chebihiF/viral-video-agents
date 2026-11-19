@@ -1,0 +1,64 @@
+name: ci-watch
+# #76 : signale une PR dont la CI est rouge (label + commentaire avec le nom des jobs
+# en échec, sans log) et relance une fois un job arrivé au timeout. Retire le label au vert.
+# Ne récupère ni n'exécute jamais le code de la PR ; seules des métadonnées sont lues.
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  actions: write
+  pull-requests: write
+  issues: write
+  contents: read
+
+jobs:
+  watch:
+    if: contains(fromJSON('["success","failure","timed_out","cancelled"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      RUN_ID: ${{ github.event.workflow_run.id }}
+      ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+      CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+    steps:
+      - name: Signaler et relancer
+        run: |
+          set -euo pipefail
+          if [ "$CONCLUSION" = "success" ]; then
+            [ -n "${PR:-}" ] && gh pr edit "$PR" --repo "$REPO" --remove-label ci-rouge || true
+            exit 0
+          fi
+          # Jobs en échec ; « timeout » si le job a duré ≥ 14,5 min (timeout-minutes: 15, le runner
+          # peut le marquer cancelled). Une annulation plus courte (concurrency) est ignorée.
+          # Seuls [A-Za-z0-9 _.-] sont gardés : le nom vient de la PR.
+          jobs=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs" --paginate \
+            --jq '.jobs[] | select(.conclusion=="failure" or .conclusion=="timed_out" or .conclusion=="cancelled") | select(.conclusion!="cancelled" or ((.completed_at|fromdate) - (.started_at|fromdate)) >= 870) | .name + ":" + (if .conclusion=="timed_out" or ((.completed_at|fromdate) - (.started_at|fromdate)) >= 870 then "timeout" else "failure" end)' \
+            | tr -c 'A-Za-z0-9 _.:\n-' '?' | { head -10 || true; })
+          [ -n "$jobs" ] || exit 0
+          retry=false; note="CI rouge"
+          if [ "$ATTEMPT" = "1" ] && echo "$jobs" | grep -Eq ':timeout$'; then
+            retry=true; note="CI rouge (timeout, relancée une fois)"
+          fi
+          list=$(echo "$jobs" | sed 's/^/- /')
+          url="$GITHUB_SERVER_URL/$REPO/actions/runs/$RUN_ID"
+          if [ -n "${PR:-}" ]; then
+            gh label create ci-rouge --repo "$REPO" --color B60205 --description "CI rouge" --force >/dev/null
+            gh pr edit "$PR" --repo "$REPO" --add-label ci-rouge
+            gh pr comment "$PR" --repo "$REPO" --body "$note, jobs en échec :
+          $list
+
+          Run : $url"
+            gh issue comment 21 --repo "$REPO" --body "$note sur la PR #$PR : $(echo "$jobs" | tr '\n' ' ')"
+          else
+            b=$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9/_.-' '?' | cut -c1-80)
+            gh issue comment 21 --repo "$REPO" --body "$note sur la branche $b : $(echo "$jobs" | tr '\n' ' ') ($url)"
+          fi
+          if [ "$retry" = "true" ]; then
+            gh run rerun "$RUN_ID" --repo "$REPO" --failed
+          fi

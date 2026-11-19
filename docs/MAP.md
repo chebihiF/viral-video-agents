@@ -6,6 +6,7 @@
 - `.github/ISSUE_TEMPLATE/ts.yml` — Tâche technique
 - `.github/ISSUE_TEMPLATE/us.yml` — User story
 - `.github/pull_request_template.md` — Titre : Conventional Commits, ex. « feat(dashboard): tokens par agent ». Il devient le com
+- `.github/workflows/ci-watch.yml` — ci-watch
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml` — release
 - `.gitignore`
