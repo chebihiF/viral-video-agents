@@ -2,6 +2,8 @@
   "schema_version": "1.0",
   "run_id": "run-0001",
   "etat": "ok",
+  "mode": "reel",
+  "termine_le": "2026-11-19T10:15:00Z",
   "etapes": [
     { "nom": "classification", "statut": "ok", "duree_s": 1.2 },
     { "nom": "storyboard", "statut": "ok", "duree_s": 4.8 },

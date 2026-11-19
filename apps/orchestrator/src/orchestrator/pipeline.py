@@ -15,6 +15,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, TypeVar
 
 log = logging.getLogger(__name__)
@@ -58,15 +59,19 @@ def lancer(
     run_id: str | None = None,
     workdir: str = "/data/jobs",
     gpu_lock: AbstractContextManager[Any] = GPU_LOCK,
+    mode: str | None = None,
 ) -> Run:
     """Exécute le pipeline et rend l'état du run (pipeline-run v1.0).
 
     Ne lève pas si une étape échoue : le run est « erreur » et nomme l'étape.
+    `mode` (reel|mocks) est recopié tel quel ; `termine_le` horodate la fin en UTC.
     """
     rid = run_id or uuid.uuid4().hex[:16]
     if not _RUN_ID.fullmatch(rid):
         raise ValueError("run_id invalide")
     run: Run = {"schema_version": SCHEMA_VERSION, "run_id": rid, "etat": "erreur", "etapes": []}
+    if mode is not None:
+        run["mode"] = mode
     try:
         texte = _etape(
             run, "classification", lambda: _texte_autorise(etapes.classifier(dictee), dictee)
@@ -78,8 +83,17 @@ def lancer(
             run["etat"] = "ok"
     except _EtapeEchouee:
         pass
+    # timezone.utc plutôt que datetime.UTC : le module reste importable en Python 3.9.
+    run["termine_le"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: UP017
     log.info("run=%s etat=%s", rid, run["etat"])
     return run
+
+
+def ligne_durees(run: Run) -> Run:
+    """Ligne de `durees.jsonl` (pipeline-run $defs/LigneDurees) : durées par étape, sans texte."""
+    etapes = [{k: e[k] for k in ("nom", "statut", "duree_s")} for e in run["etapes"]]
+    cles = ("run_id", "mode", "etat", "termine_le")
+    return {**{k: run[k] for k in cles}, "etapes": etapes}
 
 
 # TypeVar plutôt que PEP 695 : le module reste importable en Python 3.9.
