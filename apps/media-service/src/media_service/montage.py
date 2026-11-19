@@ -1,4 +1,5 @@
-"""Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres SRT incrustés.
+"""Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres incrustés
+(ASS mot par mot si `subtitles_path`, sinon SRT).
 
 Contrat d'entrée : contracts/montage-job.schema.json. Stdlib uniquement ; FFmpeg et
 ffprobe système sont appelés avec une liste d'arguments (jamais de shell) et des chemins
@@ -39,6 +40,7 @@ class Plan:
 class MontageJob:
     plans: tuple[Plan, ...]
     output_path: Path
+    subtitles_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -63,8 +65,7 @@ def parse_job(data: Any) -> MontageJob:
     """Valide un montage-job (contrat v1.0) ; refuse tout écart."""
     optional = {"subtitles_path"} & set(data) if isinstance(data, Mapping) else set()
     root = _exact_keys(data, {"schema_version", "plans", "output_path"} | optional, "montage-job")
-    if optional:
-        _text(root["subtitles_path"], "subtitles_path")  # contrat seul ; non utilisé ici
+    subtitles = Path(_text(root["subtitles_path"], "subtitles_path")) if optional else None
     if root["schema_version"] != SCHEMA_VERSION:
         raise MontageError(f"schema_version {root['schema_version']!r} non supportée")
     raw_plans = root["plans"]
@@ -83,7 +84,7 @@ def parse_job(data: Any) -> MontageJob:
     output = _text(root["output_path"], "output_path")
     if not output.endswith(".mp4"):
         raise MontageError("output_path : extension .mp4 attendue")
-    return MontageJob(plans=tuple(plans), output_path=Path(output))
+    return MontageJob(plans=tuple(plans), output_path=Path(output), subtitles_path=subtitles)
 
 
 def format_srt_time(seconds: float) -> str:
@@ -160,16 +161,21 @@ def _check_inputs(job: MontageJob) -> MontageJob:
     for target in (_absolute(job.output_path), _absolute(job.output_path).with_suffix(".srt")):
         if target.is_dir():
             raise MontageError(f"sortie invalide : {target} est un dossier")
+    subtitles = job.subtitles_path
+    if subtitles is not None:
+        if not subtitles.is_file():
+            raise MontageError(f"sous-titres ASS introuvables : {subtitles}")
+        subtitles = _absolute(subtitles)
     plans: list[Plan] = []
     for n, plan in enumerate(job.plans, start=1):
         for label, path in (("clip", plan.clip_path), ("audio", plan.audio_path)):
             if not path.is_file():
                 raise MontageError(f"plan {n} : {label} introuvable : {path}")
         plans.append(Plan(_absolute(plan.clip_path), _absolute(plan.audio_path), plan.narration_fr))
-    return MontageJob(plans=tuple(plans), output_path=_absolute(job.output_path))
+    return MontageJob(tuple(plans), _absolute(job.output_path), subtitles)
 
 
-def _filter_graph(durations: list[float], srt: Path) -> str:
+def _filter_graph(durations: list[float], srt: Path, ass: Path | None = None) -> str:
     parts: list[str] = []
     for i, d in enumerate(durations):
         parts.append(
@@ -182,10 +188,13 @@ def _filter_graph(durations: list[float], srt: Path) -> str:
             f"atrim=duration={d:.3f},asetpts=PTS-STARTPTS[a{i}]"
         )
     labels = "".join(f"[v{i}][a{i}]" for i in range(len(durations)))
-    subs = (
-        f"subtitles=filename={escape_filter_value(str(srt))}"
-        f":force_style={escape_filter_value(SUBTITLE_STYLE)}"
-    )
+    if ass is not None:  # le style vient du fichier ASS (#52), pas de force_style
+        subs = f"ass=filename={escape_filter_value(str(ass))}"
+    else:
+        subs = (
+            f"subtitles=filename={escape_filter_value(str(srt))}"
+            f":force_style={escape_filter_value(SUBTITLE_STYLE)}"
+        )
     parts.append(f"{labels}concat=n={len(durations)}:v=1:a=1[vc][ac]")
     parts.append(f"[vc]{subs}[v]")
     return ";".join(parts)
@@ -196,7 +205,8 @@ def _ffmpeg_command(job: MontageJob, durations: list[float], srt: Path, out: Pat
     for plan, d in zip(job.plans, durations, strict=True):
         cmd += ["-stream_loop", "-1", "-t", f"{d:.3f}", "-i", str(plan.clip_path)]
         cmd += ["-i", str(plan.audio_path)]
-    cmd += ["-filter_complex", _filter_graph(durations, srt), "-map", "[v]", "-map", "[ac]"]
+    graph = _filter_graph(durations, srt, job.subtitles_path)
+    cmd += ["-filter_complex", graph, "-map", "[v]", "-map", "[ac]"]
     cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-crf", "20"]
     cmd += ["-r", str(FPS), "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart"]
     return [*cmd, "-f", "mp4", str(out)]

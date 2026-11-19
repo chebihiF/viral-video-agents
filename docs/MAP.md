@@ -77,7 +77,7 @@
 - `apps/media-service/README.md` — media-service
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
-- `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres SRT incrustés.
+- `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres incrustés
 - `apps/media-service/src/media_service/subtitles.py` — Sous-titres ASS mot par mot : calcul pur à partir du texte et de la durée de chaque plan.
 - `apps/media-service/src/media_service/tts.py` — Voix off par plan avec Piper (CPU) : un WAV et sa durée par plan.
 - `apps/media-service/tests/__init__.py`
