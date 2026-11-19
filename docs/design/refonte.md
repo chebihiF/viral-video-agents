@@ -43,7 +43,7 @@ Même gabarit : `.page-head` (titre + `.live`), formulaire de filtres `role="sea
 États toujours = forme + libellé : ● Actif, ❚❚ En pause, ▲ Erreur/Bloqué, ○ Inactif, ✓ Livré.
 
 ## Accessibilité et sobriété
-Contrastes AA vérifiés pour les paires ajoutées (`accent` sur `accent-bg` : 5,8:1 clair et sombre). Focus 2 px visible partout. Clavier : ordre DOM = ordre visuel. `prefers-reduced-motion` : animations coupées (tokens.css). Aucune police ni lib externe. Données des maquettes fictives, aucune donnée d'enfant.
+Contrastes AA vérifiés pour les paires ajoutées (`accent` sur `accent-bg` : 5,35:1 clair, 5,64:1 sombre). Focus 2 px visible partout. Clavier : ordre DOM = ordre visuel. `prefers-reduced-motion` : animations coupées (tokens.css). Aucune police ni lib externe. Données des maquettes fictives, aucune donnée d'enfant.
 
 ## Version enfant (plus tard, hors périmètre)
 Réutiliser `tokens.css` avec une autre feuille de composants : `--size-touch` 72 px, `dir="rtl"`, icônes + voix, un seul bouton par écran.
