@@ -146,6 +146,7 @@ def test_error_state_when_database_unreadable(
     resp = client.get("/interactions")
     assert resp.status_code == 503
     assert 'role="alert"' in resp.text and "Réessayer" in resp.text
+    assert 'class="banner banner--danger"' in resp.text  # composant partagé (#129)
     assert "disk I/O" not in resp.text
 
 
@@ -259,7 +260,6 @@ def test_ticket_numeric_columns_right_aligned_in_table_wrap(client: TestClient) 
     section = html.split('id="tickets-title"', 1)[1].split("</section>", 1)[0]
     assert 'class="table-wrap"' in section
     assert section.count('class="num"') >= 6  # 3 en-têtes + 3 cellules
-    assert ".num {" in html and "text-align: right" in html
 
 
 def test_legend_counts_events_without_ticket_over_7_days(client: TestClient) -> None:
@@ -288,3 +288,14 @@ def test_ticket_section_has_explicit_empty_state(client: TestClient) -> None:
 @pytest.mark.parametrize(("seconds", "label"), [(0, "< 1 min"), (59, "< 1 min"), (60, "1 min")])
 def test_ticket_duration_under_one_minute(seconds: int, label: str) -> None:
     assert interactions.TicketStat(1, seconds, 0, 1).duration_label == label
+
+
+# Scénario (#129) : plus de <style> local, composants partagés, rendu inchangé à 360 px
+def test_interactions_has_no_local_style_and_uses_shared_components(client: TestClient) -> None:
+    source = (TEMPLATES / "interactions.html").read_text(encoding="utf-8")
+    assert "<style" not in source and "style=" not in source
+    seed(*sub(1, "10:00:00", "10:00:03"))
+    html = client.get("/interactions").text
+    assert 'class="card"' in html and 'class="table-wrap"' in html
+    assert 'class="panel"' not in html and 'class="scroll"' not in html
+    assert '<body class="page">' in html and 'class="main"' in html
