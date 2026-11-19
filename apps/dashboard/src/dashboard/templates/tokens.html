@@ -25,6 +25,7 @@
   {% if not report.by_agent and not report.by_model %}
   {% call empty("Aucune donnée de tokens", "Aucune consommation n'a été enregistrée sur les 7 derniers jours.") %}Prochaine étape : lancer un agent ; sa consommation s'affichera ici (contrat <code>token-usage</code>).{% endcall %}
   {% else %}
+  {% include "_quota.html" %}
   {% for title, column, rows in [("Par agent", "Agent", report.by_agent), ("Par modèle", "Modèle", report.by_model)] %}
   <h2>{{ title }}</h2>
   <table>
