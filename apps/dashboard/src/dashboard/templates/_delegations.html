@@ -1,0 +1,31 @@
+<style>
+  .deleg-groups { display: grid; gap: var(--space-4); }
+  .deleg-group h3 { font-size: var(--font-size-label); font-weight: 600; color: var(--color-text-muted); margin: 0 0 var(--space-2); }
+  .deleg-rows { list-style: none; margin: 0; padding: 0; display: grid; }
+  .deleg-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-1) var(--space-3); padding: var(--space-3) 0; min-height: 36px; border-bottom: 1px solid var(--color-border-subtle); font-size: var(--font-size-body); }
+  .deleg-row:last-child { border-bottom: 0; }
+  .deleg-row strong { font-weight: 600; }
+  .deleg-duration { margin-left: auto; font-size: var(--font-size-small); font-variant-numeric: tabular-nums; }
+</style>
+<section class="panel" aria-labelledby="deleg-title">
+  <h2 id="deleg-title">Délégations</h2>
+  {% if delegation_groups %}
+  <div class="deleg-groups">
+    {% for g in delegation_groups %}
+    <div class="deleg-group">
+      <h3>{{ g.title }}</h3>
+      <ol class="deleg-rows">
+        {% for r in g.rows %}
+        <li class="deleg-row">
+          <span>{{ r.line }}</span>
+          <span class="deleg-duration muted">{{ r.duration }}</span>
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="muted">Aucune délégation récente.</p>
+  {% endif %}
+</section>
