@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check build map run bootstrap ticket
+.PHONY: help sync lint fmt type test audit check mapcheck build map run bootstrap ticket
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -27,8 +27,11 @@ audit: ## pip-audit sur les dépendances verrouillées
 	uv export -q --frozen --no-hashes --no-emit-workspace -o .venv/req-audit.txt
 	$(SH) $(UV) pip-audit -r .venv/req-audit.txt --progress-spinner off
 
-check: lint type test ## Tout ce que la CI vérifie (hors build)
+check: lint type test mapcheck ## Tout ce que la CI vérifie (hors build)
 	echo ok
+
+mapcheck: ## docs/MAP.md à jour ? (sinon : make map)
+	@python3 infra/scripts/gen_map.py --check
 
 build: ## Image Docker du dashboard
 	docker build -q -f apps/dashboard/Dockerfile -t vva-dashboard:local . >/dev/null
