@@ -1,3 +1,4 @@
 # Faux positifs : secrets factices des tests de refus de note (#83), déjà fragmentés dans le fichier.
 5f3802a920daabae62f71477e3d42d3d21a0ccac:tools/agents/tests/test_handoff.py:aws-access-token:198
 5f3802a920daabae62f71477e3d42d3d21a0ccac:tools/agents/tests/test_handoff.py:generic-api-key:196
+b54510b50130d78414d96146f3dfe2911cfedbb7:tools/agents/tests/test_handoff.py:generic-api-key:196
