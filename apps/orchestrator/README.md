@@ -30,3 +30,16 @@ run["etat"], run.get("video_path")  # ok | bloque | erreur
 - Clips de 49 images (2 s à 24 i/s) ; le montage les boucle sur la durée de la voix.
 - Aucun texte de dictée, texte adouci ni message d'exception dans l'état ou les logs (`run=… etape=… statut=… duree_s=…`).
 - Les dossiers (`<workdir>/<run_id>/voix`, `final.mp4`) sont créés par les étapes, pas par l'orchestrateur.
+
+## CLI (#138)
+
+```
+python -m orchestrator run --mocks --dictee-file F --out DIR   # F = fichier UTF-8 ou « - » (stdin)
+make run-mock [DICTEE=F]                                        # sortie dans .venv/run-mock
+```
+
+- Écrit `DIR/run.json` (`pipeline-run.schema.json`, sans dictée) ; `etat` ok : code 0, erreur : 1, bloque : 2.
+- Dictée vide, illisible ou de plus de 2000 caractères, ou arguments invalides : code 64, rien d'écrit.
+- Sans `--mocks` : « étapes réelles non configurées », code 78.
+- `--mocks` (`mocks.py`) : étapes factices, sans GPU ni fichier ; le mot-clé `MOCK-BLOQUE` dans la dictée la fait classer « bloque ». `video_path` est fictif.
+- La dictée n'est ni écrite, ni affichée, ni journalisée (logs `run=… etape=…` sur stderr).
