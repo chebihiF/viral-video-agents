@@ -37,7 +37,7 @@ class LiveRow:
     last_label: str
 
 
-def _parse(ts: str | None) -> datetime | None:
+def parse_ts(ts: str | None) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(ts) if ts else None
     except ValueError:
@@ -60,7 +60,7 @@ def format_duration(delta: timedelta) -> str:
     return f"{days} j {hours} h"
 
 
-def _state(now: datetime, last: datetime, stopped_at: datetime | None) -> str:
+def state_of(now: datetime, last: datetime, stopped_at: datetime | None) -> str:
     if stopped_at is not None and stopped_at >= last:
         return "terminé"
     age = now - last
@@ -69,7 +69,7 @@ def _state(now: datetime, last: datetime, stopped_at: datetime | None) -> str:
     return "en attente" if age <= WAITING_WINDOW else "terminé"
 
 
-def _ticket(raw: object) -> int | None:
+def ticket_number(raw: object) -> int | None:
     """Numéro de ticket tolérant : une valeur non numérique (« #93 », « 93a ») est inconnue."""
     try:
         return int(raw) if raw is not None else None  # type: ignore[call-overload]
@@ -79,10 +79,10 @@ def _ticket(raw: object) -> int | None:
 
 def _row(raw: tuple[str | None, ...], now: datetime) -> LiveRow | None:
     agent_type, agent_id, ticket, first_ts, last_ts, stop_ts = raw
-    first, last = _parse(first_ts), _parse(last_ts)
+    first, last = parse_ts(first_ts), parse_ts(last_ts)
     if first is None or last is None:
         return None
-    state = _state(now, last, _parse(stop_ts))
+    state = state_of(now, last, parse_ts(stop_ts))
     duration = (
         f"a duré {format_duration(last - first)}"
         if state == "terminé"
@@ -90,7 +90,7 @@ def _row(raw: tuple[str | None, ...], now: datetime) -> LiveRow | None:
     )
     return LiveRow(
         agent=agent_type or agent_id or UNKNOWN_AGENT,
-        ticket=_ticket(ticket),
+        ticket=ticket_number(ticket),
         state=state,
         duration=duration,
         last_label=last.astimezone(UTC).strftime("%H:%M"),
