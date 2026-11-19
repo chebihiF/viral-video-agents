@@ -9,6 +9,7 @@
 - `.github/workflows/ci.yml`
 - `.github/workflows/release.yml` — release
 - `.gitignore`
+- `.gitleaksignore` — Faux positifs : secrets factices des tests de refus de note (#83), déjà fragmentés dans le
 - `.python-version`
 - `Makefile` — Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 - `README.md` — viral-video-agents
