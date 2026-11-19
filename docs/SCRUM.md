@@ -27,6 +27,9 @@ Un ticket est un **paquet de contexte autonome** : un agent doit pouvoir le trai
 - [ ] Déployé en prod par le pipeline, smoke test vert.
 - [ ] Docs/ADR/contrats à jour ; `docs/MAP.md` régénéré (`make map`).
 - [ ] Aucun secret, aucune donnée d'enfant dans le dépôt.
+- [ ] Ticket touchant le dashboard : capture de la prod avec de vraies données (pas un jeu de test) jointe au ticket,
+  mobile 360 px et bureau ; sinon le ticket reste en Revue. Les captures sont déposées dans le ticket ou #21,
+  jamais dans le dépôt, et ne montrent aucune donnée d'enfant ni secret (masquer ou recadrer).
 
 ## Flux de travail
 1. Branche `feat/<n°>-<slug>` (ou `fix/`, `chore/`) créée depuis `origin/main` sans suivi.
