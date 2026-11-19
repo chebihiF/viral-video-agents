@@ -49,6 +49,7 @@
 - `apps/dashboard/src/dashboard/templates/progress.html`
 - `apps/dashboard/src/dashboard/templates/tokens.html`
 - `apps/dashboard/src/dashboard/tokens.py` — Totaux de tokens par agent et par modèle, sur 24 h et 7 jours glissants.
+- `apps/dashboard/src/dashboard/trend.py` — Tendance de consommation (#96) : tokens par jour sur 7 jours UTC et marge avant le plafond
 - `apps/dashboard/tests/test_activity.py` — Liste d'activité des agents (#5) : 100 derniers événements, vues tableau + flux.
 - `apps/dashboard/tests/test_auth.py` — Connexion au dashboard (#5) : mot de passe, cookie de session signé, limitation.
 - `apps/dashboard/tests/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).

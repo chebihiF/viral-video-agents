@@ -24,10 +24,24 @@
   <header>
     <h1>Tokens</h1>
   </header>
-  {% if not report.by_agent and not report.by_model %}
+  {% if report is none %}
+  <section class="state"><h2>Tokens indisponibles</h2><p>La base est illisible pour le moment. Recharge la page dans un instant.</p></section>
+  {% elif not report.by_agent and not report.by_model %}
   {% call empty("Aucune donnée de tokens", "Aucune consommation n'a été enregistrée sur les 7 derniers jours.") %}Prochaine étape : lancer un agent ; sa consommation s'affichera ici (contrat <code>token-usage</code>).{% endcall %}
   {% else %}
   {% include "_quota.html" %}
+  <h2>Tendance</h2>
+  <p><strong>{{ cap_text }}</strong></p>
+  <table data-testid="daily">
+    <caption>Tokens par jour (7 jours, jours UTC, unité : tokens)</caption>
+    <thead><tr><th>Jour</th><th class="num">Tokens</th><th class="num">Variation vs la veille</th></tr></thead>
+    <tbody>
+      {% for d in days %}
+      <tr><td>{{ d.day }}{% if d.partial %} (jour en cours, incomplet){% endif %}</td><td class="num">{{ d.tokens | thousands }} tokens</td><td class="num">{{ d.change or "—" }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p><small>Variation en % des tokens du jour par rapport au jour précédent. Le plafond est celui de la page Contrôles (24 heures glissantes). Pas de coût en euros : aucune grille de prix locale.</small></p>
   {% for title, column, rows in [("Par agent", "Agent", report.by_agent), ("Par modèle", "Modèle", report.by_model)] %}
   <h2>{{ title }}</h2>
   <table>
