@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import threading
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
@@ -13,7 +14,7 @@ from typing import Any
 import pytest
 from jsonschema import Draft202012Validator
 
-from orchestrator.pipeline import ETAPES, Etapes, lancer
+from orchestrator.pipeline import ETAPES, Etapes, lancer, ligne_durees
 
 CONTRACTS = Path(__file__).resolve().parents[3] / "contracts"
 DICTEE = "Dictée factice de test : un hibou violet joue du tambour sur la lune."
@@ -327,3 +328,69 @@ def test_wavs_sans_correspondance_est_une_erreur(ids: list[str]) -> None:
     assert run["etat"] == "erreur"
     assert run["etapes"][-1]["nom"] == "voix"
     assert "image" not in fakes.appels
+
+
+# --- #164 : mode, horodatage et ligne de durées -------------------------------------------------
+
+LIGNE = Draft202012Validator(
+    {"$defs": _load("pipeline-run.schema.json")["$defs"], "$ref": "#/$defs/LigneDurees"}
+)
+ISO_UTC = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
+
+
+def test_ancien_run_sans_mode_ni_horodatage_reste_valide() -> None:
+    run = _load("examples/pipeline-run.ok.json")
+    assert run["mode"] == "reel"
+    del run["mode"], run["termine_le"]
+    RUN.validate(run)
+
+
+@pytest.mark.parametrize(
+    "changement", [{"mode": "simule"}, {"termine_le": "19/11/2026"}, {"termine_le": "2026-11-19"}]
+)
+def test_contrat_refuse_mode_ou_horodatage_invalide(changement: dict[str, Any]) -> None:
+    run = _load("examples/pipeline-run.ok.json")
+    run.update(changement)
+    assert not RUN.is_valid(run)
+
+
+@pytest.mark.parametrize("mode", ["mocks", "reel"])
+def test_run_porte_mode_et_horodatage_utc(mode: str) -> None:
+    run = lancer(DICTEE, Fakes().etapes(), run_id="run-12", mode=mode)
+    RUN.validate(run)
+    assert run["mode"] == mode
+    assert re.fullmatch(ISO_UTC, run["termine_le"])
+
+
+def test_run_sans_mode_reste_conforme() -> None:
+    run = lancer(DICTEE, Fakes().etapes(), run_id="run-13")
+    RUN.validate(run)
+    assert "mode" not in run
+
+
+@pytest.mark.parametrize(
+    ("classe", "echec"), [("libre", None), ("libre", "clip"), ("bloque", None)]
+)
+def test_ligne_durees_conforme_et_sans_texte(classe: str, echec: str | None) -> None:
+    run = lancer(DICTEE, Fakes(classe, echec=echec).etapes(), run_id="run-14", mode="mocks")
+    ligne = ligne_durees(run)
+    LIGNE.validate(ligne)
+    assert set(ligne) == {"run_id", "mode", "etat", "termine_le", "etapes"}
+    assert ligne["etapes"] == run["etapes"]
+    assert "hibou" not in json.dumps(ligne, ensure_ascii=False)
+
+
+def test_contrat_ligne_refuse_un_champ_inconnu() -> None:
+    run = lancer(DICTEE, Fakes().etapes(), run_id="run-15", mode="mocks")
+    assert not LIGNE.is_valid({**ligne_durees(run), "video_path": "/x/final.mp4"})
+
+
+def test_mode_inconnu_refuse() -> None:
+    with pytest.raises(ValueError, match="mode invalide"):
+        lancer(DICTEE, Fakes().etapes(), run_id="run-16", mode="simule")  # type: ignore[arg-type]
+
+
+def test_ligne_durees_exige_un_mode() -> None:
+    run = lancer(DICTEE, Fakes().etapes(), run_id="run-17")
+    with pytest.raises(ValueError, match="mode invalide"):
+        ligne_durees(run)
