@@ -17,6 +17,7 @@ from dashboard.tokens import MAIN_THREAD_LABEL, thousands
 UNKNOWN_TICKET = "ticket inconnu"
 WARN_PERCENT = 70
 DANGER_PERCENT = 90
+LEVEL_LABELS = {"ok": "Normal", "warn": "Attention", "danger": "Critique"}
 _FIVE_HOURS = timedelta(hours=5)
 _WEEK = timedelta(days=7)
 
@@ -41,6 +42,7 @@ class Gauge:
     limit: int | None
     percent: int | None
     level: str | None  # "ok" | "warn" | "danger" ; None sans quota
+    level_label: str | None  # « Normal » | « Attention » | « Critique »
     text: str
     help: str | None
 
@@ -60,11 +62,22 @@ class Row:
 
 
 @dataclass(frozen=True)
+class Margin:
+    """Tokens restants avant le plafond d'une fenêtre (0 si déjà dépassé)."""
+
+    name: str
+    remaining: int
+    percent: int
+
+
+@dataclass(frozen=True)
 class QuotaView:
     configured: bool
     five_hours: Gauge
     week: Gauge
     weekend: Gauge
+    margins: list[Margin]
+    closest: Margin | None
     by_agent: list[Row]
     by_ticket: list[Row]
 
@@ -76,24 +89,42 @@ def _percent(used: int, limit: int) -> int:
 def _level(used: int, limit: int) -> str:
     if used * 100 < WARN_PERCENT * limit:
         return "ok"
-    return "warn" if used * 100 <= DANGER_PERCENT * limit else "danger"
+    return "warn" if used * 100 < DANGER_PERCENT * limit else "danger"
 
 
 def gauge(used: int, limit: int | None, quota_label: str, raw_label: str, env: str) -> Gauge:
     """`quota_label` : « des 5 dernières heures » ; `raw_label` : « sur les 5 dernières heures »."""
     if limit is None:
         text = f"{thousands(used)} tokens {raw_label}"
-        return Gauge(used, None, None, None, text, f"quota non configuré : renseigner {env}")
+        return Gauge(used, None, None, None, None, text, f"quota non configuré : renseigner {env}")
     percent = _percent(used, limit)
     detail = f"({thousands(used)} sur {thousands(limit)} tokens)"
+    level = _level(used, limit)
     return Gauge(
         used,
         limit,
         percent,
-        _level(used, limit),
+        level,
+        LEVEL_LABELS[level],
         f"{percent} % du quota {quota_label} {detail}",
         None,
     )
+
+
+def margins(five_hours: Gauge, week: Gauge) -> list[Margin]:
+    """Marge des fenêtres à quota. Le week-end (même plafond, tokens inclus dans la semaine)
+    n'est jamais plus proche du plafond que la semaine : il n'a pas de ligne propre."""
+    named = (("Fenêtre de 5 heures", five_hours), ("Semaine", week))
+    return [
+        Margin(name, max(g.limit - g.used, 0), max(100 - g.percent, 0))
+        for name, g in named
+        if g.limit is not None and g.percent is not None
+    ]
+
+
+def closest_to_limit(items: list[Margin]) -> Margin | None:
+    """Marge relative la plus faible ; à égalité, la première fenêtre."""
+    return min(items, key=lambda m: m.percent, default=None)
 
 
 def _cell(tokens: int, limit: int | None) -> Cell:
@@ -136,24 +167,31 @@ def _by_ticket(conn: sqlite3.Connection, params: tuple[str, str]) -> dict[str, t
 def build(conn: sqlite3.Connection, now: datetime, quota: Quota) -> QuotaView:
     params = (_iso(now, _FIVE_HOURS), _iso(now, _WEEK))
     h5, d7, weekend = conn.execute(_TOTALS, params).fetchone()
-    week_label = "de la semaine (7 derniers jours)"
+    five_hours = gauge(
+        int(h5), quota.five_hours, "des 5 dernières heures", "sur les 5 dernières heures", ENV_5H
+    )
+    week = gauge(
+        int(d7),
+        quota.week,
+        "de la semaine (7 derniers jours)",
+        "sur les 7 derniers jours",
+        ENV_WEEK,
+    )
+    weekend_gauge = gauge(
+        int(weekend),
+        quota.week,
+        "de la semaine, consommés le week-end (samedi et dimanche)",
+        "consommés le week-end (samedi et dimanche) sur les 7 derniers jours",
+        ENV_WEEK,
+    )
+    window_margins = margins(five_hours, week)
     return QuotaView(
         configured=quota.configured,
-        five_hours=gauge(
-            int(h5),
-            quota.five_hours,
-            "des 5 dernières heures",
-            "sur les 5 dernières heures",
-            ENV_5H,
-        ),
-        week=gauge(int(d7), quota.week, week_label, "sur les 7 derniers jours", ENV_WEEK),
-        weekend=gauge(
-            int(weekend),
-            quota.week,
-            "de la semaine, consommés le week-end (samedi et dimanche)",
-            "consommés le week-end (samedi et dimanche) sur les 7 derniers jours",
-            ENV_WEEK,
-        ),
+        five_hours=five_hours,
+        week=week,
+        weekend=weekend_gauge,
+        margins=window_margins,
+        closest=closest_to_limit(window_margins),
         by_agent=_rows(_by_agent(conn, params), quota),
         by_ticket=_rows(_by_ticket(conn, params), quota),
     )
