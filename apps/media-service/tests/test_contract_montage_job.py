@@ -123,3 +123,20 @@ def test_invalid_job_is_refused_by_schema_and_parser(
     assert not validator.is_valid(valid)
     with pytest.raises(MontageError):
         parse_job(valid)
+
+
+def test_subtitles_path_is_optional_and_validated(
+    validator: Draft202012Validator, valid: dict[str, Any]
+) -> None:
+    assert validator.is_valid(valid)  # sans subtitles_path
+    with_subs = _load("examples/montage-job.subtitles.json")
+    assert list(validator.iter_errors(with_subs)) == []
+    assert with_subs["subtitles_path"].endswith(".ass")
+    assert parse_job(with_subs).output_path == Path("/data/jobs/42/final.mp4")
+    for bad in ("/data/jobs/42/subs.srt", "  ", "   .ass", "/data/ .ass", "a\u0000b.ass", 3):
+        with_subs["subtitles_path"] = bad
+        assert not validator.is_valid(with_subs), bad
+    for bad in ("  ", "a\u0000b.ass", 3):  # le parseur ne contrôle que « chaîne non vide »
+        with_subs["subtitles_path"] = bad
+        with pytest.raises(MontageError):
+            parse_job(with_subs)

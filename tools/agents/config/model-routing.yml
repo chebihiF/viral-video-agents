@@ -1,0 +1,19 @@
+# Routage des modèles des agents (#19) : source de vérité, lue par tools/agents/token_report.py.
+# Sous-ensemble YAML volontaire (lu sans dépendance, Python 3.9) : « clé: valeur » et un seul
+# niveau d'imbrication indenté de 2 espaces. Priorité : agents > labels > escalade > défaut.
+models:
+  haiku: claude-haiku-5-5
+  sonnet: claude-sonnet-5-5
+  opus: claude-opus-5-5
+default: sonnet
+# Deux échecs notés pour un même agent sur un même ticket (token-report.sh fail) : relance sur Opus.
+escalation:
+  failures: 2
+  model: opus
+# Label GitHub du ticket -> modèle.
+labels:
+  complex: opus
+# Agents à modèle fixe (jamais promus ni rétrogradés).
+agents:
+  scout: haiku
+  reviewer: opus
