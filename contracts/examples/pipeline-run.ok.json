@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0",
+  "run_id": "run-0001",
+  "etat": "ok",
+  "etapes": [
+    { "nom": "classification", "statut": "ok", "duree_s": 1.2 },
+    { "nom": "storyboard", "statut": "ok", "duree_s": 4.8 },
+    { "nom": "voix", "statut": "ok", "duree_s": 2.1 },
+    { "nom": "image", "statut": "ok", "duree_s": 38.5 },
+    { "nom": "clip", "statut": "ok", "duree_s": 412.0 },
+    { "nom": "montage", "statut": "ok", "duree_s": 9.3 }
+  ],
+  "video_path": "/data/jobs/run-0001/final.mp4"
+}
