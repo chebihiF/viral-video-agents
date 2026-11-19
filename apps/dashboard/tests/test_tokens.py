@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
 
-from dashboard import auth, db, tokens
+from dashboard import auth, db, tokens, trend
 from dashboard.main import app
 
 NOW = datetime(2026, 11, 18, 12, 0, tzinfo=UTC)
@@ -198,3 +199,80 @@ def test_agent_named_session_stays_distinct_from_main_thread(db_path: Path) -> N
     with db.connect() as conn:
         report = tokens.totals(conn, NOW)
     assert as_dict(report.by_agent) == {"session": (7, 7), "(fil principal)": (3, 3)}
+
+
+# Tendance, plafond (#96)
+def daily(rows: list[tuple[timedelta, int]]) -> list[trend.Day]:
+    seed([(age, "a", "m", "input", n) for age, n in rows])
+    with db.connect() as conn:
+        return trend.daily_usage(conn, NOW)
+
+
+def test_daily_usage_has_seven_utc_days_oldest_first(db_path: Path) -> None:
+    days = daily([(H, 100), (D, 40), (3 * D, 7), (7 * D, 999)])
+    assert [d.day for d in days] == [f"2026-11-{n}" for n in range(12, 19)]
+    assert [d.tokens for d in days] == [0, 0, 0, 7, 0, 40, 100]
+    assert days[-1].partial and not days[0].partial
+
+
+def test_daily_usage_empty_days_are_zero(db_path: Path) -> None:
+    with db.connect() as conn:
+        assert [d.tokens for d in trend.daily_usage(conn, NOW)] == [0] * 7
+
+
+def test_variation_vs_previous_day(db_path: Path) -> None:
+    days = daily([(H, 150), (D, 100), (2 * D, 200)])
+    assert days[-1].change == "+50 %" and days[-1].delta == 50
+    assert days[-2].change == "-50 %"
+    assert days[0].change is None  # pas de veille dans le tableau
+
+
+def test_variation_from_zero_is_not_a_percentage(db_path: Path) -> None:
+    days = daily([(H, 10)])
+    assert days[-1].change == "nouveau (veille sans token)"
+    assert days[-2].change == "0 %" or days[-2].change is None
+
+
+def test_cap_margin_in_words() -> None:
+    one_thousand = tokens.thousands(1000)
+    assert trend.cap_text(cap=1000, used=250) == (
+        "marge restante : 750 tokens avant le plafond "
+        f"(250 sur {one_thousand} tokens, 24 dernières heures)"
+    )
+    assert trend.cap_text(cap=1000, used=1000).startswith("plafond atteint")
+    assert tokens.thousands(1500) in trend.cap_text(cap=2_000, used=500)
+
+
+def test_tokens_page_shows_trend_cap_and_no_cost(db_path: Path) -> None:
+    now = datetime.now(UTC)
+    with db.connect() as conn:
+        db.insert_token_usage(
+            conn, [("t", (now - H).isoformat(timespec="microseconds"), "s", "a", "m", "input", 300)]
+        )
+        db.set_cap(conn, 1000)
+    text = logged_in().get("/tokens").text
+    assert "Tokens par jour" in text
+    assert "variation vs la veille" in text.lower()
+    assert "marge restante : 700 tokens avant le plafond" in text
+    assert "€" not in text  # aucune grille de prix locale : pas de coût inventé
+
+
+def test_tokens_page_trend_has_seven_rows(db_path: Path) -> None:
+    seed([(H, "a", "m", "input", 5)])
+    text = logged_in().get("/tokens").text
+    body = text.split('data-testid="daily"')[1].split("</table>")[0]
+    assert body.count("<tr") == 8  # en-tête + 7 jours
+
+
+def test_tokens_page_unreadable_database_is_503(
+    db_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    client = logged_in()
+
+    def boom(*_a: object, **_k: object) -> None:
+        raise sqlite3.OperationalError("disk I/O error")
+
+    monkeypatch.setattr(tokens, "totals", boom)
+    resp = client.get("/tokens")
+    assert resp.status_code == 503
+    assert "indisponible" in resp.text.lower()
