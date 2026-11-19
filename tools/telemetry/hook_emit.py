@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -23,6 +25,9 @@ DEFAULT_FILE = Path(".claude") / "telemetry" / "events.jsonl"
 DEADLINE_S = 0.8
 REQUIRED = {"hook_event_name": 64, "session_id": 128}
 OPTIONAL = {"agent_type": 128, "agent_id": 128, "tool_name": 128}
+# même motif que tools/agents/token_report.py : seul le numéro sort de la branche (#100)
+BRANCH = re.compile(r"^(?:feat|fix|chore|docs|test|ci)/(\d{1,9})-")
+GIT_TIMEOUT_S = 0.4
 
 
 def _bail(_signum: int, _frame: FrameType | None) -> None:
@@ -35,11 +40,29 @@ def _text(value: Any, limit: int) -> str | None:
     return value[:limit]
 
 
-def build_event(hook: Any) -> dict[str, str | None] | None:
+def ticket_of(cwd: Any) -> int | None:
+    """Numéro de la branche courante de `cwd` ; None hors branche de ticket ou si git échoue."""
+    if not isinstance(cwd, str) or not cwd:
+        return None
+    try:
+        out = subprocess.run(  # noqa: S603 - git local, liste d'arguments sans shell
+            ["git", "-c", "core.fsmonitor=", "-C", cwd, "branch", "--show-current"],  # noqa: S607
+            capture_output=True,
+            text=True,
+            timeout=GIT_TIMEOUT_S,
+            check=True,
+        )
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    match = BRANCH.match(out.stdout.strip())
+    return int(match.group(1)) if match else None
+
+
+def build_event(hook: Any) -> dict[str, str | int | None] | None:
     """Projette le JSON du hook sur le contrat ; None si inexploitable."""
     if not isinstance(hook, dict):
         return None
-    event: dict[str, str | None] = {
+    event: dict[str, str | int | None] = {
         "event_id": str(uuid.uuid4()),
         "ts": datetime.now(timezone.utc).isoformat(),  # noqa: UP017 - pas de datetime.UTC en 3.9
     }
@@ -50,6 +73,9 @@ def build_event(hook: Any) -> dict[str, str | None] | None:
         event[name] = value
     for name, limit in OPTIONAL.items():
         event[name] = _text(hook.get(name), limit)
+    ticket = ticket_of(hook.get("cwd"))
+    if ticket is not None:
+        event["ticket"] = ticket
     return event
 
 
@@ -60,7 +86,7 @@ def target_file() -> Path:
     return Path(os.environ.get("CLAUDE_PROJECT_DIR", ".")) / DEFAULT_FILE
 
 
-def append_line(path: Path, event: dict[str, str | None]) -> None:
+def append_line(path: Path, event: dict[str, str | int | None]) -> None:
     """Ajout en un seul write O_APPEND : lignes entières même si hooks concurrents."""
     path.parent.mkdir(parents=True, exist_ok=True)
     data = (json.dumps(event, ensure_ascii=False) + "\n").encode("utf-8")
