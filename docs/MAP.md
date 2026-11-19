@@ -57,10 +57,12 @@
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
 - `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres SRT incrustés.
+- `apps/media-service/src/media_service/tts.py` — Voix off par plan avec Piper (CPU) : un WAV et sa durée par plan.
 - `apps/media-service/tests/__init__.py`
 - `apps/media-service/tests/test_contract_montage_job.py` — Contrat contracts/montage-job.schema.json : entrée du media-service (#34).
 - `apps/media-service/tests/test_montage.py` — Montage FFmpeg (#34) : clips et voix synthétiques générés par le test (lavfi).
 - `apps/media-service/tests/test_montage_edge_cases.py` — Cas limites du montage (#34) : unicode arabe, plan unique, 0 plan, double exécution.
+- `apps/media-service/tests/test_tts.py` — TTS Piper (#51) : faux binaire Piper (WAV silencieux de durée connue), aucun texte loggé.
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
@@ -77,12 +79,14 @@
 - `contracts/examples/montage-job.valid.json` — données JSON
 - `contracts/examples/storyboard.invalid.json` — données JSON
 - `contracts/examples/storyboard.valid.json` — données JSON
+- `contracts/examples/tts-job.json` — données JSON
 - `contracts/gpu-job.schema.json` — données JSON
 - `contracts/ingest-api.md` — API d'ingestion des événements d'agents
 - `contracts/montage-job.schema.json` — données JSON
 - `contracts/progress.schema.json` — données JSON
 - `contracts/storyboard.schema.json` — données JSON
 - `contracts/token-usage.md` — Métriques de tokens (OTLP/HTTP JSON)
+- `contracts/tts-job.schema.json` — données JSON
 - `docs/ARCHITECTURE.md` — Architecture — Viral Video Agents
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
