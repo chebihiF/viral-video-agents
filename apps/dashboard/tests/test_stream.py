@@ -49,6 +49,7 @@ def seed(n: int, start: int = 0, **extra: Any) -> None:
             extra.get("agent_type", "backend"),
             extra.get("agent_id", "agent-1"),
             extra.get("tool_name", "Bash"),
+            None,
         )
         for i in range(start, start + n)
     ]

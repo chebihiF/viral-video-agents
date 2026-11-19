@@ -43,6 +43,30 @@
     {% else %}
     <div id="sessions">
       {% if sessions or delegation_groups %}{% include "_delegations.html" %}{% endif %}
+      {% if ticket_stats %}
+      <section class="panel" aria-labelledby="tickets-title">
+        <h2 id="tickets-title">Durée et sous-agents par ticket</h2>
+        <p class="muted">7 derniers jours. Durée : de la première à la dernière activité du ticket. Les événements sans numéro de ticket ne sont pas comptés.</p>
+        <div class="scroll">
+          <table>
+            <caption class="sr-only">Tickets triés par durée décroissante</caption>
+            <thead>
+              <tr><th scope="col">Ticket</th><th scope="col">Durée (h min)</th><th scope="col">Sous-agents lancés (nombre)</th><th scope="col">Sessions (nombre)</th></tr>
+            </thead>
+            <tbody>
+              {% for t in ticket_stats %}
+              <tr title="{{ t.line }}">
+                <th scope="row">ticket #{{ t.ticket }}</th>
+                <td>{{ t.duration_label }}</td>
+                <td>{{ t.subagents }}</td>
+                <td>{{ t.sessions }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+      {% endif %}
       {% for s in sessions %}
       <section class="panel" aria-labelledby="session-{{ loop.index }}">
         <h2 id="session-{{ loop.index }}">Session <code>{{ s.session_id }}</code></h2>

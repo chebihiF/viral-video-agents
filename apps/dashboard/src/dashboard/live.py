@@ -1,8 +1,8 @@
 """« Qui fait quoi » (#101) : un état par agent et par ticket, dérivé de la table `events`.
 
 États : actif (dernier événement < 2 min), en attente (2 à 15 min), terminé (dernier événement
-`SubagentStop`, ou plus de 15 min). Le ticket vient de la colonne `ticket` si elle existe (#100) ;
-sinon, ou si elle est vide, il est inconnu. Métadonnées uniquement : aucun contenu de prompt.
+`SubagentStop`, ou plus de 15 min). Le ticket vient de la colonne `ticket` (#100) ;
+si elle est vide, il est inconnu. Métadonnées uniquement : aucun contenu de prompt.
 """
 
 from __future__ import annotations
@@ -21,9 +21,9 @@ STOP_EVENT = "SubagentStop"
 UNKNOWN_AGENT = "agent inconnu"
 
 _SELECT = (
-    "SELECT agent_type, agent_id, {ticket}, MIN(ts), MAX(ts), "
+    "SELECT agent_type, agent_id, ticket, MIN(ts), MAX(ts), "
     "MAX(CASE WHEN hook_event_name = ? THEN ts END) "
-    "FROM events WHERE ts >= ? GROUP BY {group} "
+    "FROM events WHERE ts >= ? GROUP BY agent_type, agent_id, ticket "
     "ORDER BY MAX(ts) DESC LIMIT ?"
 )
 
@@ -37,11 +37,7 @@ class LiveRow:
     last_label: str
 
 
-def _has_ticket_column(conn: sqlite3.Connection) -> bool:
-    return any(row[1] == "ticket" for row in conn.execute("PRAGMA table_info(events)"))
-
-
-def _parse(ts: str | None) -> datetime | None:
+def parse_ts(ts: str | None) -> datetime | None:
     try:
         parsed = datetime.fromisoformat(ts) if ts else None
     except ValueError:
@@ -64,7 +60,7 @@ def format_duration(delta: timedelta) -> str:
     return f"{days} j {hours} h"
 
 
-def _state(now: datetime, last: datetime, stopped_at: datetime | None) -> str:
+def state_of(now: datetime, last: datetime, stopped_at: datetime | None) -> str:
     if stopped_at is not None and stopped_at >= last:
         return "terminé"
     age = now - last
@@ -73,7 +69,7 @@ def _state(now: datetime, last: datetime, stopped_at: datetime | None) -> str:
     return "en attente" if age <= WAITING_WINDOW else "terminé"
 
 
-def _ticket(raw: object) -> int | None:
+def ticket_number(raw: object) -> int | None:
     """Numéro de ticket tolérant : une valeur non numérique (« #93 », « 93a ») est inconnue."""
     try:
         return int(raw) if raw is not None else None  # type: ignore[call-overload]
@@ -83,10 +79,10 @@ def _ticket(raw: object) -> int | None:
 
 def _row(raw: tuple[str | None, ...], now: datetime) -> LiveRow | None:
     agent_type, agent_id, ticket, first_ts, last_ts, stop_ts = raw
-    first, last = _parse(first_ts), _parse(last_ts)
+    first, last = parse_ts(first_ts), parse_ts(last_ts)
     if first is None or last is None:
         return None
-    state = _state(now, last, _parse(stop_ts))
+    state = state_of(now, last, parse_ts(stop_ts))
     duration = (
         f"a duré {format_duration(last - first)}"
         if state == "terminé"
@@ -94,7 +90,7 @@ def _row(raw: tuple[str | None, ...], now: datetime) -> LiveRow | None:
     )
     return LiveRow(
         agent=agent_type or agent_id or UNKNOWN_AGENT,
-        ticket=_ticket(ticket),
+        ticket=ticket_number(ticket),
         state=state,
         duration=duration,
         last_label=last.astimezone(UTC).strftime("%H:%M"),
@@ -103,13 +99,8 @@ def _row(raw: tuple[str | None, ...], now: datetime) -> LiveRow | None:
 
 def agent_rows(conn: sqlite3.Connection, now: datetime) -> list[LiveRow]:
     """Une ligne par (agent, ticket), la plus récente d'abord ; `now` est injecté."""
-    has_ticket = _has_ticket_column(conn)
-    sql = _SELECT.format(
-        ticket="ticket" if has_ticket else "NULL",
-        group="agent_type, agent_id, ticket" if has_ticket else "agent_type, agent_id",
-    )
     since = (now - HISTORY_WINDOW).astimezone(UTC).isoformat()
-    rows = (_row(raw, now) for raw in conn.execute(sql, (STOP_EVENT, since, MAX_ROWS)))
+    rows = (_row(raw, now) for raw in conn.execute(_SELECT, (STOP_EVENT, since, MAX_ROWS)))
     return [row for row in rows if row is not None]
 
 

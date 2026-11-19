@@ -5,7 +5,7 @@ session et dans `PAIR_WINDOW`, du `SubagentStart` d'un `agent_type`. L'événeme
 `agent_id` vient du fil principal (« tech lead ») ; sinon le délégant est son `agent_type`.
 Appariement dans l'ordre d'arrivée (le `SubagentStart` ne référence pas l'appel d'outil) : en
 cas de lancements parallèles l'ordre est conservé, pas l'identité de l'appel. Le ticket vient
-de la colonne `ticket` si elle existe (#100), sinon il est inconnu. Métadonnées uniquement.
+de la colonne `ticket` (#100) ; vide, il est inconnu. Métadonnées uniquement.
 `ORDER BY ts` suppose des heures au même décalage (+00:00, comme l'ingestion).
 """
 
@@ -28,7 +28,7 @@ MAX_EVENTS = 2000
 MAX_ROWS = 50
 
 _SELECT = (
-    "SELECT ts, hook_event_name, session_id, agent_type, agent_id, {ticket} FROM events "
+    "SELECT ts, hook_event_name, session_id, agent_type, agent_id, ticket FROM events "
     "WHERE ts >= ? AND (hook_event_name IN (?, ?) "
     "OR (hook_event_name = ? AND tool_name IN (?, ?))) "
     "ORDER BY ts DESC, rowid DESC LIMIT ?"
@@ -135,11 +135,9 @@ def pair(raws: list[Raw]) -> list[_Open]:
 
 def load_groups(conn: sqlite3.Connection, now: datetime) -> list[TicketGroup]:
     """Délégations des 7 derniers jours (50 au plus récentes), groupées par ticket."""
-    has_ticket = any(r[1] == "ticket" for r in conn.execute("PRAGMA table_info(events)"))
-    sql = _SELECT.format(ticket="ticket" if has_ticket else "NULL")
     since = (now - HISTORY_WINDOW).astimezone(UTC).isoformat()
     args = (since, START, STOP, TOOL_EVENT, *DELEGATION_TOOLS, MAX_EVENTS)
-    raws = list(reversed(conn.execute(sql, args).fetchall()))
+    raws = list(reversed(conn.execute(_SELECT, args).fetchall()))
     rows = [item.freeze() for item in pair(raws)][-MAX_ROWS:]
     by_ticket: dict[int | None, list[Delegation]] = {}
     for row in rows:

@@ -23,6 +23,9 @@ x-dashboard: &dashboard
       DASHBOARD_SESSION_KEY: ${DASHBOARD_SESSION_KEY:-}
       DASHBOARD_PASSWORD_HASH: ${DASHBOARD_PASSWORD_HASH:-}
       VVA_DB_PATH: /data/vva.db
+      # Quota de tokens du parent (#100, #103) : fenêtre de 5 h et semaine ; vide => « non configuré », jamais de %.
+      VVA_QUOTA_5H_TOKENS: ${VVA_QUOTA_5H_TOKENS:-}
+      VVA_QUOTA_WEEK_TOKENS: ${VVA_QUOTA_WEEK_TOKENS:-}
     volumes:
       - vva-data:/data
     mem_limit: 256m

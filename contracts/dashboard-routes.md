@@ -33,12 +33,12 @@ personnelle dans le cookie. Le cookie `Secure` impose HTTPS (Traefik en prod).
 | Route | Accès | Réponses |
 |---|---|---|
 | `GET /healthz` | public | 200 `{"status": "ok", "version": "<APP_VERSION>"}` — aucune donnée d'événement |
-| `GET /` | public | 303 vers `/progress` avec session valide, sinon vers `/login` (jamais mis en cache) |
+| `GET /` | session | 200 page « Accueil » (agents actifs ou en pause, dernier événement, tickets Prêt / En cours / Revue / Livré, tokens 24 h et 7 j, fil des délégations, badge si plafond atteint ; carte tickets « indisponible » si GitHub injoignable ; état vide sans événement) ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible ; jamais mis en cache. Aucun pourcentage sans légende : sans quota configuré, tokens bruts |
 | `GET /login` | public | 200 formulaire (champ `password`) |
 | `POST /login` | public, limité | voir ci-dessous |
 | `GET /activity` | session | 200 page ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
 | `GET /interactions` | session | 200 page ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
-| `GET /tokens` | session | 200 page (totaux par agent et modèle, 24 h / 7 j) ; 303 vers `/login` sans session valide ; voir [`token-usage.md`](token-usage.md) |
+| `GET /tokens` | session | 200 page (jauges en % du quota 5 h / semaine / week-end avec légende, par agent et par ticket ; sans quota : tokens bruts et message d'aide, jamais de % ; totaux par agent et modèle, 24 h / 7 j) ; 303 vers `/login` sans session valide ; voir [`token-usage.md`](token-usage.md) |
 | `GET /stream` | session | 200 `text/event-stream` ; **401** sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
 | `GET /static/live.js` | public | client temps réel (`EventSource`), sans dépendance ni CDN |
 | `GET /static/tokens.css` | public | feuille de style du design system |
