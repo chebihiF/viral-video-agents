@@ -96,8 +96,8 @@ Statut d'une session : « terminé » si son dernier événement est un `Subagen
 
 Valeur inconnue : **ignorée, sans erreur** (toujours 200, jamais 4xx) et jamais répétée telle
 quelle dans la page : `statut` hors liste, `duree_min` non numérique, négatif, décimal ou
-≥ 1 000 000 sont traités comme absents (limite connue : un chiffre non ASCII tel que `²` fait échouer
-l'analyse, défaut suivi par #121 ; l'entrée valide reste les chiffres `0-9`) ; `agent` n'est pas validé (liste fermée absente) mais
+≥ 1 000 000 ou contenant un chiffre non ASCII (tel que `²`) sont traités comme absents (seuls les
+chiffres `0-9` sont valides) ; `agent` n'est pas validé (liste fermée absente) mais
 une valeur inconnue ne correspond à aucune session. Les filtres retenus sont rappelés
 (« Filtres actifs », lien « Effacer le filtre ») ; sans résultat : « Aucun résultat pour ce
 filtre » ; sans session : « Aucune session sur les 7 derniers jours ». Les filtres ne touchent
