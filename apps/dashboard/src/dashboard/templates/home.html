@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Accueil — Agents Dashboard</title>
+  <link rel="stylesheet" href="/static/tokens.css">
+  <link rel="stylesheet" href="/static/components.css">
+  <style>
+    body { margin: 0; background: var(--color-bg); color: var(--color-text); font-family: var(--font-sans); font-size: var(--font-size-body); }
+    main { display: grid; gap: var(--space-5); padding: var(--space-5); max-width: var(--layout-max); margin: 0 auto; }
+    header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); }
+    h1 { font-size: var(--font-size-title); margin: 0; }
+    h2 { font-size: var(--font-size-heading); margin: 0; }
+    #home { display: grid; gap: var(--space-5); }
+    .cards { display: grid; gap: var(--space-4); grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+    .card p { margin: 0; }
+    .more { margin-top: auto; font-weight: 600; }
+    .muted { color: var(--color-text-muted); }
+    .counts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+    .counts li { display: flex; flex-direction: column; }
+    .counts strong { font-family: var(--font-mono); font-size: var(--font-size-kpi); line-height: 1.1; }
+    #live-status { margin: 0; font-size: var(--font-size-small); color: var(--color-text-muted); }
+  </style>
+</head>
+<body>
+  <main data-stream data-last-id="{{ home.last_id if home else 0 }}" data-refresh="#home">
+    <header>
+      <h1>Accueil</h1>
+      {% with active="/" %}{% include "_nav.html" %}{% endwith %}
+      <p id="live-status" role="status"></p>
+    </header>
+    <div id="home">
+    {% if not home %}
+    <div class="banner banner--danger" role="alert">
+      <span>Erreur : les données sont indisponibles (tentative à <time>{{ error_at }}</time> UTC).</span>
+      <a class="btn" href="/">Réessayer</a>
+    </div>
+    {% else %}
+    {% if home.cap_reached %}
+    <p><span class="badge badge--danger">▲ Plafond de tokens atteint</span>
+      <span class="muted">{{ home.tokens_24h | thousands }} tokens sur 24 h pour un plafond de {{ home.cap_tokens | thousands }}. <a href="/controls">Gérer le plafond</a></span></p>
+    {% endif %}
+    {% if home.empty %}
+    <section class="state" aria-labelledby="empty-title">
+      <h2 id="empty-title">Aucun agent n'a encore travaillé</h2>
+      <p>Lancez un agent sur un ticket : ses événements et ses tokens apparaîtront ici dès sa première action.</p>
+    </section>
+    {% endif %}
+    <div class="cards">
+      {% if not home.empty %}
+      <section class="card" aria-labelledby="agents-title">
+        <h2 id="agents-title">Agents</h2>
+        <p class="kpi-value">{{ home.active }}</p>
+        <p class="kpi-label">{{ "agent actif" if home.active == 1 else "agents actifs" }}{% if home.waiting %}, {{ home.waiting }} en attente{% endif %}</p>
+        {% if home.paused %}
+        <p><span class="badge badge--warn">❚❚ Agents en pause</span> <span class="muted">({{ "plafond atteint" if home.pause_reason == "plafond" else "pause manuelle" }})</span></p>
+        {% else %}
+        <p><span class="badge badge--ok">● Agents en marche</span></p>
+        {% endif %}
+        {% if home.last_event %}
+        <p class="kpi-note">Dernier événement : {{ home.last_event.agent_type or home.last_event.agent_id or "agent inconnu" }} · {{ home.last_event.hook_event_name }}, <time datetime="{{ home.last_event.ts }}">{{ home.last_event.time_label }}</time> UTC</p>
+        {% endif %}
+        <a class="more" href="/activity">Voir l'activité des agents</a>
+      </section>
+      {% endif %}
+      <section class="card" aria-labelledby="tickets-title">
+        <h2 id="tickets-title">Tickets</h2>
+        {% if home.tickets %}
+        <ul class="counts">
+          {% for label, count in [("Prêt", home.tickets.ready), ("En cours", home.tickets.in_progress), ("Revue", home.tickets.review), ("Livré", home.tickets.delivered)] %}
+          <li><span class="kpi-label">{{ label }}</span> <strong>{{ count }}</strong></li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="kpi-note">GitHub injoignable : la liste des tickets est indisponible pour le moment.</p>
+        {% endif %}
+        <a class="more" href="/progress">Voir le suivi du projet</a>
+      </section>
+      {% if not home.empty %}
+      <section class="card" aria-labelledby="tokens-title">
+        <h2 id="tokens-title">Tokens</h2>
+        <p><strong class="kpi-value">{{ home.tokens_24h | thousands }}</strong> <span class="kpi-label">tokens sur les dernières 24 h</span></p>
+        <p><strong class="mono">{{ home.tokens_7d | thousands }}</strong> <span class="kpi-label">tokens sur les 7 derniers jours</span></p>
+        <p class="kpi-note">Quota non configuré : tokens bruts affichés, sans pourcentage. Le plafond sur 24 h ({{ home.cap_tokens | thousands }} tokens) se règle dans <a href="/controls">Contrôles</a>.</p>
+        <a class="more" href="/tokens">Voir le détail des tokens</a>
+      </section>
+      <section class="card" aria-labelledby="feed-title">
+        <h2 id="feed-title">Fil des délégations</h2>
+        {% if home.feed %}
+        <ol class="rows">
+          {% for d in home.feed %}
+          <li class="row"><span class="row-main">{{ d.line }}</span> <span class="row-meta">{{ d.duration }}</span></li>
+          {% endfor %}
+        </ol>
+        {% else %}
+        <p class="kpi-note">Aucune délégation entre agents sur les 7 derniers jours.</p>
+        {% endif %}
+        <a class="more" href="/interactions">Voir les interactions</a>
+      </section>
+      {% endif %}
+    </div>
+    {% endif %}
+    </div>
+  </main>
+  <script src="/static/live.js" defer></script>
+</body>
+</html>

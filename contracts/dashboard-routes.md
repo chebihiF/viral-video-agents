@@ -33,7 +33,7 @@ personnelle dans le cookie. Le cookie `Secure` impose HTTPS (Traefik en prod).
 | Route | Accès | Réponses |
 |---|---|---|
 | `GET /healthz` | public | 200 `{"status": "ok", "version": "<APP_VERSION>"}` — aucune donnée d'événement |
-| `GET /` | public | 303 vers `/progress` avec session valide, sinon vers `/login` (jamais mis en cache) |
+| `GET /` | session | 200 page « Accueil » (agents actifs ou en pause, dernier événement, tickets Prêt / En cours / Revue / Livré, tokens 24 h et 7 j, fil des délégations, badge si plafond atteint ; carte tickets « indisponible » si GitHub injoignable ; état vide sans événement) ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible ; jamais mis en cache. Aucun pourcentage sans légende : sans quota configuré, tokens bruts |
 | `GET /login` | public | 200 formulaire (champ `password`) |
 | `POST /login` | public, limité | voir ci-dessous |
 | `GET /activity` | session | 200 page ; 303 vers `/login` sans session valide (aucune lecture de la base) ; 503 si la base est illisible |
