@@ -1,8 +1,12 @@
 """Tests hors GPU de l'éval de classification (#35) : contrat, cas, dry-run, seuils."""
 
+import http.server
 import json
+import threading
+import urllib.error
 import urllib.request
 from collections import Counter
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
@@ -258,3 +262,88 @@ def test_no_chevron_from_dictee_survives(injection: str) -> None:
 
 def test_dictee_is_nfkc_normalised() -> None:
     assert ce.wrap_dictee("e\u0301 \uff21") == "<dictee>é A</dictee>"
+
+
+# Scénarios #148 : `ask` sans proxy ni redirection (vrai transport urllib, serveurs 127.0.0.1)
+
+
+class _Serveur(http.server.ThreadingHTTPServer):
+    def __init__(self, statut: int, entetes: dict[str, str], corps: bytes) -> None:
+        self.statut, self.entetes, self.corps = statut, entetes, corps
+        self.chemins: list[str] = []
+        super().__init__(("127.0.0.1", 0), _Gestionnaire)
+
+    @property
+    def url(self) -> str:
+        return f"http://127.0.0.1:{self.server_address[1]}"
+
+
+class _Gestionnaire(http.server.BaseHTTPRequestHandler):
+    server: _Serveur
+
+    def do_POST(self) -> None:
+        self.server.chemins.append(self.path)
+        self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        self.send_response(self.server.statut)
+        for nom, valeur in self.server.entetes.items():
+            self.send_header(nom, valeur)
+        self.send_header("Content-Length", str(len(self.server.corps)))
+        self.end_headers()
+        self.wfile.write(self.server.corps)
+
+    def log_message(self, *_: Any) -> None:
+        pass
+
+
+@pytest.fixture
+def serveurs() -> Iterator[Callable[..., _Serveur]]:
+    lances: list[_Serveur] = []
+
+    def lancer(statut: int, corps: bytes = b"", **entetes: str) -> _Serveur:
+        serveur = _Serveur(statut, entetes, corps)
+        threading.Thread(target=serveur.serve_forever, daemon=True).start()
+        lances.append(serveur)
+        return serveur
+
+    yield lancer
+    for serveur in lances:
+        serveur.shutdown()
+        serveur.server_close()
+
+
+REPONSE = json.dumps({"message": {"content": json.dumps({"classe": "libre"})}}).encode()
+
+
+def appeler(url: str) -> tuple[Any, float]:
+    return ce.ask("dictée synthétique", "système", ce.load_schema(), "m", f"{url}/api/chat")
+
+
+def test_ask_nominal(serveurs: Callable[..., _Serveur]) -> None:
+    ollama = serveurs(200, REPONSE)
+    sortie, duree = appeler(ollama.url)
+    assert sortie == {"classe": "libre"}
+    assert duree >= 0
+    assert ollama.chemins == ["/api/chat"]
+
+
+def test_ask_redirection_non_suivie(serveurs: Callable[..., _Serveur]) -> None:
+    cible = serveurs(200, REPONSE)
+    ollama = serveurs(302, Location=f"{cible.url}/api/chat")
+    with pytest.raises(urllib.error.HTTPError):
+        appeler(ollama.url)
+    assert ollama.chemins == ["/api/chat"]
+    assert cible.chemins == []
+
+
+def test_ask_proxy_ignore(
+    serveurs: Callable[..., _Serveur], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    proxy = serveurs(200, REPONSE)
+    ollama = serveurs(200, REPONSE)
+    for nom in ("NO_PROXY", "no_proxy"):
+        monkeypatch.delenv(nom, raising=False)
+    for nom in ("HTTP_PROXY", "http_proxy", "HTTPS_PROXY", "https_proxy", "ALL_PROXY"):
+        monkeypatch.setenv(nom, proxy.url)
+    assert appeler(ollama.url)[0] == {"classe": "libre"}
+    assert proxy.chemins == []
+    assert ollama.chemins == ["/api/chat"]
