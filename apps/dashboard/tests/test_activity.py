@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from html import unescape
 from pathlib import Path
 from typing import Any
 
@@ -116,7 +117,7 @@ def test_page_not_cached(client: TestClient) -> None:
 
 # États
 def test_empty_state(client: TestClient) -> None:
-    html = client.get("/activity").text
+    html = unescape(client.get("/activity").text)
     assert "Aucun agent n'a encore travaillé" in html
     assert feed_ids(html) == []
 

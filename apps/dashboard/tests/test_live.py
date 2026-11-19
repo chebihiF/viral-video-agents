@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 import sqlite3
 from datetime import UTC, datetime, timedelta
+from html import unescape
 from pathlib import Path
 
 import pytest
@@ -239,7 +240,7 @@ def test_no_session_redirects_to_login(db_file: Path) -> None:
 def test_empty_database_shows_empty_state_without_live_block(client: TestClient) -> None:
     r = client.get("/activity")
     assert r.status_code == 200
-    assert "Aucun agent n'a encore travaillé" in r.text
+    assert "Aucun agent n'a encore travaillé" in unescape(r.text)
     assert "Qui fait quoi" not in r.text
 
 
