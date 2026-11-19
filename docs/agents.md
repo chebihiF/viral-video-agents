@@ -120,6 +120,36 @@ Câblage à faire par le parent (`.claude/settings.json`, local, jamais commité
   "command": "\"$CLAUDE_PROJECT_DIR/tools/agents/bin/handoff.sh\" check" }] }]
 ```
 
+## Compte rendu (CR) des agents en base (#61)
+
+Chaque agent termine sa tâche par un CR de **5 lignes au plus**, une rubrique par ligne en début
+de ligne : `Fait : …`, `Fichiers : …`, `Reste : …`, `Blocage : … (ou « aucun »)`. Les
+définitions d'agents (`.claude/agents/*.md`, locales) reprennent ce format dans leur « Rapport
+final ». Outil : `tools/agents/bin/cr.sh` (`tools/agents/cr.py`, stdlib, Python 3.9).
+
+- **Écriture** : `cr.sh record` (hooks `SubagentStop` et `SessionEnd`, JSON sur stdin) lit
+  `last_assistant_message` (sinon la fin du transcript), extrait les rubriques et ajoute une ligne
+  à `agent_reports` ([contrat](../contracts/agent-report.schema.json)) : `ticket` (numéro de la
+  branche du poste, sinon NULL), `agent` (`agent_type` ; `tech-lead` en fin de session), `ts`
+  (UTC), `summary`, `status` (`blocked` si Blocage renseigné, `partial` si Reste renseigné, `done`
+  sinon, `no-cr` si aucune rubrique : rien n'est alors recopié). Une ligne contenant un motif de
+  secret est remplacée par `[masqué]`. Jamais de prompt ni de donnée d'enfant dans un CR.
+- **Base** : SQLite locale `~/.vva/agent-reports.db` (600 ; `VVA_CR_DB` pour un autre chemin).
+- **Silence** : base illisible, JSON invalide ou plus de 1,5 s : code 0, aucune sortie, l'agent n'est
+  jamais interrompu.
+- **Lecture** : `make status` (`cr.sh status`) affiche au plus 10 lignes, les CR arrivés depuis la
+  dernière lecture (marqueur `last_read` dans la base), les plus récents en dernier ; « Aucun
+  nouveau CR » sinon. Base illisible : une ligne sur stderr, code 1.
+
+Câblage local (`.claude/settings.json`, jamais commité), à côté des autres hooks :
+
+```json
+"SubagentStop": [{ "hooks": [{ "type": "command", "timeout": 2,
+  "command": "\"$CLAUDE_PROJECT_DIR/tools/agents/bin/cr.sh\" record" }] }],
+"SessionEnd":   [{ "hooks": [{ "type": "command", "timeout": 2,
+  "command": "\"$CLAUDE_PROJECT_DIR/tools/agents/bin/cr.sh\" record" }] }]
+```
+
 ## Limites
 
 - Échec d'une tâche : noté à la main (`fail`) par le tech lead ; la télémétrie ne le détecte

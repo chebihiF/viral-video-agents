@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/agent-report.schema.json",
+  "title": "AgentReport",
+  "description": "Une ligne de la table agent_reports (base locale ~/.vva/agent-reports.db, #61) : compte rendu (CR) de fin de tâche d'un agent. Résumé de 5 lignes au plus (Fait / Fichiers / Reste / Blocage), secrets masqués ; aucun prompt, aucune donnée d'enfant.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ticket", "agent", "ts", "summary", "status"],
+  "properties": {
+    "ticket": { "type": ["integer", "null"], "minimum": 1, "description": "Numéro lu dans la branche du poste ; null hors branche de ticket." },
+    "agent": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,64}$", "description": "agent_type du SubagentStop ; « tech-lead » pour la fin de session." },
+    "ts": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(\\+00:00|Z)$" },
+    "summary": { "type": "string", "minLength": 1, "maxLength": 1000, "description": "Au plus 5 lignes, séparées par \\n." },
+    "status": {
+      "enum": ["done", "partial", "blocked", "no-cr"],
+      "description": "blocked : Blocage renseigné ; partial : Reste renseigné ; done : ni l'un ni l'autre ; no-cr : aucun CR au format dans le dernier message."
+    }
+  }
+}
