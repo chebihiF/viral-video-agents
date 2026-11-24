@@ -11,3 +11,6 @@ outputs/
 *.mp4
 *.png
 *.wav
+
+# Icônes PWA de l'appli enfant (générées par apps/kid-ui/make_icons.py)
+!apps/kid-ui/static/icons/*.png
