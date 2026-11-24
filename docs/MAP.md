@@ -52,7 +52,6 @@
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
 - `contracts/README.md` — contracts
-- `contracts/agent-report.schema.json` — données JSON
 - `contracts/classification.schema.json` — données JSON
 - `contracts/examples/classification.adouci.json` — données JSON
 - `contracts/examples/classification.bloque.json` — données JSON
@@ -78,10 +77,6 @@
 - `docs/adr/ADR-004-separation-usine-produit.md` — ADR-004 — Séparer l'usine d'agents (A) et l'application vidéo (B)
 - `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
-- `docs/design/activity.md` — Écran « Activité des agents »
-- `docs/design/progress.md` — Écran « Suivi du projet » (`/progress`)
-- `docs/design/refonte.md` — Refonte du dashboard — spec (#92, couvre #93 à #99)
-- `docs/design/tokens.md` — Écran « Tokens » (`/tokens`) — spec alignée sur le réel (#129, écarts #118)
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
