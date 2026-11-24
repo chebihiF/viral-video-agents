@@ -5,16 +5,14 @@ description = "Monorepo — appli familiale de vidéos animées générées par 
 requires-python = ">=3.12"
 
 [tool.uv.workspace]
-members = ["apps/dashboard", "apps/media-service", "apps/orchestrator"]
+members = ["apps/media-service", "apps/orchestrator"]
 
 [tool.uv.sources]
-dashboard = { workspace = true }
 media-service = { workspace = true }
 orchestrator = { workspace = true }
 
 [dependency-groups]
 dev = [
-  "dashboard",
   "media-service",
   "orchestrator[media]",
   "ruff>=0.8",
@@ -39,7 +37,7 @@ select = ["E", "F", "W", "I", "B", "UP", "S", "SIM"]
 ignore = ["S101"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["dashboard", "media_service", "orchestrator", "next_version", "hook_emit", "ship", "convert_legacy", "test_ship", "token_report"]
+known-first-party = ["media_service", "orchestrator", "next_version"]
 
 [tool.ruff.lint.per-file-ignores]
 "apps/gpu-worker/*" = ["S310", "S110", "E501"]
@@ -48,12 +46,12 @@ known-first-party = ["dashboard", "media_service", "orchestrator", "next_version
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["apps/dashboard/src", "apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "tools/telemetry", "tools/agents", "evals/classification_eval.py", "evals/test_classification_eval.py",
+files = ["apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "evals/classification_eval.py", "evals/test_classification_eval.py",
   "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py", "apps/gpu-worker/lan_guard.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/contracts", "apps/dashboard/tests", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "tools/telemetry/tests", "tools/agents/tests", "evals", "apps/gpu-worker/tests"]
-pythonpath = ["infra/scripts", "tools/telemetry", "tools/agents", "evals", "apps/gpu-worker"]
+testpaths = ["tests/contracts", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "evals", "apps/gpu-worker/tests"]
+pythonpath = ["infra/scripts", "evals", "apps/gpu-worker"]
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = ["e2e: parcours de bout en bout avec mocks (ffmpeg local, sans GPU ni réseau)"]
 addopts = "-q --no-header -p no:cacheprovider"

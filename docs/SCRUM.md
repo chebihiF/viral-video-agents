@@ -49,7 +49,7 @@ Le `reviewer` n'intervient que si le ticket est `complex`, **ou** si le diff dé
 
 ### Plafonds de tokens
 - Contexte par session : ~150 k tokens ; au-delà, passation (résumé dans l'épique #21) et nouvelle session (voir #83).
-- Bilan par ticket (mesuré par `tools/agents/bin/token-report.sh`, voir `docs/agents.md`) :
+- Bilan par ticket (mesuré par `tools/agents/bin/token-report.sh` du dépôt agent-factory, voir son `docs/agents.md`) :
   simple ≤ 150 k, `complex` ≤ 300 k ; part d'Opus ≤ 30 % des tokens du sprint.
 - Un ticket qui dépasse son plafond est signalé dans le bilan de sprint.
 
