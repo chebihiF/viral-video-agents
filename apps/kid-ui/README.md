@@ -5,10 +5,11 @@ Appli enfant « Mimo » (#159) : coquille statique installable sur l'écran d'ac
 ## Lancer
 
 ```sh
-python3 apps/kid-ui/server.py [--host 127.0.0.1] [--port 8090]
+python3 apps/kid-ui/server.py --tls-cert infra/kid-ui/certs/cert.pem --tls-key infra/kid-ui/certs/key.pem [--host 192.168.1.20] [--port 8090]
+python3 apps/kid-ui/server.py --insecure-dev   # HTTP local, développement seulement
 ```
 
-Écoute `127.0.0.1` par défaut (l'exposition HTTPS, nécessaire à l'installation sur téléphone, relève de #160).
+Écoute `127.0.0.1` par défaut ; `--host` pour l'IP LAN. Sans certificat, le serveur refuse de démarrer (HTTP) sauf `--insecure-dev`. Génération du certificat et installation sur le téléphone : `infra/kid-ui/README.md` (#160).
 
 ## Contenu de `static/`
 
@@ -28,4 +29,4 @@ Pas de téléchargement : la maquette prévoit Bricolage Grotesque et Figtree (O
 
 ## Tests
 
-`uv run pytest apps/kid-ui` : manifest, service worker (liste de précache), absence de contenu sensible en cache, serveur local. L'installation réelle (HTTPS, téléphone) se vérifie à la main une fois #160 livré.
+`uv run pytest apps/kid-ui` : manifest, service worker (liste de précache), absence de contenu sensible en cache, serveur local. `apps/kid-ui/tests/test_tls.py` : démarrage HTTPS (certificat jetable) et refus du HTTP nu. L'installation réelle sur téléphone se vérifie à la main (`infra/kid-ui/README.md`).
