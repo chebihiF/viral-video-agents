@@ -1,6 +1,6 @@
 # Design system du dashboard
 
-Source des valeurs : `apps/dashboard/src/dashboard/static/tokens.css` (miroir lisible : [design system Claude Design](https://claude.ai/artifact/AmUybVqZu5w33VjnHuzYf2), lien privé).
+Le dashboard et ses specs d'écrans vivent dans le dépôt agent-factory (`docs/design/`) ; ce dossier ne garde que les specs de l'application vidéo.
 
 ## Contrat
 - Les gabarits Jinja n'utilisent **que** les variables `--color-*`, `--space-*`, `--font-*`, `--radius-*` (plus `--font-size-*`, `--focus-ring`). Aucune couleur ni taille en dur.
@@ -24,7 +24,3 @@ Espacements 4 px : `space-1..7` = 4, 8, 12, 16, 24, 32, 48. Rayons : `radius-sm|
 
 ## Contrastes WCAG 2.2 AA (vérifiés par calcul, clair et sombre)
 Texte et texte atténué >= 4,5:1 sur bg, surface, surface-2 ; états (ok, warn, danger, info) >= 4,5:1 sur leur `*-bg`, surface et bg ; texte sur accent >= 4,5:1 ; `color-border` et `color-focus` >= 3:1 sur bg et surface.
-
-## Écrans
-- [Activité des agents](activity.md)
-- [Suivi du projet](progress.md)

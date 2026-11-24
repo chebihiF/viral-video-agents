@@ -1,6 +1,6 @@
 # Cibles silencieuses : n'affichent que les échecs (économie de tokens).
 .SILENT:
-.PHONY: help sync lint fmt type test audit check mapcheck build map run run-mock e2e-mock bootstrap ticket status telemetry-check ci-b
+.PHONY: help sync lint fmt type test audit check mapcheck map run-mock e2e-mock bootstrap ticket ci-b
 
 UV := uv run -q
 SH := infra/scripts/quiet.sh
@@ -27,20 +27,14 @@ audit: ## pip-audit sur les dépendances verrouillées
 	uv export -q --frozen --no-hashes --no-emit-workspace -o .venv/req-audit.txt
 	$(SH) $(UV) pip-audit -r .venv/req-audit.txt --progress-spinner off
 
-check: lint type test mapcheck ## Tout ce que la CI vérifie (hors build)
+check: lint type test mapcheck ## Tout ce que la CI vérifie
 	echo ok
 
 mapcheck: ## docs/MAP.md à jour ? (sinon : make map)
 	@python3 infra/scripts/gen_map.py --check
 
-build: ## Image Docker du dashboard
-	docker build -q -f apps/dashboard/Dockerfile -t vva-dashboard:local . >/dev/null
-
 map: ## Régénère docs/MAP.md
 	python3 infra/scripts/gen_map.py
-
-run: ## Dashboard en local sur :8000
-	$(UV) uvicorn dashboard.main:app --reload
 
 run-mock: ## Parcours simulé : DICTEE=fichier (défaut : dictée d'exemple), sortie dans .venv/run-mock
 	printf 'Un petit chat vole sur un tapis magique.' > .venv/dictee-mock.txt
@@ -55,12 +49,6 @@ bootstrap: ## Copie .claude/ et CLAUDE.md du checkout principal (VVA_MAIN=chemin
 ticket: ## Ticket N sur un poste libre du pool (N=<n>, DRY=1 pour simuler)
 	case '$(N)' in ''|*[!0-9]*) echo "usage : make ticket N=<n> (numérique)" >&2; exit 2;; esac
 	infra/scripts/pool.sh $(if $(DRY),--dry-run) '$(N)'
-
-status: ## CR d'agents depuis la dernière lecture (10 lignes max, #61)
-	python3 tools/agents/cr.py status
-
-telemetry-check: ## Les hooks locaux émettent-ils vers l'ingestion ? (--live : envoi réel, LIVE=1)
-	$(UV) python tools/telemetry/check_hooks.py $(if $(LIVE),--live)
 
 ci-b: ## CI de B sans GPU : contrats, evals --dry-run, garde-fou fichiers Claude
 	$(UV) pytest -q tests/contracts infra/scripts/test_no_claude_tracked.py
