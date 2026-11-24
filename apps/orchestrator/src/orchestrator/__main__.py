@@ -2,6 +2,7 @@
 
 Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 configuration absente
 (sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL ; échec fermé avant tout appel réseau).
+Sous-commande `purge` (#152) : codes 0 ok, 1 suppression échouée, 2 usage.
 Image et clip réels (gpu-worker) ne sont pas branchés : le run finit « erreur » (#150).
 La dictée n'est ni écrite, ni journalisée, ni affichée.
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import shutil
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -18,18 +20,22 @@ from typing import NoReturn
 
 from orchestrator.mocks import etapes_factices
 from orchestrator.pipeline import Etapes, lancer, ligne_durees
+from orchestrator.purge import supprimer, trouver_anciens
 from orchestrator.steps_llm import ErreurConfiguration
 
 DICTEE_MAX = 2000
 EX_USAGE = 64
+EX_PURGE_USAGE = 2
 EX_CONFIG = 78
 _CODES = {"ok": 0, "erreur": 1, "bloque": 2}
 
 
 class _Parser(argparse.ArgumentParser):
+    code_usage = EX_USAGE
+
     def error(self, message: str) -> NoReturn:
         self.print_usage(sys.stderr)
-        self.exit(EX_USAGE, f"orchestrator: {message}\n")
+        self.exit(self.code_usage, f"orchestrator: {message}\n")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -41,7 +47,47 @@ def _parser() -> argparse.ArgumentParser:
         "--out", required=True, type=Path, help="dossier de sortie (run.json et durees.jsonl)"
     )
     run.add_argument("--mocks", action="store_true", help="étapes factices (sans GPU)")
+    purge = sub.add_parser("purge", help="supprime les runs plus anciens que N jours")
+    purge.code_usage = EX_PURGE_USAGE
+    purge.add_argument("--runs", required=True, type=Path, help="dossier contenant les runs")
+    purge.add_argument("--older-than-days", required=True, type=int, metavar="N", help="N >= 1")
+    purge.add_argument("--apply", action="store_true", help="supprime (sinon : liste seulement)")
+    purge.add_argument("--dry-run", action="store_true", help="liste sans supprimer (défaut)")
     return parser
+
+
+def _purger(args: argparse.Namespace) -> int:
+    """Liste (défaut) ou supprime (`--apply`) ; n'imprime que run_id et âge."""
+    racine: Path = args.runs
+    if args.older_than_days < 1:
+        print("--older-than-days doit être >= 1", file=sys.stderr)
+        return EX_PURGE_USAGE
+    if args.apply and args.dry_run:
+        print("--apply et --dry-run s'excluent", file=sys.stderr)
+        return EX_PURGE_USAGE
+    if racine.is_symlink() or not racine.is_dir():
+        print("dossier des runs absent ou invalide", file=sys.stderr)
+        return EX_PURGE_USAGE
+    if args.apply and not shutil.rmtree.avoids_symlink_attacks:
+        print("suppression refusée : plateforme sans rmtree résistant aux liens", file=sys.stderr)
+        return EX_PURGE_USAGE
+    try:
+        anciens = trouver_anciens(racine, args.older_than_days)
+    except OSError:
+        print("dossier des runs illisible", file=sys.stderr)
+        return EX_PURGE_USAGE
+    code = 0
+    for run in anciens:
+        etat = "a_supprimer"
+        if args.apply:
+            try:
+                supprimer(run)
+                etat = "supprime"
+            except OSError as exc:
+                etat = f"echec({type(exc).__name__})"
+                code = 1
+        print(f"{run.run_id} age_jours={run.age_jours} {etat}")
+    return code
 
 
 def _lire_dictee(source: str) -> str | None:
@@ -73,6 +119,8 @@ def _etapes(mocks: bool) -> Etapes | str:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.commande == "purge":
+        return _purger(args)
     dictee = _lire_dictee(args.dictee_file)
     if dictee is None:
         print(

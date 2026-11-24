@@ -38,6 +38,7 @@
 - `apps/orchestrator/src/orchestrator/etapes.py` — Assemblage des étapes réelles (#150) : Ollama, Piper, montage ; image et clip injectables.
 - `apps/orchestrator/src/orchestrator/mocks.py` — Étapes factices valides (#138) : aucune génération réelle, aucun fichier écrit, pas de GPU
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
+- `apps/orchestrator/src/orchestrator/purge.py` — Purge des runs anciens (#152) : supprime les dossiers de run plus vieux que N jours.
 - `apps/orchestrator/src/orchestrator/steps_llm.py` — Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
 - `apps/orchestrator/src/orchestrator/steps_media.py` — Étapes média réelles : voix (Piper) et montage (ASS + FFmpeg), sans GPU (#136).
 - `apps/orchestrator/tests/fakes.py` — Doublures pour le parcours de bout en bout (#139) : faux Piper, clips lavfi, GPU tracé.
@@ -45,6 +46,7 @@
 - `apps/orchestrator/tests/test_e2e_mock.py` — Parcours de bout en bout dictée -> MP4 avec mocks (#139) : `make e2e-mock`.
 - `apps/orchestrator/tests/test_etapes.py` — Étapes réelles assemblées (#150) : faux Ollama et faux Piper, aucun réseau, aucun GPU.
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
+- `apps/orchestrator/tests/test_purge.py` — Purge des runs anciens (#152) : dry-run, suppression, sécurité, usage. Dossiers synthétiqu
 - `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
 - `apps/orchestrator/tests/test_steps_media.py` — Étapes voix (Piper) et montage réelles (#136) : faux Piper, lavfi, sans fuite de texte.
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
