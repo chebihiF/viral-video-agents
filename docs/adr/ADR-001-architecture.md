@@ -27,6 +27,8 @@ Monorepo : `apps/*` (services), `contracts/` (schémas JSON), `prompts/` (prompt
 `comfyui/workflows/` (workflows API), `n8n/workflows/` (exports), `evals/` (évaluations),
 `infra/` (déploiement, runner), `docs/adr/`.
 
+> Mise à jour (ADR-004) : le déploiement et le runner `vps-deploy` vivent désormais dans le dépôt A ; B ne déploie plus.
+
 Livraison : GitHub Actions (runners hébergés gratuits pour la CI, runner auto-hébergé sur le VPS
 pour le déploiement, plus tard sur le PC pour les tâches GPU), images sur GHCR.
 
