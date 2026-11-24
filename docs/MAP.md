@@ -8,7 +8,7 @@
 - `.github/pull_request_template.md` — Titre : Conventional Commits, ex. « feat(dashboard): tokens par agent ». Il devient le com
 - `.github/workflows/ci-watch.yml` — ci-watch
 - `.github/workflows/ci.yml`
-- `.gitignore`
+- `.gitignore` — Icônes PWA de l'appli enfant (générées par apps/kid-ui/make_icons.py)
 - `.gitleaksignore` — Faux positifs : secrets factices des tests de refus de note (#83), déjà fragmentés dans le
 - `.python-version`
 - `Makefile` — Cibles silencieuses : n'affichent que les échecs (économie de tokens).
@@ -19,6 +19,21 @@
 - `apps/gpu-worker/tests/test_lan_guard.py` — lan_guard (#158) : le PC GPU n'est joignable que depuis le réseau local (aucun appel réel 
 - `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
 - `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
+- `apps/kid-ui/README.md` — kid-ui
+- `apps/kid-ui/make_icons.py` — Icônes PNG de l'appli (mascotte Mimo), stdlib seule : python3 apps/kid-ui/make_icons.py.
+- `apps/kid-ui/server.py` — Serveur statique minimal de l'appli enfant (stdlib seule, écoute 127.0.0.1 par défaut).
+- `apps/kid-ui/static/icons/icon-192.png`
+- `apps/kid-ui/static/icons/icon-512.png`
+- `apps/kid-ui/static/icons/maskable-512.png`
+- `apps/kid-ui/static/index.html` — Coquille statique, aucune ressource externe. Thème : theme.js pose data-theme sur <html> a
+- `apps/kid-ui/static/manifest.webmanifest`
+- `apps/kid-ui/static/mimo.svg`
+- `apps/kid-ui/static/shell.css`
+- `apps/kid-ui/static/shell.js` — Coquille : service worker, écran hors ligne, choix du thème. Aucun appel réseau.
+- `apps/kid-ui/static/sw.js`
+- `apps/kid-ui/static/theme.js` — Thème de l'enfant : lu en local avant le rendu, jamais envoyé au serveur.
+- `apps/kid-ui/static/tokens-enfant.css`
+- `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
 - `apps/media-service/README.md` — media-service
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.

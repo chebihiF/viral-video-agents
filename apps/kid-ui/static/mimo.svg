@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="128" height="128" role="img" aria-label="Mimo, le chat">
+  <path d="M10 28 L12 6 L28 16 Z" fill="#FF8A1F" stroke="#1B1340" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M54 28 L52 6 L36 16 Z" fill="#FF8A1F" stroke="#1B1340" stroke-width="3" stroke-linejoin="round"/>
+  <path d="M14 22 L15 12 L22 16 Z" fill="#FFB3C9"/>
+  <path d="M50 22 L49 12 L42 16 Z" fill="#FFB3C9"/>
+  <ellipse cx="32" cy="36" rx="25" ry="21" fill="#FF8A1F" stroke="#1B1340" stroke-width="3"/>
+  <path d="M25 17 L27 24 M32 15 L32 23 M39 17 L37 24" stroke="#C25A00" stroke-width="3" stroke-linecap="round"/>
+  <ellipse cx="32" cy="43" rx="10" ry="7" fill="#FFE3C2"/>
+  <g class="eyes">
+    <ellipse cx="22" cy="34" rx="3.6" ry="4.6" fill="#1B1340"/>
+    <ellipse cx="42" cy="34" rx="3.6" ry="4.6" fill="#1B1340"/>
+    <circle cx="23.2" cy="32.4" r="1.2" fill="#FFFFFF"/>
+    <circle cx="43.2" cy="32.4" r="1.2" fill="#FFFFFF"/>
+  </g>
+  <path d="M29.5 40 L34.5 40 L32 43 Z" fill="#FF5C8A" stroke="#1B1340" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M32 43 Q32 47 28 47 M32 43 Q32 47 36 47" fill="none" stroke="#1B1340" stroke-width="2" stroke-linecap="round"/>
+  <path d="M12 40 L4 38 M12 44 L4 45 M52 40 L60 38 M52 44 L60 45" stroke="#1B1340" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,3 @@
+/* Complément de la coquille : un seul écran visible à la fois (le reste vient de tokens-enfant.css). */
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); }
