@@ -38,8 +38,8 @@ fichiers Claude, alors que ces fichiers sont le code source de A.
 | scripts `pool`, `bootstrap_worktree`, `quiet`, `gen_map`, `set-dashboard-password`, `test_no_claude_tracked` | `apps/dashboard/tests/test_contracts_storyboard.py` (revient dans B) |
 | agents, skills et hooks versionnés (voir plus bas) | |
 
-Les fichiers communs et petits sont dupliqués, sans paquet partagé : `Makefile`, `pyproject.toml`,
-`next_version.py`, les modèles d'issue et de PR.
+Les fichiers communs et petits sont dupliqués, sans paquet partagé : `Makefile`,
+`pyproject.toml`, les modèles d'issue et de PR. `next_version.py` est retiré de B (il ne servait que le release, qui vit dans A).
 
 L'historique git est conservé (`git filter-repo` sur une copie du dépôt). Les issues de A sont
 déplacées avec `gh issue transfer`, ce qui garde leurs commentaires. #21 reste dans B comme
