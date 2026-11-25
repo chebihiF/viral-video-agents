@@ -41,6 +41,8 @@ def test_schema_valide_draft_2020_12() -> None:
         ("Status", {"state": "fini", "step": "images"}, False),
         ("Status", {"state": "done", "step": "classification"}, False),
         ("Status", {"state": "done", "step": "montage", "text": "dictée"}, False),
+        ("Status", {"state": "error", "step": "storyboard", "blocked": True}, True),
+        ("Status", {"state": "error", "step": "storyboard", "blocked": False}, False),
     ],
 )
 def test_exemples(defn: str, data: Any, valide: bool) -> None:

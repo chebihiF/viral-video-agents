@@ -38,7 +38,11 @@
       "additionalProperties": false,
       "properties": {
         "state": { "enum": ["queued", "running", "done", "error", "deferred"] },
-        "step": { "enum": ["storyboard", "images", "voix", "montage"] }
+        "step": { "enum": ["storyboard", "images", "voix", "montage"] },
+        "blocked": {
+          "const": true,
+          "description": "Présent seulement si state = error parce que la classification a bloqué la dictée : ne pas réessayer."
+        }
       }
     }
   }
