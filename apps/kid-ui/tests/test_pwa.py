@@ -111,6 +111,14 @@ def test_rien_de_sensible_dans_le_precache() -> None:
         assert "dict" not in bas, chemin
 
 
+def test_precache_contient_les_polices_arabes_existantes() -> None:
+    liste = precache_list()
+    for graisse in (500, 700, 800):
+        chemin = f"/fonts/tajawal-arabic-{graisse}.woff2"
+        assert chemin in liste, chemin
+        assert (STATIC / chemin.lstrip("/")).is_file(), chemin
+
+
 def test_sw_ne_met_rien_en_cache_dynamiquement() -> None:
     src = (STATIC / "sw.js").read_text(encoding="utf-8")
     assert "/api" not in src
