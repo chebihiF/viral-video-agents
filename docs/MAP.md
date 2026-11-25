@@ -20,8 +20,9 @@
 - `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
 - `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
 - `apps/kid-ui/README.md` — kid-ui
+- `apps/kid-ui/jobs.py` — Jobs vidéo de l'appli enfant (#162) : la dictée part au CLI orchestrateur (#150) par stdin
 - `apps/kid-ui/make_icons.py` — Icônes PNG de l'appli (mascotte Mimo), stdlib seule : python3 apps/kid-ui/make_icons.py.
-- `apps/kid-ui/server.py` — Serveur statique minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défa
+- `apps/kid-ui/server.py` — Serveur minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défaut).
 - `apps/kid-ui/static/icons/icon-192.png`
 - `apps/kid-ui/static/icons/icon-512.png`
 - `apps/kid-ui/static/icons/maskable-512.png`
@@ -30,9 +31,11 @@
 - `apps/kid-ui/static/mimo.svg`
 - `apps/kid-ui/static/shell.css`
 - `apps/kid-ui/static/shell.js` — Coquille : service worker, écran hors ligne, choix du thème. Aucun appel réseau.
+- `apps/kid-ui/static/status.js` — Suivi d'une vidéo (#162) : envoi de la dictée à /api/jobs, puis statut interrogé toutes le
 - `apps/kid-ui/static/sw.js`
 - `apps/kid-ui/static/theme.js` — Thème de l'enfant : lu en local avant le rendu, jamais envoyé au serveur.
 - `apps/kid-ui/static/tokens-enfant.css`
+- `apps/kid-ui/tests/test_jobs.py` — Envoi de la dictée et suivi du statut (#162) : faux orchestrateur, aucun GPU, aucun réseau
 - `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
 - `apps/kid-ui/tests/test_tls.py` — HTTPS local de l'appli enfant (#160) : démarrage TLS, refus du HTTP nu, écoute locale.
 - `apps/media-service/README.md` — media-service
@@ -82,6 +85,7 @@
 - `contracts/examples/storyboard.valid.json` — données JSON
 - `contracts/examples/tts-job.json` — données JSON
 - `contracts/gpu-job.schema.json` — données JSON
+- `contracts/kid-job.schema.json` — données JSON
 - `contracts/montage-job.schema.json` — données JSON
 - `contracts/pipeline-run.schema.json` — données JSON
 - `contracts/storyboard.schema.json` — données JSON
@@ -123,4 +127,5 @@
 - `prompts/classification.v1.md` — classification.v1
 - `prompts/storyboard.v1.md`
 - `pyproject.toml`
+- `tests/contracts/test_contracts_kid_job.py` — Contrat contracts/kid-job.schema.json : API jobs de l'appli enfant (#162).
 - `tests/contracts/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).

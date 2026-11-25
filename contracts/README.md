@@ -11,3 +11,4 @@ Les contrats de l'usine d'agents (`agent-event`, `ingest-api`, `dashboard-routes
 | [`montage-job.schema.json`](montage-job.schema.json) | Entrée du media-service (v1.0) : plans clip + voix + narration, sortie MP4, `subtitles_path` ASS optionnel ; exemples dans [`examples/`](examples/) |
 | [`tts-job.schema.json`](tts-job.schema.json) | Entrée du TTS Piper du media-service (v1.0) : texte de voix off par plan ; sortie `$defs/TtsResult` (WAV + durée par plan) ; exemple dans [`examples/`](examples/) |
 | [`pipeline-run.schema.json`](pipeline-run.schema.json) | État d'un run de l'orchestrateur (v1.0, #53) : `etat` ok/bloque/erreur, étapes (nom, statut, durée), `video_path` si ok ; aucun texte de dictée ; exemple dans [`examples/`](examples/) |
+| [`kid-job.schema.json`](kid-job.schema.json) | API jobs de l'appli enfant (v1.0, #162) : `Submit` (dictée ≤ 500 car.), `Accepted` (job_id), `Deferred` (hors réseau local), `Status` (état + étape, jamais la dictée) |

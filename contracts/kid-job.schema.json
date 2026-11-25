@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "kid-job.schema.json",
+  "title": "kid-job",
+  "description": "API jobs de l'appli enfant (v1.0, #162) : POST /api/jobs (Submit -> Accepted 202 ou Deferred 200 hors réseau local) et GET /api/jobs/{id} (Status, ou Deferred hors réseau local). Aucune réponse ne reprend la dictée.",
+  "$defs": {
+    "Submit": {
+      "type": "object",
+      "required": ["text"],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "\\S" }
+      }
+    },
+    "Accepted": {
+      "type": "object",
+      "required": ["job_id"],
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        }
+      }
+    },
+    "Deferred": {
+      "type": "object",
+      "required": ["status", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "const": "deferred" },
+        "message": { "const": "Je te génère la vidéo une fois à la maison." }
+      }
+    },
+    "Status": {
+      "type": "object",
+      "required": ["state", "step"],
+      "additionalProperties": false,
+      "properties": {
+        "state": { "enum": ["queued", "running", "done", "error", "deferred"] },
+        "step": { "enum": ["storyboard", "images", "voix", "montage"] }
+      }
+    }
+  }
+}

@@ -47,7 +47,7 @@ known-first-party = ["media_service", "orchestrator"]
 python_version = "3.12"
 strict = true
 files = ["apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "evals/classification_eval.py", "evals/test_classification_eval.py",
-  "apps/kid-ui/server.py", "apps/kid-ui/make_icons.py",
+  "apps/kid-ui/server.py", "apps/kid-ui/jobs.py", "apps/kid-ui/make_icons.py",
   "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py", "apps/gpu-worker/lan_guard.py"]
 
 [tool.pytest.ini_options]
