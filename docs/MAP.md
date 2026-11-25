@@ -34,6 +34,7 @@
 - `apps/kid-ui/static/index.html` — Coquille statique, aucune ressource externe. Thème : theme.js pose data-theme sur <html> a
 - `apps/kid-ui/static/manifest.webmanifest`
 - `apps/kid-ui/static/mimo.svg`
+- `apps/kid-ui/static/player.js` — Lecture de la vidéo terminée (#163) : lecteur, téléchargement, retour à l'accueil.
 - `apps/kid-ui/static/shell.css`
 - `apps/kid-ui/static/shell.js` — Coquille : service worker, écran hors ligne, choix du thème. Aucun appel réseau.
 - `apps/kid-ui/static/status.js` — Suivi d'une vidéo (#162) : envoi de la dictée à /api/jobs, puis statut interrogé toutes le
@@ -45,7 +46,9 @@
 - `apps/kid-ui/tests/test_jobs.py` — Envoi de la dictée et suivi du statut (#162) : faux orchestrateur, aucun GPU, aucun réseau
 - `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
 - `apps/kid-ui/tests/test_tls.py` — HTTPS local de l'appli enfant (#160) : démarrage TLS, refus du HTTP nu, écoute locale.
+- `apps/kid-ui/tests/test_video.py` — Lecture et téléchargement de la vidéo terminée (#163) : faux orchestrateur, aucun GPU.
 - `apps/kid-ui/transcriber.py` — Transcription de la dictée (#161) : interface locale, sans service tiers.
+- `apps/kid-ui/video.py` — Service de la vidéo terminée (#163) : MP4 du job, avec `Range` et téléchargement optionnel
 - `apps/media-service/README.md` — media-service
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.

@@ -92,6 +92,10 @@ class JobStore:
         self._jobs: dict[str, Status] = {}
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="kid-job")
 
+    @property
+    def runs_dir(self) -> Path:
+        return self._runs
+
     def argv(self, out: Path) -> list[str]:
         """Ligne de commande du CLI : la dictée viendra de stdin (« - »), jamais d'ici."""
         return [*self._command, "run", "--dictee-file", "-", "--out", str(out)]
