@@ -23,6 +23,12 @@ GPU : RTX 4060 Ti, 8188 MiB de VRAM (126 MiB au repos), driver 580.178.04.
 
 Voix Piper arabe absente. Attend le parent : accord pour télécharger une voix gratuite (ex. `ar_JO-kareem-medium`, licence à vérifier avant téléchargement) ou choix d'un autre TTS arabe/darija. Sans cela, l'étape TTS ne peut se faire qu'en français (`fr_FR-siwis-medium`) et le run n'est pas complet.
 
+## Blocage GPU du 25/11 (étape 1, aucune mesure possible)
+
+Après le réveil (`pc-gpu wake`, ~6 s), `comfyui.service` est en boucle de redémarrage : `RuntimeError: CUDA unknown error` à l'init de torch (`torch.cuda.is_available()` = False, alors que `nvidia-smi` voit la RTX 4060 Ti). Cause probable : état CUDA/nvidia_uvm cassé après la reprise de veille. Correctif possible (hors mandat, sudo requis) : recharger `nvidia_uvm` ou redémarrer le PC. Rien n'a été relancé ni modifié sur le PC. Attend le parent : redémarrage du PC ou accord pour `sudo rmmod nvidia_uvm && sudo modprobe nvidia_uvm`.
+
+Préparé : `comfyui/workflows/wan22_a14b_i2v_lightning_api.json` (A14B Q4_K_S High/Low + lightning, 4 étapes, 480x864, 81 images, 24 i/s, sans RIFE), dérivé du workflow de labo `~/vva/lab`. Non testé tant que CUDA est KO.
+
 ## Contraintes VRAM 8 Go
 
 - Un seul modèle lourd résident à la fois : décharger Ollama (`keep_alive: 0`) avant Flux, libérer ComfyUI (`/free`) avant Wan.
