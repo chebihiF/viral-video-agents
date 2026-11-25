@@ -2,15 +2,18 @@
 
 `COMFY_URL` vise la boucle locale seulement (127.0.0.1, localhost, ::1 : extrémité d'un tunnel
 ouvert à la main) ; absente ou autre hôte : `ErreurConfiguration` avant tout appel réseau.
-Durcissement de `steps_llm` : proxy ignoré, redirection refusée, délais bornés, réponses bornées
-en taille. Les noms de fichiers rendus par ComfyUI ne servent qu'à `/view` (validés), jamais de
-chemin local : le clip est écrit sous `<out>/<run_id>/<job_id>.mp4`. VRAM 8 Go : Ollama déchargé
-avant chaque image, `/free` avant la phase clip. Échec : `ErreurComfy`, message générique, sans
-prompt ni texte de ComfyUI, levée hors de tout bloc `except` (ni `__cause__` ni `__context__`).
+Durcissement de `steps_llm` : proxy ignoré, redirection refusée, délai global par requête
+(lecture par blocs sous échéance), réponses bornées en taille. Les noms de fichiers rendus par
+ComfyUI ne servent qu'à `/view` (validés), jamais de chemin local : le clip est écrit sous
+`<out>/<run_id>/<job_id>.mp4`. VRAM 8 Go : `/free` à chaque changement de phase, modèles
+d'Ollama (`/api/ps`) déchargés avant chaque image. Graine dérivée du job_id (déterministe).
+Échec : `ErreurComfy`, message générique, sans prompt ni texte de ComfyUI, levée hors de tout
+bloc `except` (ni `__cause__` ni `__context__`).
 """
 
 from __future__ import annotations
 
+import hashlib
 import ipaddress
 import json
 import logging
@@ -25,13 +28,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, NoReturn
 
-from orchestrator.steps_llm import (
-    RACINE,
-    ClientOllama,
-    ErreurConfiguration,
-    OllamaInjoignable,
-    _SansRedirection,
-)
+from orchestrator.pipeline import _IMAGE_PATH
+from orchestrator.steps_llm import RACINE, ErreurConfiguration, OllamaInjoignable, _SansRedirection
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +37,9 @@ WORKFLOWS = RACINE / "comfyui" / "workflows"
 FLUX = "flux_schnell_t2i_api.json"
 WAN = "wan22_5b_i2v_api.json"
 HOTES_LOCAUX = frozenset({"localhost"})
-TIMEOUT_S = 30.0  # par requête HTTP
+TIMEOUT_S = 30.0  # par requête HTTP, lecture comprise
+BLOC = 65_536  # octets lus par opération socket
+MODELES_MAX = 16  # modèles Ollama chargés, au plus
 DELAI_IMAGE_S = 600.0  # rendu d'une image, attente bornée
 DELAI_CLIP_S = 1800.0  # rendu d'un clip
 INTERVALLE_S = 1.0  # entre deux lectures de /history
@@ -49,9 +49,9 @@ TAILLE_CLIP = 200_000_000
 FRAMES = frozenset(range(5, 122, 4))  # 4n+1, gpu-job.schema.json
 _JOB_CLIP = re.compile(r"([A-Za-z0-9_-]{1,48})-clip-[0-9]{1,4}")
 _JOB_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
-_IMAGE_PATH = re.compile(r"(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_./-]{0,254}")
 _PROMPT_ID = re.compile(r"[A-Za-z0-9-]{1,64}")
 _NOM_SORTIE = re.compile(r"(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}")
+_MODELE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,63}(?:/[A-Za-z0-9_.:-]{1,64}){0,2}")
 _SOUS_DOSSIER = re.compile(r"(?:[A-Za-z0-9_-]{1,64}(?:/[A-Za-z0-9_-]{1,64}){0,3})?")
 
 
@@ -76,12 +76,23 @@ _OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedi
 
 
 def _http(requete: Requete, timeout: float) -> bytes:
+    """Réponse lue par blocs ; `timeout` borne la requête entière (pas seulement chaque lecture)."""
+    echeance = time.monotonic() + timeout
     entetes = {} if requete.corps is None else {"Content-Type": requete.type_contenu}
-    # S310 : schéma http et hôte de boucle locale imposés par ClientComfy.__post_init__.
+    # S310 : schéma http(s) imposé par ClientComfy.__post_init__ et ClientOllama (OLLAMA_URL).
     req = urllib.request.Request(requete.url, requete.corps, entetes)  # noqa: S310
+    blocs: list[bytes] = []
+    lus = 0
     with _OPENER.open(req, timeout=timeout) as reponse:
-        brut: bytes = reponse.read(requete.limite + 1)
-    return brut
+        while lus <= requete.limite:
+            if time.monotonic() > echeance:
+                raise TimeoutError("requête trop longue")
+            bloc: bytes = reponse.read1(BLOC)
+            if not bloc:
+                break
+            blocs.append(bloc)
+            lus += len(bloc)
+    return b"".join(blocs)
 
 
 def _url_locale(url: str) -> bool:
@@ -122,13 +133,13 @@ class ClientComfy:
             )
         object.__setattr__(self, "url", self.url.rstrip("/"))
 
-    def envoyer(self, requete: Requete) -> bytes:
-        """Octets de la réponse ; toute panne ou réponse trop grande lève `ErreurComfy`."""
+    def envoyer(self, requete: Requete, budget_s: float | None = None) -> bytes:
+        """Octets de la réponse en `budget_s` (défaut `timeout_s`) ; panne : `ErreurComfy`."""
         complete = Requete(
             self.url + requete.url, requete.corps, requete.type_contenu, requete.limite
         )
         try:
-            brut = self.transport(complete, self.timeout_s)
+            brut = self.transport(complete, self.timeout_s if budget_s is None else budget_s)
         except Exception as exc:  # toute panne de transport : échec fermé, type seul journalisé
             nom = type(exc).__name__
         else:
@@ -138,33 +149,41 @@ class ClientComfy:
         log.warning("comfyui requete en echec type=%s", nom)
         raise ErreurComfy("comfyui : requête en échec")
 
-    def json(self, chemin: str, corps: Any = None) -> dict[str, Any]:
+    def json(self, chemin: str, corps: Any = None, budget_s: float | None = None) -> dict[str, Any]:
         donnees = None if corps is None else json.dumps(corps).encode()
-        return _objet(self.envoyer(Requete(chemin, donnees)))
+        return _objet(self.envoyer(Requete(chemin, donnees), budget_s))
 
     def rendre(self, workflow: Mapping[str, Any], noeud: str, delai_s: float, limite: int) -> bytes:
         """Soumet le workflow, attend sa fin (`delai_s` au plus), rend la sortie de `noeud`."""
-        soumis = self.json("/prompt", {"prompt": workflow, "client_id": uuid.uuid4().hex})
-        prompt_id = soumis.get("prompt_id")
+        fin = self.horloge() + delai_s
+        corps = {"prompt": workflow, "client_id": uuid.uuid4().hex}
+        prompt_id = self.json("/prompt", corps, self._budget(fin)).get("prompt_id")
         if not isinstance(prompt_id, str) or not _PROMPT_ID.fullmatch(prompt_id):
             _echec("prompt_id hors contrat")
-        sorties = self._attendre(prompt_id, delai_s)
+        sorties = self._attendre(prompt_id, fin)
         requete = urllib.parse.urlencode(_fichier(sorties.get(noeud)))
-        return self.envoyer(Requete(f"/view?{requete}", limite=limite))
+        # Téléchargement borné par le reste du délai de l'étape (serveur au compte-gouttes).
+        return self.envoyer(Requete(f"/view?{requete}", limite=limite), self._restant(fin))
 
-    def _attendre(self, prompt_id: str, delai_s: float) -> dict[str, Any]:
-        fin = self.horloge() + delai_s
+    def _attendre(self, prompt_id: str, fin: float) -> dict[str, Any]:
         while True:
-            entree = self.json(f"/history/{prompt_id}").get(prompt_id)
+            entree = self.json(f"/history/{prompt_id}", budget_s=self._budget(fin)).get(prompt_id)
             statut = entree.get("status") if isinstance(entree, dict) else None
             if isinstance(statut, dict) and statut.get("status_str") == "error":
                 _echec("rendu en échec")
             if isinstance(statut, dict) and statut.get("completed") is True:
                 sorties = entree.get("outputs") if isinstance(entree, dict) else None
                 return sorties if isinstance(sorties, dict) else {}
-            if self.horloge() >= fin:
-                _echec("délai dépassé")
             self.dormir(self.intervalle_s)
+
+    def _restant(self, fin: float) -> float:
+        restant = fin - self.horloge()
+        if restant <= 0:
+            _echec("délai dépassé")
+        return restant
+
+    def _budget(self, fin: float) -> float:
+        return min(self.timeout_s, self._restant(fin))
 
     def liberer(self) -> None:
         corps = json.dumps({"unload_models": True, "free_memory": True}).encode()
@@ -188,13 +207,18 @@ def comfy_depuis_env(env: Mapping[str, str], transport: Transport = _http) -> Cl
     return ClientComfy(url, transport=transport)
 
 
-def decharger_ollama(client: ClientOllama) -> Callable[[], None]:
-    """Décharge le modèle d'Ollama de la VRAM (`keep_alive: 0`) ; panne : `OllamaInjoignable`."""
+def decharger_ollama(url: str, transport: Transport = _http) -> Callable[[], None]:
+    """Décharge de la VRAM tous les modèles listés par `<url>/api/ps` (`keep_alive: 0`).
+
+    Réponse bornée, au plus `MODELES_MAX` noms validés ; panne : `OllamaInjoignable`.
+    """
+    base = url.rstrip("/")
 
     def decharger() -> None:
-        corps = json.dumps({"model": client.modele, "keep_alive": 0}).encode()
         try:
-            client.transport(client.url.rstrip("/") + "/api/generate", corps, client.timeout_s)
+            for modele in _modeles(transport(Requete(f"{base}/api/ps"), TIMEOUT_S)):
+                corps = json.dumps({"model": modele, "keep_alive": 0}).encode()
+                transport(Requete(f"{base}/api/generate", corps), TIMEOUT_S)
         except Exception as exc:  # VRAM non libérée : la génération n'est pas lancée
             nom = type(exc).__name__
         else:
@@ -203,6 +227,24 @@ def decharger_ollama(client: ClientOllama) -> Callable[[], None]:
         raise OllamaInjoignable("ollama : déchargement en échec")
 
     return decharger
+
+
+def _modeles(brut: bytes) -> list[str]:
+    """Noms des modèles chargés (`/api/ps`) ; réponse hors contrat : ValueError."""
+    if len(brut) > TAILLE_JSON:
+        raise ValueError("réponse trop grande")
+    liste = json.loads(brut).get("models") if brut.lstrip().startswith(b"{") else None
+    if not isinstance(liste, list) or len(liste) > MODELES_MAX:
+        raise ValueError("liste de modèles hors contrat")
+    noms = [m.get("name") if isinstance(m, dict) else None for m in liste]
+    if not all(isinstance(n, str) and _MODELE.fullmatch(n) for n in noms):
+        raise ValueError("nom de modèle hors contrat")
+    return [str(n) for n in noms]
+
+
+def graine(job_id: str) -> int:
+    """Graine du KSampler dérivée du job_id : même job, même rendu ; 32 bits."""
+    return int.from_bytes(hashlib.sha256(job_id.encode()).digest()[:4], "big")
 
 
 @dataclass(frozen=True)
@@ -216,19 +258,22 @@ class _Workflow:
     def charger(
         cls, chemin: Path, sauvegarde: str, marqueurs: tuple[str, ...], longueurs: int = 0
     ) -> _Workflow:
-        """Workflow valide : sortie `sauvegarde` unique, chaque marqueur une fois, `longueurs`
-        entrées `length` entières (nombre d'images remplacé par `frames`)."""
+        """Workflow valide : sortie `sauvegarde` unique, chaque marqueur une fois, une graine
+        `seed` entière, `longueurs` entrées `length` entières (remplacées par `frames`)."""
         graphe = _graphe(chemin)
         entrees = [n["inputs"] for n in graphe.values()]
         valeurs = [v for e in entrees for v in e.values()]
         sorties = [k for k, n in graphe.items() if n.get("class_type") == sauvegarde]
         longueur = sum(isinstance(e.get("length"), int) for e in entrees)
+        graines = sum(isinstance(e.get("seed"), int) for e in entrees)
         marques = all(valeurs.count(m) == 1 for m in marqueurs)
-        if len(sorties) != 1 or not marques or longueur != longueurs:
+        if len(sorties) != 1 or not marques or longueur != longueurs or graines != 1:
             raise ErreurConfiguration(f"workflow sans marqueur ou sortie unique : {chemin.name}")
         return cls(graphe, sorties[0])
 
-    def preparer(self, valeurs: Mapping[str, Any], longueur: int | None = None) -> dict[str, Any]:
+    def preparer(
+        self, valeurs: Mapping[str, Any], seed: int, longueur: int | None = None
+    ) -> dict[str, Any]:
         graphe: dict[str, Any] = json.loads(json.dumps(self.graphe))
         for noeud in graphe.values():
             entrees = noeud["inputs"]
@@ -237,6 +282,8 @@ class _Workflow:
                     entrees[cle] = valeurs[valeur]
             if longueur is not None and isinstance(entrees.get("length"), int):
                 entrees["length"] = longueur
+            if isinstance(entrees.get("seed"), int):
+                entrees["seed"] = seed
         return graphe
 
 
@@ -262,9 +309,11 @@ class EtapesGpu:
         """Image Flux déposée dans ComfyUI/input ; rend son chemin relatif `<job_id>.png`."""
         if not _JOB_ID.fullmatch(job_id) or not isinstance(image_prompt, str):
             _echec("job image hors contrat")
+        if self._phase != "image":  # Wan (phase clip précédente) ne reste pas en VRAM
+            self.comfy.liberer()
         self.decharger_ollama()  # à chaque image : un run voisin a pu recharger Ollama
         self._phase = "image"
-        graphe = self._flux.preparer({"{{PROMPT}}": image_prompt})
+        graphe = self._flux.preparer({"{{PROMPT}}": image_prompt}, graine(job_id))
         png = self.comfy.rendre(graphe, self._flux.sortie, self.delai_image_s, TAILLE_IMAGE)
         if not png.startswith(b"\x89PNG\r\n\x1a\n"):
             _echec("image hors format PNG")
@@ -279,7 +328,7 @@ class EtapesGpu:
             self.comfy.liberer()
             self._phase = "clip"
         valeurs = {"{{PROMPT}}": job["motion_prompt"], "{{IMAGE}}": job["image_path"]}
-        graphe = self._wan.preparer(valeurs, longueur=job["frames"])
+        graphe = self._wan.preparer(valeurs, graine(job["job_id"]), longueur=job["frames"])
         mp4 = self.comfy.rendre(graphe, self._wan.sortie, self.delai_clip_s, TAILLE_CLIP)
         if mp4[4:8] != b"ftyp":
             _echec("clip hors format MP4")

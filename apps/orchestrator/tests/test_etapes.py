@@ -48,8 +48,6 @@ class FauxOllama:
     def __call__(self, url: str, corps: bytes, timeout: float) -> bytes:
         requete = json.loads(corps)
         self.requetes.append(requete)
-        if url.endswith("/api/generate"):  # déchargement de la VRAM avant l'image (#245)
-            return b'{"done": true}'
         contenu = LIBRE if len(self.requetes) == 1 else STORYBOARD
         return json.dumps(
             {"message": {"role": "assistant", "content": json.dumps(contenu)}}
@@ -104,6 +102,10 @@ def test_configuration_absente_leve_avant_tout_appel(
 # Scénario: rendu en échec ou trop long (#245), via `lancer` et un faux ComfyUI
 
 
+def _sans_ollama() -> None:
+    """Déchargement de la VRAM d'Ollama : testé dans test_steps_gpu et test_cli."""
+
+
 def _comfy(faux: FauxComfy) -> ClientComfy:
     horloge = Horloge()
     return ClientComfy(COMFY, transport=faux.transport, horloge=horloge, dormir=horloge.dormir)
@@ -121,7 +123,9 @@ def test_rendu_en_echec_run_en_erreur_sans_fuite(
 ) -> None:
     faux = FauxComfy(mode=mode, cible=cible)
     out = tmp_path / "jobs"
-    etapes = etapes_reelles(env, out=out, transport=FauxOllama(), comfy=_comfy(faux))
+    etapes = etapes_reelles(
+        env, out=out, transport=FauxOllama(), comfy=_comfy(faux), decharge=_sans_ollama
+    )
     with caplog.at_level(logging.DEBUG):
         run = lancer(DICTEE, etapes, run_id="r245", workdir=str(out))
     RUN.validate(run)
@@ -147,7 +151,9 @@ def test_comfy_url_hors_boucle_locale_refusee_avant_tout_appel(
 
 def test_image_et_clip_branches_sur_comfyui(env: dict[str, str], tmp_path: Path) -> None:
     faux = FauxComfy()
-    etapes = etapes_reelles(env, out=tmp_path, transport=FauxOllama(), comfy=_comfy(faux))
+    etapes = etapes_reelles(
+        env, out=tmp_path, transport=FauxOllama(), comfy=_comfy(faux), decharge=_sans_ollama
+    )
     assert etapes.image("r245-img-1", "an owl") == "r245-img-1.png"
     job = {
         "schema_version": "1.0",

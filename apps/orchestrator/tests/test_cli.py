@@ -279,6 +279,8 @@ class _FauxOllamaHttp:
 
     def repondre(self, methode: str, chemin: str, corps: bytes | None) -> tuple[int, bytes]:
         self.journal.append(f"ollama {methode} {chemin}")
+        if chemin == "/api/ps":
+            return 200, json.dumps({"models": [{"name": "qwen3:8b"}]}).encode()
         if chemin == "/api/generate":
             self.dechargements.append(json.loads(corps or b"{}"))
             return 200, b'{"done": true}'
@@ -350,14 +352,17 @@ def test_reel_dictee_vers_mp4_avec_faux_comfyui(
 def test_reel_memoire_graphique(tmp_path: Path, reel: Callable[..., _Reel]) -> None:
     r = reel()
     _run_reel(tmp_path, r)
-    j = r.journal
-    premiere_image = j.index("comfy POST /prompt")
-    assert j.index("ollama POST /api/generate") < premiere_image
     images = len(STORYBOARD["plans"])
     assert r.ollama.dechargements == [{"model": "qwen3:8b", "keep_alive": 0}] * images
-    free = j.index("comfy POST /free")
-    assert j[:free].count("comfy POST /prompt") == images  # aucun clip avant /free
-    assert j[free:].count("comfy POST /prompt") == images
+    free, ps, decharge, prompt = (
+        "comfy POST /free",
+        "ollama GET /api/ps",
+        "ollama POST /api/generate",
+        "comfy POST /prompt",
+    )
+    vram = [ligne for ligne in r.journal if ligne in (free, ps, decharge, prompt)]
+    phase_image = [free] + [ps, decharge, prompt] * images
+    assert vram == phase_image + [free] + [prompt] * images  # /free avant le premier clip
 
 
 @pytest.mark.parametrize(("cible", "etape"), [("SaveImage", "image"), ("SaveVideo", "clip")])

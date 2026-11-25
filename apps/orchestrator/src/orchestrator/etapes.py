@@ -9,7 +9,7 @@ Aucun texte de dictée ni prompt dans les messages.
 from __future__ import annotations
 
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from orchestrator.pipeline import Etapes
@@ -32,10 +32,11 @@ def etapes_reelles(
     out: Path,
     transport: Transport = _transport_http,
     comfy: ClientComfy | None = None,
+    decharge: Callable[[], None] | None = None,
 ) -> Etapes:
     """Étapes réelles ; lève `ErreurConfiguration` si Ollama, Piper ou ComfyUI est mal configuré.
 
-    `transport` (Ollama) et `comfy` sont injectables : faux serveurs en test.
+    `transport` (Ollama), `comfy` et `decharge` (VRAM d'Ollama) sont injectables : faux en test.
     """
     environnement = os.environ if env is None else env
     client = client_depuis_env(environnement, transport)
@@ -43,6 +44,7 @@ def etapes_reelles(
     storyboard = storyboard_ollama(client)
     _verifier_configuration(environnement)
     comfy = comfy_depuis_env(environnement) if comfy is None else comfy
-    gpu = EtapesGpu(comfy, decharger_ollama(client), out)
+    decharge = decharger_ollama(client.url) if decharge is None else decharge
+    gpu = EtapesGpu(comfy, decharge, out)
     voix = voix_piper(environnement)
     return Etapes(classifier, storyboard, voix, gpu.image, gpu.clip, montage_reel())

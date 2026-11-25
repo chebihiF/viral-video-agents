@@ -27,13 +27,14 @@ from orchestrator.steps_gpu import (
     comfy_depuis_env,
     decharger_ollama,
 )
-from orchestrator.steps_llm import ClientOllama, ErreurConfiguration, OllamaInjoignable
+from orchestrator.steps_llm import ErreurConfiguration, OllamaInjoignable
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\0" * 32
 MP4 = b"\0\0\0\x18ftypisom" + b"\0" * 32
 PROMPT = "a violet owl drums a secret tambourine on the moon"
 MOTION = "the owl beats the drum slowly, camera pushes in"
 URL = "http://127.0.0.1:8188"
+OLLAMA = "http://ollama.test:11434"
 
 
 class FauxComfy:
@@ -124,16 +125,23 @@ class FauxComfy:
         return corps
 
 
-class FauxOllama:
-    """Transport Ollama factice pour le déchargement (`/api/generate`, keep_alive 0)."""
+MODELES = ["qwen3:8b", "llava:7b"]
 
-    def __init__(self, journal: list[str]) -> None:
+
+class FauxOllama:
+    """Transport Ollama factice : `/api/ps` (modèles chargés) puis `/api/generate` keep_alive 0."""
+
+    def __init__(self, journal: list[str], ps: bytes | None = None) -> None:
         self.journal = journal
         self.corps: list[dict[str, Any]] = []
+        self.ps = ps or json.dumps({"models": [{"name": m} for m in MODELES]}).encode()
 
-    def __call__(self, url: str, corps: bytes, timeout: float) -> bytes:
-        self.journal.append(f"ollama {urlsplit(url).path}")
-        self.corps.append(json.loads(corps))
+    def __call__(self, requete: Requete, timeout: float) -> bytes:
+        methode = "GET" if requete.corps is None else "POST"
+        self.journal.append(f"ollama {methode} {urlsplit(requete.url).path}")
+        if requete.corps is None:
+            return self.ps
+        self.corps.append(json.loads(requete.corps))
         return b'{"done": true}'
 
 
@@ -155,8 +163,8 @@ def _gpu(tmp_path: Path, mode: str = "ok", **kwargs: Any) -> tuple[EtapesGpu, Fa
     faux = FauxComfy(journal, mode)
     horloge = Horloge()
     comfy = ClientComfy(URL, transport=faux.transport, horloge=horloge, dormir=horloge.dormir)
-    ollama = ClientOllama("http://ollama.test:11434", transport=FauxOllama(journal))
-    gpu = EtapesGpu(comfy, decharger_ollama(ollama), tmp_path / "out", **kwargs)
+    decharge = decharger_ollama(OLLAMA, FauxOllama(journal))
+    gpu = EtapesGpu(comfy, decharge, tmp_path / "out", **kwargs)
     return gpu, faux, journal
 
 
@@ -250,43 +258,78 @@ def test_clip_telecharge_le_mp4_dans_le_dossier_du_run(tmp_path: Path) -> None:
 # Scénario: mémoire graphique
 
 
-def test_ollama_decharge_avant_l_image_et_free_avant_le_clip(tmp_path: Path) -> None:
+VRAM = ("comfy POST /free", "ollama POST /api/generate", "comfy POST /prompt")
+
+
+def test_memoire_graphique_free_a_chaque_changement_de_phase(tmp_path: Path) -> None:
     gpu, faux, journal = _gpu(tmp_path)
     gpu.image("r245-img-1", PROMPT)
     gpu.image("r245-img-2", PROMPT)
     gpu.clip(_job(1))
     gpu.clip(_job(2))
-    premier_prompt = journal.index("comfy POST /prompt")
-    assert journal.index("ollama /api/generate") < premier_prompt
-    assert journal.count("ollama /api/generate") == 2  # avant chaque image
-    free = journal.index("comfy POST /free")
-    assert journal.count("comfy POST /free") == 1
-    assert free < len(journal) - 1 - journal[::-1].index("comfy POST /prompt")
-    prompts_avant_free = journal[:free].count("comfy POST /prompt")
-    assert prompts_avant_free == 2  # les deux images, aucun clip avant /free
-    assert faux.frees == [{"unload_models": True, "free_memory": True}]
+    gpu.image("r246-img-1", PROMPT)  # run suivant : Wan ne doit pas rester en VRAM
+    free, ollama, prompt = VRAM
+    decharge = [ollama] * len(MODELES)
+    attendu = [free, *decharge, prompt, *decharge, prompt, free, prompt, prompt]
+    attendu += [free, *decharge, prompt]
+    assert [ligne for ligne in journal if ligne in VRAM] == attendu
+    assert faux.frees == [{"unload_models": True, "free_memory": True}] * 3
 
 
-def test_dechargement_ollama_keep_alive_zero() -> None:
+def test_dechargement_de_tous_les_modeles_listes_par_ps() -> None:
     journal: list[str] = []
     ollama = FauxOllama(journal)
-    decharger_ollama(ClientOllama("http://ollama.test:11434", transport=ollama))()
-    assert ollama.corps == [{"model": "qwen3:8b", "keep_alive": 0}]
+    decharger_ollama(OLLAMA, ollama)()
+    assert journal[0] == "ollama GET /api/ps"
+    assert ollama.corps == [{"model": m, "keep_alive": 0} for m in MODELES]
+
+
+@pytest.mark.parametrize(
+    "ps",
+    [
+        b"{" + b" " * 2_000_000 + b"}",
+        b"pas du json",
+        json.dumps({"models": [{"name": "../x"}]}).encode(),
+        json.dumps({"models": [{"name": f"m{i}"} for i in range(100)]}).encode(),
+        json.dumps({"models": "qwen3"}).encode(),
+    ],
+)
+def test_ps_hors_contrat_echec_ferme_sans_dechargement(ps: bytes) -> None:
+    ollama = FauxOllama([], ps)
+    with pytest.raises(OllamaInjoignable) as exc:
+        decharger_ollama(OLLAMA, ollama)()
+    assert exc.value.__context__ is None
+    assert ollama.corps == []
+
+
+def test_graine_derivee_du_job_id(tmp_path: Path) -> None:
+    gpu, faux, _ = _gpu(tmp_path)
+    gpu.image("r245-img-1", PROMPT)
+    gpu.image("r245-img-2", PROMPT)
+    gpu.image("r245-img-1", PROMPT)
+    gpu.clip(_job(1))
+    graines = [
+        n["inputs"]["seed"] for wf in faux.workflows for n in wf.values() if "seed" in n["inputs"]
+    ]
+    assert len(graines) == 4
+    assert graines[0] == graines[2]
+    assert len({graines[0], graines[1], graines[3]}) == 3
+    assert all(type(g) is int and 0 <= g < 2**32 for g in graines)
 
 
 def test_dechargement_ollama_en_echec_aucun_rendu(tmp_path: Path) -> None:
     faux = FauxComfy()
 
-    def panne(url: str, corps: bytes, timeout: float) -> bytes:
+    def panne(requete: Requete, timeout: float) -> bytes:
         raise OSError(PROMPT)
 
-    ollama = ClientOllama("http://ollama.test:11434", transport=panne)
-    gpu = EtapesGpu(ClientComfy(URL, transport=faux.transport), decharger_ollama(ollama), tmp_path)
+    comfy = ClientComfy(URL, transport=faux.transport)
+    gpu = EtapesGpu(comfy, decharger_ollama(OLLAMA, panne), tmp_path)
     with pytest.raises(OllamaInjoignable) as exc:
         gpu.image("r245-img-1", PROMPT)
     assert exc.value.__context__ is None
     assert "owl" not in str(exc.value)
-    assert faux.journal == []
+    assert "comfy POST /prompt" not in faux.journal
 
 
 # Scénario: rendu en échec ou trop long (sans fuite du prompt)
@@ -386,6 +429,7 @@ class ServeurFaux(http.server.ThreadingHTTPServer):
         self.app = app
         self.pause_s = 0.0
         self.redirection: str | None = None
+        self.goutte_s = 0.0
         super().__init__(("127.0.0.1", 0), _Gestionnaire)
 
     @property
@@ -410,6 +454,12 @@ class _Gestionnaire(http.server.BaseHTTPRequestHandler):
         self.send_response(statut)
         self.send_header("Content-Length", str(len(contenu)))
         self.end_headers()
+        if self.server.goutte_s and self.path.startswith("/view"):
+            for octet in contenu:  # compte-gouttes : chaque lecture socket reste sous le délai
+                self.wfile.write(bytes([octet]))
+                self.wfile.flush()
+                time.sleep(self.server.goutte_s)
+            return
         self.wfile.write(contenu)
 
     do_GET = do_POST = _repondre
@@ -436,9 +486,10 @@ def serveurs() -> Iterator[Callable[[Callable[..., tuple[int, bytes]]], ServeurF
 
 def _gpu_http(tmp_path: Path, url: str, **kwargs: Any) -> tuple[EtapesGpu, list[str]]:
     journal: list[str] = []
-    ollama = ClientOllama("http://ollama.test:11434", transport=FauxOllama(journal))
+    gpu_kwargs = {k: kwargs.pop(k) for k in ("delai_image_s", "delai_clip_s") if k in kwargs}
     comfy = ClientComfy(url, **kwargs)
-    return EtapesGpu(comfy, decharger_ollama(ollama), tmp_path / "out"), journal
+    decharge = decharger_ollama(OLLAMA, FauxOllama(journal))
+    return EtapesGpu(comfy, decharge, tmp_path / "out", **gpu_kwargs), journal
 
 
 def test_http_reel_image_et_clip(tmp_path: Path, serveurs: Any) -> None:
@@ -482,3 +533,15 @@ def test_http_serveur_muet_delai_borne(tmp_path: Path, serveurs: Any) -> None:
     with pytest.raises(ErreurComfy):
         gpu.image("r245-img-1", PROMPT)
     assert time.monotonic() - debut < 0.9
+
+
+def test_http_view_au_compte_gouttes_borne_par_le_delai_de_l_etape(
+    tmp_path: Path, serveurs: Any
+) -> None:
+    serveur = serveurs(FauxComfy().repondre)
+    serveur.goutte_s = 0.05  # 41 octets : ~2 s au total, chaque octet bien sous timeout_s
+    gpu, _ = _gpu_http(tmp_path, serveur.url, timeout_s=0.5, delai_image_s=0.6)
+    debut = time.monotonic()
+    with pytest.raises(ErreurComfy):
+        gpu.image("r245-img-1", PROMPT)
+    assert time.monotonic() - debut < 1.5

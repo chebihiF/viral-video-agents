@@ -81,15 +81,16 @@ etapes = Etapes(classifier, storyboard, voix_piper(), image, clip, montage_reel(
 ```python
 from orchestrator.steps_gpu import EtapesGpu, comfy_depuis_env, decharger_ollama
 
-gpu = EtapesGpu(comfy_depuis_env(os.environ), decharger_ollama(client_ollama), out=Path("runs"))
+gpu = EtapesGpu(comfy_depuis_env(os.environ), decharger_ollama(OLLAMA_URL), out=Path("runs"))
 etapes = Etapes(classifier, storyboard, voix, gpu.image, gpu.clip, montage)
 ```
 
 - `COMFY_URL` : boucle locale seulement (`http://127.0.0.1:8188`, `http://localhost:8188`, `http://[::1]:8188`), par exemple l'extrémité d'un tunnel ouvert à la main. Absente, autre hôte, identifiants, chemin ou requête dans l'URL : `ErreurConfiguration` (CLI : code 78), aucun appel réseau.
 - `image(job_id, prompt)` : `comfyui/workflows/flux_schnell_t2i_api.json` (`{{PROMPT}}` remplacé dans la structure JSON) → `/prompt`, `/history/{id}`, `/view` (PNG vérifié) → `/upload/image` (`overwrite`) ; rend `<job_id>.png`, relatif à `ComfyUI/input`. Nom rendu différent : échec.
 - `clip(gpu_job)` : gpu-job vérifié (`job_id` `<run_id>-clip-<n>`, `image_path`, `frames` 4n+1) → `wan22_5b_i2v_api.json` (`{{PROMPT}}` = `motion_prompt`, `{{IMAGE}}` = `image_path`, `length` = `frames`) ; MP4 (`ftyp` vérifié) écrit sous `<out>/<run_id>/<job_id>.mp4` (création exclusive, sans suivre de lien symbolique).
-- VRAM 8 Go : Ollama déchargé (`POST <OLLAMA_URL>/api/generate`, `keep_alive: 0`) avant chaque image (un run voisin a pu le recharger) ; `POST /free` (`unload_models`, `free_memory`) une fois en entrant dans la phase clip. Appels faits sous le verrou GPU du pipeline.
-- Durcissement (comme `steps_llm`) : proxy d'environnement ignoré, redirection refusée, 30 s par requête, rendu borné (image 600 s, clip 1800 s, `/history` lu chaque seconde), réponses bornées (JSON 1 Mo, PNG 50 Mo, MP4 200 Mo). Les noms de fichiers rendus par ComfyUI ne servent qu'à `/view` (validés : ni `..`, ni `/`) ; jamais de chemin local.
+- VRAM 8 Go : `POST /free` (`unload_models`, `free_memory`) à chaque changement de phase (entrée en phase clip, et en phase image si la précédente ne l'était pas : Wan ne reste pas chargé) ; avant chaque image, tous les modèles listés par `GET <OLLAMA_URL>/api/ps` (réponse bornée, 16 noms validés au plus) sont déchargés (`POST /api/generate`, `keep_alive: 0`). Appels faits sous le verrou GPU du pipeline.
+- Graine (`seed` du KSampler) dérivée du `job_id` (SHA-256, 32 bits) : même job, même rendu ; plans distincts, graines distinctes.
+- Durcissement (comme `steps_llm`) : proxy d'environnement ignoré, redirection refusée, 30 s par requête lecture comprise (blocs de 64 Kio sous échéance `time.monotonic()`), `/view` borné par le reste du délai de l'étape, rendu borné (image 600 s, clip 1800 s, `/history` lu chaque seconde), réponses bornées (JSON 1 Mo, PNG 50 Mo, MP4 200 Mo). Les noms de fichiers rendus par ComfyUI ne servent qu'à `/view` (validés : ni `..`, ni `/`) ; jamais de chemin local.
 - Échec (`ErreurComfy`, `OllamaInjoignable`) : message générique, type seul journalisé, ni prompt ni texte de ComfyUI ; le run est « erreur » sur l'étape, sans MP4 final.
 - Tests : `tests/test_steps_gpu.py` (`FauxComfy` en mémoire et derrière un serveur HTTP sur 127.0.0.1) ; aucun GPU, aucun PC distant.
 
