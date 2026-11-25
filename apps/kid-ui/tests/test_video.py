@@ -61,6 +61,12 @@ def addr(store: jobs.JobStore, client_ip: list[str]) -> Iterator[tuple[str, int]
     httpd.server_close()
 
 
+def inject(store: jobs.JobStore, state: jobs.State) -> None:
+    """Pose un job UNKNOWN dans l'état voulu, avec son suivi (#165) : status() lit les deux."""
+    store._jobs[UNKNOWN] = jobs.Status(state=state, step="montage")  # noqa: SLF001
+    store._suivi[UNKNOWN] = jobs._Suivi([], 0.0)  # noqa: SLF001
+
+
 def done_job(store: jobs.JobStore) -> str:
     job_id = store.submit(DICTEE)
     deadline = time.monotonic() + 10
@@ -155,7 +161,7 @@ def test_traversee_et_inconnu_404(addr: tuple[str, int], store: jobs.JobStore, i
 
 
 def test_job_non_termine_404(addr: tuple[str, int], store: jobs.JobStore) -> None:
-    store._jobs[UNKNOWN] = jobs.Status(state="running", step="montage")
+    inject(store, "running")
     (store.runs_dir / UNKNOWN).mkdir(parents=True)
     (store.runs_dir / UNKNOWN / "final.mp4").write_bytes(MP4)
     assert get(addr, f"/api/jobs/{UNKNOWN}/video")[0] == 404
@@ -174,7 +180,7 @@ def test_lien_symbolique_refuse(
 ) -> None:
     secret = tmp_path / "secret.mp4"
     secret.write_bytes(b"secret")
-    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    inject(store, "done")
     d = store.runs_dir / UNKNOWN
     d.mkdir(parents=True)
     (d / "final.mp4").symlink_to(secret)
@@ -250,7 +256,7 @@ def test_sous_dossier_en_lien_symbolique_refuse(
     ailleurs = tmp_path / "ailleurs"
     ailleurs.mkdir()
     (ailleurs / "final.mp4").write_bytes(b"secret")
-    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    inject(store, "done")
     d = store.runs_dir / UNKNOWN
     d.mkdir(parents=True)
     (d / "run").symlink_to(ailleurs, target_is_directory=True)
@@ -263,7 +269,7 @@ def test_dossier_du_job_en_lien_symbolique_refuse(
     ailleurs = tmp_path / "ailleurs"
     ailleurs.mkdir()
     (ailleurs / "final.mp4").write_bytes(b"secret")
-    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    inject(store, "done")
     store.runs_dir.mkdir(parents=True)
     (store.runs_dir / UNKNOWN).symlink_to(ailleurs, target_is_directory=True)
     assert get(addr, f"/api/jobs/{UNKNOWN}/video")[0] == 404
@@ -271,7 +277,7 @@ def test_dossier_du_job_en_lien_symbolique_refuse(
 
 def test_fichier_non_regulier_404(addr: tuple[str, int], store: jobs.JobStore) -> None:
     """Un tube nommé final.mp4 ne bloque jamais le serveur (O_NONBLOCK + S_ISREG)."""
-    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    inject(store, "done")
     d = store.runs_dir / UNKNOWN
     d.mkdir(parents=True)
     os.mkfifo(d / "final.mp4")
