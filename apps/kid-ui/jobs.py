@@ -8,7 +8,11 @@ une soumission pendant un job queued/running est refusée (Busy). Délai global 
 puis kill et état error. Dictée bloquée par la classification (code 2 du CLI) : error avec
 `blocked`, à ne pas réessayer. Avancement (#165) : `progress` estimé par eta.py d'après les durées
 mesurées (journaux `durees.jsonl` des runs précédents, lus une fois à la soumission, lecture seule),
-jamais d'après la dictée ; le pourcentage ne recule jamais. Contrat : contracts/kid-job.schema.json.
+jamais d'après la dictée ; le pourcentage ne recule jamais. Alimentation du PC GPU (#223,
+ARCHITECTURE §8) : si `power` est fourni, `ensure_awake()` tourne dans le fil du job avant le
+CLI (état queued + `waking`, « j'allume le PC »), `job_started/job_finished` l'encadrent, et
+`Veille` appelle `tick()` périodiquement dans un fil démon arrêtable.
+Contrat : contracts/kid-job.schema.json.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, Protocol, TypedDict
 
 import eta
 
@@ -33,6 +37,7 @@ MAX_JOBS = 50  # jobs gardés en mémoire ; au-delà, les plus anciens terminés
 JOB_TIMEOUT_S = 30 * 60
 EX_BLOQUE = 2  # code de sortie du CLI orchestrateur pour une dictée bloquée
 DEFAULT_COMMAND = (sys.executable, "-m", "orchestrator")
+TICK_S = 30.0  # période de la boucle de veille, bien en deçà de idle_s (300–600 s)
 
 State = Literal["queued", "running", "done", "error", "deferred"]
 Step = Literal["storyboard", "images", "voix", "montage"]
@@ -64,6 +69,43 @@ class Status(TypedDict):
     step: Step
     progress: NotRequired[eta.Progress]
     blocked: NotRequired[bool]
+    waking: NotRequired[bool]
+
+
+class Power(Protocol):
+    """Alimentation du PC GPU (gpu_power.GpuPower) ; GpuUnavailable si le réveil échoue."""
+
+    def ensure_awake(self) -> None: ...
+    def job_started(self) -> None: ...
+    def job_finished(self) -> None: ...
+    def tick(self) -> bool: ...
+
+
+class Veille:
+    """Appelle power.tick() toutes les period_s secondes dans un fil démon, jusqu'à stop()."""
+
+    def __init__(self, power: Power, period_s: float = TICK_S) -> None:
+        self._power = power
+        self._period = period_s
+        self._stop = threading.Event()
+        self._thread = threading.Thread(target=self._loop, name="kid-veille", daemon=True)
+
+    def start(self) -> None:
+        self._thread.start()
+
+    def stop(self, timeout: float = 5.0) -> None:
+        self._stop.set()
+        self._thread.join(timeout)
+
+    def is_alive(self) -> bool:
+        return self._thread.is_alive()
+
+    def _loop(self) -> None:
+        while not self._stop.wait(self._period):
+            try:
+                self._power.tick()
+            except Exception as exc:  # le fil survit ; nom seul, jamais le message
+                log.warning("veille erreur=%s", type(exc).__name__)
 
 
 @dataclass
@@ -100,8 +142,10 @@ class JobStore:
         max_jobs: int = MAX_JOBS,
         timeout_s: float = JOB_TIMEOUT_S,
         clock: Callable[[], float] = time.monotonic,
+        power: Power | None = None,
     ) -> None:
         self._runs = runs_dir
+        self._power = power
         self._command = tuple(command)
         self._max = max_jobs
         self._timeout = timeout_s
@@ -173,8 +217,8 @@ class JobStore:
 
     def _run(self, job_id: str, dictee: str) -> None:
         try:
-            code = self._spawn(job_id, dictee)
-        except Exception as exc:  # CLI introuvable, dossier illisible… : échec fermé
+            code = self._alimente(job_id, dictee)
+        except Exception as exc:  # PC injoignable, CLI introuvable… : échec fermé
             log.warning("job=%s erreur=%s", job_id, type(exc).__name__)
             code = -1
         with self._lock:
@@ -184,6 +228,29 @@ class JobStore:
                 fin["blocked"] = True
             self._jobs[job_id] = fin
         log.info("job=%s etat=%s code=%d", job_id, fin["state"], code)
+
+    def _alimente(self, job_id: str, dictee: str) -> int:
+        """Réveille le PC (pire cas 360 s, ce fil, jamais la requête), puis lance le CLI."""
+        if self._power is None:
+            return self._spawn(job_id, dictee)
+        self._waking(job_id, True)
+        try:
+            self._power.ensure_awake()
+        finally:
+            self._waking(job_id, False)
+        self._power.job_started()
+        try:
+            return self._spawn(job_id, dictee)
+        finally:
+            self._power.job_finished()
+
+    def _waking(self, job_id: str, on: bool) -> None:
+        with self._lock:
+            s = self._jobs[job_id]
+            if on:
+                s["waking"] = True
+            else:
+                s.pop("waking", None)
 
     def _spawn(self, job_id: str, dictee: str) -> int:
         self._runs.mkdir(mode=0o700, parents=True, exist_ok=True)
