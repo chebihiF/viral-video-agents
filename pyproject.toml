@@ -4,6 +4,10 @@ version = "0.0.0"
 description = "Monorepo — appli familiale de vidéos animées générées par IA open source"
 requires-python = ">=3.12"
 
+[project.optional-dependencies]
+# ASR local de la dictée (#217) : `uv sync --extra asr` ; absent de la CI (tests avec faux module)
+asr = ["faster-whisper>=1.1"]
+
 [tool.uv.workspace]
 members = ["apps/media-service", "apps/orchestrator"]
 
