@@ -58,11 +58,12 @@ class Client:
         body: bytes,
         ctype: str | None = f"multipart/form-data; boundary={BOUNDARY}",
         path: str = "/api/dictation",
+        **extra: str,
     ) -> tuple[int, dict[str, str], Any]:
         conn = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
         try:
             headers = {"Content-Type": ctype} if ctype else {}
-            conn.request("POST", path, body=body, headers=headers)
+            conn.request("POST", path, body=body, headers=headers | extra)
             r = conn.getresponse()
             raw = r.read()
             return r.status, dict(r.getheaders()), (json.loads(raw) if raw else None)
@@ -86,6 +87,98 @@ def mock() -> transcriber.MockTranscriber:
 @pytest.fixture
 def client(mock: transcriber.MockTranscriber) -> Iterator[Client]:
     yield from serve(mock)
+
+
+@pytest.fixture(autouse=True)
+def client_ip(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Par défaut, le client est à la maison (lan_guard) ; un test peut le sortir du LAN."""
+    ip = ["192.168.1.42"]
+    monkeypatch.setattr(server.Handler, "client_ip", lambda self: ip[0])
+    return ip
+
+
+@pytest.fixture
+def lectures(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Espionne toute lecture du corps (lecture ou vidange) : la liste doit rester vide."""
+    vu: list[str] = []
+
+    def lu(h: server.Handler, n: int) -> bytes:
+        vu.append("lu")
+        return b""
+
+    monkeypatch.setattr(server, "read_body", lu)
+    monkeypatch.setattr(server, "drain", lu)
+    return vu
+
+
+REFUS = {"error": "requête refusée"}
+
+
+# --- Scénario : sécurité (#215) : hors LAN, page tierce, type inattendu ---
+def test_hors_lan_403_sans_lire_le_corps(
+    client: Client,
+    client_ip: list[str],
+    lectures: list[str],
+    mock: transcriber.MockTranscriber,
+) -> None:
+    client_ip[0] = "82.10.20.30"
+    status, _, resp = client.post(multipart(AUDIO))
+    assert (status, resp) == (403, REFUS)
+    assert VALIDATOR.is_valid(resp)
+    assert annonce_sans_envoyer(client.port, 2 * 1024 * 1024) == 403  # réponse sans attendre
+    assert lectures == []
+    assert mock.calls == 0
+
+
+def annonce_sans_envoyer(port: int, taille: int) -> int:
+    """Annonce `taille` octets sans les envoyer : si le serveur lisait le corps, il attendrait."""
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+    try:
+        conn.putrequest("POST", "/api/dictation")
+        conn.putheader("Content-Type", f"multipart/form-data; boundary={BOUNDARY}")
+        conn.putheader("Content-Length", str(taille))
+        conn.endheaders()
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
+def test_origin_different_du_host_403(
+    client: Client, lectures: list[str], mock: transcriber.MockTranscriber
+) -> None:
+    for origin in ("https://evil.example", "null", f"http://127.0.0.1:{client.port + 1}"):
+        status, _, resp = client.post(multipart(AUDIO), Origin=origin)
+        assert (status, resp) == (403, REFUS)
+    assert lectures == []
+    assert mock.calls == 0
+
+
+@pytest.mark.parametrize(
+    "ctype",
+    [
+        None,
+        "application/json",
+        "text/plain",
+        "application/x-www-form-urlencoded",
+        "multipart/mixed",
+    ],
+)
+def test_type_autre_que_multipart_403_sans_lire(
+    client: Client, lectures: list[str], ctype: str | None
+) -> None:
+    status, _, resp = client.post(multipart(AUDIO), ctype)
+    assert (status, resp) == (403, REFUS)
+    assert VALIDATOR.is_valid(resp)
+    assert lectures == []
+
+
+def test_lan_meme_origine_multipart_accepte(
+    client: Client, mock: transcriber.MockTranscriber
+) -> None:
+    origin = f"http://127.0.0.1:{client.port}"
+    status, _, body = client.post(multipart(AUDIO), Origin=origin)
+    assert (status, body) == (200, {"text": TEXTE})
+    assert mock.calls == 1
 
 
 # --- Scénario : dictée réussie ---
@@ -151,8 +244,6 @@ def test_type_non_supporte(client: Client, mock: transcriber.MockTranscriber) ->
             "audio_manquant",
         ),
         (multipart(b""), f"multipart/form-data; boundary={BOUNDARY}", "audio_vide"),
-        (b"{}", "application/json", "requete_invalide"),
-        (b"", None, "requete_invalide"),
     ],
 )
 def test_requetes_invalides(client: Client, body: bytes, ctype: str | None, code: str) -> None:

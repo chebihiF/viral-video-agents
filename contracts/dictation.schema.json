@@ -22,12 +22,13 @@
       "required": ["error"],
       "properties": {
         "error": {
-          "description": "Code d'erreur : 400 requete_invalide/audio_manquant/audio_vide, 404 introuvable, 413 audio_trop_gros, 415 type_non_supporte, 500 transcription_echouee, 503 asr_indisponible.",
+          "description": "Code d'erreur : 400 requete_invalide/audio_manquant/audio_vide, 403 « requête refusée » (hors LAN, Origin ≠ Host ou type non multipart, corps non lu ; #215), 404 introuvable, 413 audio_trop_gros, 415 type_non_supporte, 500 transcription_echouee, 503 asr_indisponible.",
           "type": "string",
           "enum": [
             "requete_invalide",
             "audio_manquant",
             "audio_vide",
+            "requête refusée",
             "introuvable",
             "audio_trop_gros",
             "type_non_supporte",
