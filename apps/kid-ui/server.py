@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import argparse
 import ipaddress
+import json
 import ssl
 import sys
+from collections.abc import Callable
+from email import policy
+from email.parser import BytesParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+
+from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, Transcriber
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_HOST = "127.0.0.1"
@@ -56,10 +62,119 @@ class Handler(SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         """Aucun journal d'accès : rien de l'enfant n'est tracé."""
 
+    def do_POST(self) -> None:
+        route = POST_ROUTES.get(self.path.split("?")[0])
+        if route is None:
+            self.send_json(404, {"error": "introuvable"})
+            return
+        route(self)
+
+    def send_json(self, status: int, payload: dict[str, str]) -> None:
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        if status >= 400:
+            self.send_header("Connection", "close")
+            self.close_connection = True
+        self.end_headers()
+        self.wfile.write(body)
+
 
 class Server(ThreadingHTTPServer):
+    transcriber: Transcriber | None = None
+
     def handle_error(self, request: Any, client_address: Any) -> None:
         """Poignée de main avortée ou connexion muette : on ferme sans trace ni journal."""
+
+
+# --- Dictée au micro (#161) : POST /api/dictation, en mémoire, sans disque ni journal ---
+MAX_BODY_BYTES = MAX_AUDIO_BYTES + 8192  # audio + en-têtes multipart
+MAX_DRAIN_BYTES = 16 * 1024 * 1024  # au-delà, on coupe sans lire
+MAX_TEXT_CHARS = 2000  # contrat contracts/dictation.schema.json
+
+
+def read_body(h: Handler, length: int) -> bytes:
+    chunks: list[bytes] = []
+    remaining = length
+    while remaining > 0:
+        chunk = h.rfile.read(min(remaining, 65536))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
+def drain(h: Handler, length: int) -> None:
+    """Lit et jette un corps trop gros pour que le client reçoive bien le 413."""
+    remaining = min(length, MAX_DRAIN_BYTES)
+    while remaining > 0:
+        chunk = h.rfile.read(min(remaining, 65536))
+        if not chunk:
+            break
+        remaining -= len(chunk)
+
+
+def audio_part(body: bytes, ctype: str) -> tuple[bytes, str] | None:
+    """(audio, type de base) du champ `audio` d'un multipart/form-data, sinon None."""
+    msg = BytesParser(policy=policy.HTTP).parsebytes(
+        b"Content-Type: " + ctype.encode() + b"\r\n\r\n" + body
+    )
+    if not msg.is_multipart():
+        return None
+    for part in msg.iter_parts():
+        if part.get_param("name", header="content-disposition") == "audio":
+            data = part.get_payload(decode=True)
+            return (data if isinstance(data, bytes) else b""), part.get_content_type()
+    return None
+
+
+def handle_dictation(h: Handler) -> None:
+    ctype = h.headers.get("Content-Type", "")
+    try:
+        length = int(h.headers.get("Content-Length", ""))
+    except ValueError:
+        length = -1
+    if not ctype.lower().startswith("multipart/form-data") or length < 0:
+        h.send_json(400, {"error": "requete_invalide"})
+        return
+    if length > MAX_BODY_BYTES:
+        drain(h, length)
+        h.send_json(413, {"error": "audio_trop_gros"})
+        return
+    found = audio_part(read_body(h, length), ctype)
+    if found is None:
+        h.send_json(400, {"error": "audio_manquant"})
+        return
+    audio, mime = found
+    if len(audio) > MAX_AUDIO_BYTES:
+        h.send_json(413, {"error": "audio_trop_gros"})
+    elif mime not in ALLOWED_MIMES:
+        h.send_json(415, {"error": "type_non_supporte"})
+    elif not audio:
+        h.send_json(400, {"error": "audio_vide"})
+    else:
+        transcribe_and_reply(h, audio, mime)
+
+
+def transcribe_and_reply(h: Handler, audio: bytes, mime: str) -> None:
+    tr = getattr(h.server, "transcriber", None)
+    if tr is None:
+        h.send_json(503, {"error": "asr_indisponible"})
+        return
+    try:
+        text = tr.transcribe(audio, mime)
+    except Exception:  # noqa: BLE001 - jamais de détail : il pourrait contenir la dictée
+        h.send_json(500, {"error": "transcription_echouee"})
+        return
+    h.send_json(200, {"text": text[:MAX_TEXT_CHARS]})
+
+
+POST_ROUTES: dict[str, Callable[[Handler], None]] = {}
+POST_ROUTES["/api/dictation"] = handle_dictation
+# --- fin du bloc dictée ---
 
 
 def make_tls_context(cert: str, key: str) -> ssl.SSLContext:
@@ -75,9 +190,11 @@ def make_server(
     *,
     tls_cert: str | None = None,
     tls_key: str | None = None,
-) -> ThreadingHTTPServer:
+    transcriber: Transcriber | None = None,
+) -> Server:
     """HTTP nu si aucun certificat (réservé aux tests et à --insecure-dev), sinon HTTPS."""
     httpd = Server((host, port), Handler)
+    httpd.transcriber = transcriber
     if tls_cert and tls_key:
         ctx = make_tls_context(tls_cert, tls_key)
         # Pas de poignée de main dans accept() : un client muet bloquerait tout le serveur.

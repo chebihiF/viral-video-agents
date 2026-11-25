@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/chebihiF/viral-video-agents/contracts/dictation.schema.json",
+  "title": "DictationResponse",
+  "description": "Réponse de POST /api/dictation de l'appli enfant (#161). La requête est un multipart/form-data avec un champ `audio` (audio/webm, audio/ogg ou audio/mp4, 1 Mo max). Succès : la transcription locale. Erreur : un code stable, jamais d'écho de l'audio ni du texte.",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text"],
+      "properties": {
+        "text": {
+          "description": "Transcription de la dictée ; donnée d'enfant, jamais journalisée.",
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["error"],
+      "properties": {
+        "error": {
+          "description": "Code d'erreur : 400 requete_invalide/audio_manquant/audio_vide, 404 introuvable, 413 audio_trop_gros, 415 type_non_supporte, 500 transcription_echouee, 503 asr_indisponible.",
+          "type": "string",
+          "enum": [
+            "requete_invalide",
+            "audio_manquant",
+            "audio_vide",
+            "introuvable",
+            "audio_trop_gros",
+            "type_non_supporte",
+            "transcription_echouee",
+            "asr_indisponible"
+          ]
+        }
+      }
+    }
+  ]
+}
