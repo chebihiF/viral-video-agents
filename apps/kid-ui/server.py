@@ -1,10 +1,15 @@
-"""Serveur statique minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défaut)."""
+"""Serveur minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défaut).
+
+Statique de static/ + API jobs (#162, contracts/kid-job.schema.json) : POST /api/jobs,
+GET /api/jobs/{id}. Hors réseau local (lan_guard, #158) : réponse « deferred », aucun job.
+"""
 
 from __future__ import annotations
 
 import argparse
 import ipaddress
 import json
+import re
 import ssl
 import sys
 from collections.abc import Callable
@@ -16,11 +21,24 @@ from typing import Any
 
 from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, MockTranscriber, Transcriber
 
+# lan_guard vit dans apps/gpu-worker (#158) : même garde, une seule implémentation.
+_GPU_WORKER = str(Path(__file__).resolve().parent.parent / "gpu-worker")
+if _GPU_WORKER not in sys.path:
+    sys.path.append(_GPU_WORKER)
+
+import jobs  # noqa: E402
+import lan_guard  # noqa: E402
+
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 8090
 TLS_TIMEOUT = 10.0  # secondes : une connexion muette est coupée
 LAN = ipaddress.ip_network("192.168.0.0/16")
+DEFAULT_RUNS_DIR = Path.home() / ".cache" / "vva" / "kid-ui-runs"
+API_JOBS = "/api/jobs"
+_JOB_PATH = re.compile(r"/api/jobs/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
+BODY_MAX = 8192  # octets : 500 caractères échappés en JSON tiennent largement
+DEFERRED = {"status": "deferred", "message": lan_guard.MSG_HORS_RESEAU}
 
 TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -52,6 +70,43 @@ class Handler(SimpleHTTPRequestHandler):
     def list_directory(self, path: Any) -> None:
         self.send_error(404)
 
+    def client_ip(self) -> str:
+        """Adresse du socket seulement : X-Forwarded-For n'est jamais lu (lan_guard)."""
+        return str(self.client_address[0])
+
+    def do_GET(self) -> None:
+        path = self.path.split("?")[0]
+        if not path.startswith("/api/"):
+            super().do_GET()
+        elif not lan_guard.is_local(self.client_ip()):
+            self.send_json(200, DEFERRED)
+        elif (m := _JOB_PATH.fullmatch(path)) and (status := self._jobs().status(m[1])):
+            self.send_json(200, dict(status))
+        else:
+            self.send_json(404, {"error": "job inconnu"})
+
+    def submit_job(self) -> None:
+        if not lan_guard.is_local(self.client_ip()):
+            self.send_json(200, DEFERRED)  # corps non lu : rien de l'enfant ne part
+            return
+        size = int(self.headers.get("Content-Length") or 0)
+        if size > BODY_MAX:
+            self.send_json(413, {"error": "corps trop gros"})
+            return
+        try:
+            body = json.loads(self.rfile.read(size))
+            if not isinstance(body, dict) or set(body) != {"text"}:
+                raise jobs.InvalidText
+            job_id = self._jobs().submit(body["text"])
+        except (ValueError, UnicodeError):  # JSON invalide ou InvalidText : texte jamais cité
+            self.send_json(400, {"error": "texte refusé"})
+            return
+        self.send_json(202, {"job_id": job_id})
+
+    def _jobs(self) -> jobs.JobStore:
+        assert isinstance(self.server, Server)
+        return self.server.store
+
     def end_headers(self) -> None:
         self.send_header("X-Content-Type-Options", "nosniff")
         if getattr(self, "path", "").split("?")[0] == "/sw.js":
@@ -69,7 +124,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         route(self)
 
-    def send_json(self, status: int, payload: dict[str, str]) -> None:
+    def send_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -84,6 +139,7 @@ class Handler(SimpleHTTPRequestHandler):
 
 class Server(ThreadingHTTPServer):
     transcriber: Transcriber | None = None
+    store: jobs.JobStore
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         """Poignée de main avortée ou connexion muette : on ferme sans trace ni journal."""
@@ -174,6 +230,7 @@ def transcribe_and_reply(h: Handler, audio: bytes, mime: str) -> None:
 
 POST_ROUTES: dict[str, Callable[[Handler], None]] = {}
 POST_ROUTES["/api/dictation"] = handle_dictation
+POST_ROUTES[API_JOBS] = Handler.submit_job
 # --- fin du bloc dictée ---
 
 
@@ -191,10 +248,12 @@ def make_server(
     tls_cert: str | None = None,
     tls_key: str | None = None,
     transcriber: Transcriber | None = None,
+    store: jobs.JobStore | None = None,
 ) -> Server:
     """HTTP nu si aucun certificat (réservé aux tests et à --insecure-dev), sinon HTTPS."""
     httpd = Server((host, port), Handler)
     httpd.transcriber = transcriber
+    httpd.store = store or jobs.JobStore(DEFAULT_RUNS_DIR)
     if tls_cert and tls_key:
         ctx = make_tls_context(tls_cert, tls_key)
         # Pas de poignée de main dans accept() : un client muet bloquerait tout le serveur.
@@ -210,6 +269,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--port", type=int, default=DEFAULT_PORT)
     p.add_argument("--tls-cert", help="certificat PEM (voir infra/kid-ui/README.md)")
     p.add_argument("--tls-key", help="clé privée PEM")
+    p.add_argument("--runs-dir", type=Path, default=DEFAULT_RUNS_DIR, help="dossier des runs vidéo")
     p.add_argument(
         "--insecure-dev",
         action="store_true",
@@ -270,7 +330,12 @@ def main(argv: list[str] | None = None) -> None:
         print(f"kid-ui : {err}", file=sys.stderr)  # noqa: T201
         raise SystemExit(2)
     httpd = make_server(
-        a.host, a.port, tls_cert=a.tls_cert, tls_key=a.tls_key, transcriber=make_transcriber(a)
+        a.host,
+        a.port,
+        tls_cert=a.tls_cert,
+        tls_key=a.tls_key,
+        transcriber=make_transcriber(a),
+        store=jobs.JobStore(a.runs_dir),
     )
     scheme = "https" if a.tls_cert else "http"
     print(f"kid-ui sur {scheme}://{a.host}:{a.port}/")  # noqa: T201
