@@ -24,6 +24,9 @@ Fichiers livrés (ne pas réécrire) : `apps/kid-ui/static/tokens-enfant.css` (t
 | Mes vidéos | `ul.grid` > `li` > `a.card` (`.pic` + `.kid-chip`, `b` titre, `.d` date) ; `.card.wait` = en cours | `.kid-foot` = retour |
 | Hors maison | `.home-scene` (Mimo endormi + `.zzz`), `.note.warn[role=status]` | voir ci-dessous |
 | Erreur | `.scene` (Mimo étourdi `.dizzy`), `.note.bad[role=alert]`, `.kid-cta` Réessayer `lg primary` | existe dans `index.html` |
+| Erreur : rien entendu (200, texte vide) | idem Erreur, puce « Dictée » | « Je n'ai rien entendu » / « Parle un peu plus fort, puis réessaie » (#234) |
+| Erreur : dictée trop longue (413 `audio_trop_gros`) | idem Erreur, puce « Dictée » | « C'est un peu long » / « Dis-moi une idée plus courte » |
+| Erreur : écoute indisponible (503 `asr_indisponible`) | idem Erreur, puce « Dictée », Réessayer actif | « Mimo ne peut pas écouter » / « Demande à un grand de m'aider » ; tout autre échec : « Oups, je n'ai pas compris » |
 
 ### Progression (#165, durée restante)
 ```html

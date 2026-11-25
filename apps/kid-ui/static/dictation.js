@@ -58,6 +58,27 @@
     erreur.hidden = false;
   }
 
+  // Erreurs de dictée (#234) : phrases courtes, jamais de code technique ni de texte dicté à l'écran.
+  var ERREURS = {
+    vide: ["Je n'ai rien entendu", "Parle un peu plus fort, puis réessaie"],
+    long: ["C'est un peu long", "Dis-moi une idée plus courte"],
+    sourd: ["Mimo ne peut pas écouter", "Demande à un grand de m'aider"],
+    autre: ["Oups, je n'ai pas compris", "Mimo n'a pas réussi à t'écouter. Réessaie."],
+  };
+
+  // Réponse de /api/dictation -> clé de ERREURS ; "" = texte exploitable.
+  function classer(rep, texte) {
+    if (rep.status === 413 && rep.corps && rep.corps.error === "audio_trop_gros") return "long";
+    if (rep.status === 503 && rep.corps && rep.corps.error === "asr_indisponible") return "sourd";
+    if (!rep.ok) return "autre";
+    if (rep.corps && typeof rep.corps.text === "string") return texte ? "" : "vide";
+    return "autre";
+  }
+
+  function erreurDictee(cle) {
+    afficherErreur(ERREURS[cle][0], ERREURS[cle][1], "Dictée");
+  }
+
   function erreurMicro() {
     afficherErreur("Je ne t'entends pas", "Le micro est fermé. Autorise-le, puis réessaie.", "Micro");
   }
@@ -154,18 +175,19 @@
     fetch("/api/dictation", { method: "POST", body: fd, cache: "no-store", credentials: "omit" })
       .then(function (r) {
         return r.json().then(function (j) {
-          return { ok: r.ok, corps: j };
+          return { ok: r.ok, status: r.status, corps: j };
         });
       })
       .then(function (rep) {
-        var texte = rep.ok && rep.corps && typeof rep.corps.text === "string" ? rep.corps.text.trim().slice(0, TEXTE_MAX) : "";
-        if (!texte) throw new Error("vide");
-        if (ecran === mon) resultat(texte);
+        var texte = rep.corps && typeof rep.corps.text === "string" ? rep.corps.text.trim().slice(0, TEXTE_MAX) : "";
+        var cle = classer(rep, texte);
+        if (ecran === mon) {
+          if (cle) erreurDictee(cle);
+          else resultat(texte);
+        }
       })
       .catch(function () {
-        if (ecran === mon) {
-          afficherErreur("Oups, je n'ai pas compris", "Mimo n'a pas réussi à t'écouter. Réessaie.", "Dictée");
-        }
+        if (ecran === mon) erreurDictee("autre");
       });
   }
 
