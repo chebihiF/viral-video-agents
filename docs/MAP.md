@@ -104,6 +104,7 @@
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
 - `comfyui/workflows/infinitetalk_single_api.json` — données JSON
 - `comfyui/workflows/wan22_5b_i2v_api.json` — données JSON
+- `comfyui/workflows/wan22_a14b_i2v_lightning_api.json` — données JSON
 - `contracts/README.md` — contracts
 - `contracts/classification.schema.json` — données JSON
 - `contracts/dictation.schema.json` — données JSON
