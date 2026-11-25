@@ -310,7 +310,8 @@ def test_js_garde_d_identite_d_ecran_apres_reponse() -> None:
 
 def test_js_ferme_l_ecoute_si_le_reseau_change() -> None:
     js = dictation_js()
-    assert re.search(r'addEventListener\("online",\s*fermerEcoute', js)
+    online = js.split('addEventListener("online"', 1)[1].split("});", 1)[0]
+    assert "retourAccueil()" in online and "fermerEcoute()" in online  # jamais d'écran vide
     assert re.search(r'addEventListener\("offline"', js)
     assert "fermerEcoute();" in js.split('"offline"', 1)[1].split("});", 1)[0]
 
