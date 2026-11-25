@@ -273,7 +273,7 @@ def test_la_maquette_du_mini_dom_correspond_a_index_html() -> None:
                   'class="kid-composer"', 'class="kid-theme"', 'class="kid-chip bad"'):  # fmt: skip
         assert motif in html, motif
     ordre = re.findall(r'<script src="/([\w.]+\.js)"></script>', html)
-    assert ordre[-4:] == ["status.js", "player.js", "shell.js", "dictation.js"]
+    assert ordre[-5:] == ["status.js", "player.js", "shell.js", "dictation.js", "accueil.js"]
 
 
 def test_dictation_envoie_par_mimostatus_sans_innerhtml() -> None:

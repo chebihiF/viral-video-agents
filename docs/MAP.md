@@ -26,8 +26,17 @@
 - `apps/kid-ui/jobs.py` — Jobs vidéo de l'appli enfant (#162) : la dictée part au CLI orchestrateur (#150) par stdin
 - `apps/kid-ui/make_icons.py` — Icônes PNG de l'appli (mascotte Mimo), stdlib seule : python3 apps/kid-ui/make_icons.py.
 - `apps/kid-ui/server.py` — Serveur minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défaut).
+- `apps/kid-ui/static/accueil.js` — Accueil : idées de départ et navigation clavier des radios. Aucun appel réseau, aucune don
 - `apps/kid-ui/static/dictation.js` — Dictée au micro (#161) : MediaRecorder vers POST /api/dictation, sans service tiers.
+- `apps/kid-ui/static/fonts/OFL-Bricolage-Grotesque.txt`
+- `apps/kid-ui/static/fonts/OFL-Figtree.txt`
 - `apps/kid-ui/static/fonts/OFL-Tajawal.txt`
+- `apps/kid-ui/static/fonts/bricolage-grotesque-latin-700.woff2`
+- `apps/kid-ui/static/fonts/bricolage-grotesque-latin-800.woff2`
+- `apps/kid-ui/static/fonts/figtree-latin-500.woff2`
+- `apps/kid-ui/static/fonts/figtree-latin-600.woff2`
+- `apps/kid-ui/static/fonts/figtree-latin-700.woff2`
+- `apps/kid-ui/static/fonts/figtree-latin-800.woff2`
 - `apps/kid-ui/static/fonts/tajawal-arabic-500.woff2`
 - `apps/kid-ui/static/fonts/tajawal-arabic-700.woff2`
 - `apps/kid-ui/static/fonts/tajawal-arabic-800.woff2`

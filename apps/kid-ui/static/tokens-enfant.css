@@ -1,6 +1,13 @@
 /* tokens-enfant.css — appli "Mimo" (360 px). Direction C : stickers, couleurs franches, mascotte.
-   3 thèmes : nuit (défaut), soleil, menthe. Polices latines (Bricolage Grotesque + Figtree, OFL) : repli système
-   tant qu'elles ne sont pas hébergées. Arabe : Tajawal (OFL, woff2 locaux dans fonts/, sans CDN). */
+   3 thèmes : nuit (défaut), soleil, menthe. Polices latines (Bricolage Grotesque + Figtree, OFL, woff2 locaux dans fonts/, sans CDN). Arabe : Tajawal (OFL, woff2 locaux dans fonts/, sans CDN). */
+
+/* Latin (sous-ensemble fontsource, avec accents français) : Bricolage Grotesque et Figtree, licences fonts/OFL-*.txt. */
+@font-face { font-family: "Bricolage Grotesque"; font-weight: 700; font-style: normal; font-display: swap; src: url("fonts/bricolage-grotesque-latin-700.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Bricolage Grotesque"; font-weight: 800; font-style: normal; font-display: swap; src: url("fonts/bricolage-grotesque-latin-800.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Figtree"; font-weight: 500; font-style: normal; font-display: swap; src: url("fonts/figtree-latin-500.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Figtree"; font-weight: 600; font-style: normal; font-display: swap; src: url("fonts/figtree-latin-600.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Figtree"; font-weight: 700; font-style: normal; font-display: swap; src: url("fonts/figtree-latin-700.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Figtree"; font-weight: 800; font-style: normal; font-display: swap; src: url("fonts/figtree-latin-800.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 /* Arabe seulement (unicode-range) : le latin garde sa pile. Sous-ensembles fontsource, licence fonts/OFL-Tajawal.txt. */
 @font-face { font-family: "Tajawal"; font-weight: 500; font-style: normal; font-display: swap; src: url("fonts/tajawal-arabic-500.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
@@ -30,6 +37,7 @@
   --bad: #FF8A8A; --bad-bg: #42182C;
   --info: #7CD0FF; --info-bg: #112F4A;
   --focus: #FFD84A;
+  --mimo-halo: drop-shadow(1.5px 0 0 var(--ink-2)) drop-shadow(-1.5px 0 0 var(--ink-2)) drop-shadow(0 1.5px 0 var(--ink-2)) drop-shadow(0 -1.5px 0 var(--ink-2));
 }
 /* ---------- Thème SOLEIL (clair, crème + cobalt + orange) ---------- */
 [data-theme="soleil"] {
@@ -46,6 +54,7 @@
   --bad: #A8201A; --bad-bg: #FFD3CE;
   --info: #0B4F8A; --info-bg: #CDE8FF;
   --focus: #1B1340;
+  --mimo-halo: none;
 }
 /* ---------- Thème MENTHE (clair, menthe + beurre + rose) ---------- */
 [data-theme="menthe"] {
@@ -62,6 +71,7 @@
   --bad: #A8201A; --bad-bg: #FFD3CE;
   --info: #0B4F8A; --info-bg: #CDE8FF;
   --focus: #0C2E2A;
+  --mimo-halo: none;
 }
 /* Sans choix de l'enfant : le réglage du téléphone décide (sombre = nuit, clair = soleil). */
 @media (prefers-color-scheme: light) {
@@ -74,6 +84,7 @@
     --ok: #0A6B42; --ok-bg: #CFF3DF; --warn: #7A4300; --warn-bg: #FFE1A0;
     --bad: #A8201A; --bad-bg: #FFD3CE; --info: #0B4F8A; --info-bg: #CDE8FF;
     --focus: #1B1340;
+    --mimo-halo: none;
   }
 }
 
@@ -96,7 +107,7 @@
 .muted { color: var(--ink-2); }
 
 /* ---------- Mascotte Mimo ---------- */
-.mimo { display: block; width: 40px; height: 40px; flex: none; overflow: visible; }
+.mimo { display: block; width: 40px; height: 40px; flex: none; overflow: visible; filter: var(--mimo-halo, none); }
 .mimo .eyes { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
 .mimo.xl { width: 128px; height: 128px; }
 .mimo.big { width: 92px; height: 92px; }
@@ -139,6 +150,7 @@
 .kid-chip.warn { background: var(--warn-bg); color: var(--warn); border-color: var(--warn); }
 .kid-chip.ok { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
 .kid-chip.info { background: var(--info-bg); color: var(--info); border-color: var(--info); }
+.kid-chip.dur { min-height: 28px; padding: 0 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .kid-chip.bad { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
 .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); animation: rec 1s infinite; }
 
@@ -262,7 +274,7 @@
 .poster { position: relative; align-self: center; width: 138px; aspect-ratio: 9/16; transform: rotate(-2deg); border: 3px solid var(--edge); border-radius: 18px; overflow: hidden; box-shadow: 0 6px 0 var(--edge); background: #1F2A5C; }
 .poster .art, .card .art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .poster .play { position: absolute; inset-inline-start: 50%; top: 50%; margin-block: -28px 0; margin-inline: -28px 0; width: 56px; height: 56px; }
-.poster .dur { position: absolute; inset-inline-end: 8px; bottom: 8px; }
+.poster .dur { position: absolute; inset-inline-end: 8px; bottom: 8px; background: var(--surface); box-shadow: 0 2px 0 var(--edge); }
 
 /* ---------- Mes vidéos ---------- */
 .grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 16px 14px; padding: 8px 14px 14px; align-content: start; }
