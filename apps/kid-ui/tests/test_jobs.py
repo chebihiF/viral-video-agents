@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import json
 import logging
 import re
@@ -90,10 +91,12 @@ def base(store: jobs.JobStore, client_ip: list[str]) -> Iterator[str]:
     httpd.server_close()
 
 
-def call(url: str, body: bytes | None = None) -> tuple[int, Any]:
+def call(url: str, body: bytes | None = None, **headers: str) -> tuple[int, Any]:
     method = "POST" if body is not None else "GET"
     req = urllib.request.Request(url, data=body, method=method)  # noqa: S310 - URL locale
     req.add_header("Content-Type", "application/json")
+    for nom, valeur in headers.items():
+        req.add_header(nom.replace("_", "-"), valeur)
     try:
         with urllib.request.urlopen(req, timeout=5) as r:  # noqa: S310 - URL locale de test
             return r.status, json.loads(r.read())
@@ -173,23 +176,108 @@ def test_suivi_hors_de_la_maison_differe(base: str, client_ip: list[str]) -> Non
 
 # --- Scénario : suivi du statut ---
 def test_suivi_queued_running_done(
-    base: str, store: jobs.JobStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    base: str, store: jobs.JobStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # fmt: skip
+    caplog.set_level(logging.INFO, logger="jobs")
+    gate = tmp_path / "gate"
+    monkeypatch.setenv("FAKE_GATE", str(gate))
+    job_id = post(base, {"text": DICTEE})[1]["job_id"]
+    wait_state(store, job_id, "running")
+    time.sleep(0.2)  # le faux CLI a lu la dictée et signalé la classification
+    assert call(f"{base}/api/jobs/{job_id}") == (200, {"state": "running", "step": "storyboard"})
+    gate.touch()
+    wait_state(store, job_id, "done")
+    status, body = call(f"{base}/api/jobs/{job_id}")
+    assert (status, body) == (200, {"state": "done", "step": "montage"})
+    assert list(validator("Status").iter_errors(body)) == []
+    etats = re.findall(rf"job={job_id} etat=(\w+)", caplog.text)
+    assert etats == ["queued", "running", "done"]
+
+
+def test_un_seul_job_a_la_fois_409(
+    base: str, store: jobs.JobStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, spy: Path
 ) -> None:
     gate = tmp_path / "gate"
     monkeypatch.setenv("FAKE_GATE", str(gate))
     premier = post(base, {"text": DICTEE})[1]["job_id"]
-    second = post(base, {"text": DICTEE})[1]["job_id"]
-    wait_state(store, premier, "running")
-    time.sleep(0.2)  # le faux CLI a lu la dictée et signalé la classification
-    assert call(f"{base}/api/jobs/{premier}") == (200, {"state": "running", "step": "storyboard"})
-    status, body = call(f"{base}/api/jobs/{second}")
-    assert (status, body["state"]) == (200, "queued")  # un seul parcours à la fois
+    status, body = post(base, {"text": DICTEE})
+    assert status == 409
+    assert DICTEE not in json.dumps(body)
     gate.touch()
-    for job_id in (premier, second):
-        wait_state(store, job_id, "done")
-        status, body = call(f"{base}/api/jobs/{job_id}")
-        assert (status, body) == (200, {"state": "done", "step": "montage"})
-        assert list(validator("Status").iter_errors(body)) == []
+    wait_state(store, premier, "done")
+    assert post(base, {"text": DICTEE})[0] == 202
+    assert len(spied(spy)) <= 2
+
+
+def test_jobs_bornes_les_plus_anciens_termines_purges(tmp_path: Path, spy: Path) -> None:
+    fake = tmp_path / "fake.py"
+    fake.write_text(FAKE, encoding="utf-8")
+    store = jobs.JobStore(tmp_path / "runs", command=(sys.executable, str(fake)), max_jobs=2)
+    ids = []
+    for _ in range(3):
+        ids.append(store.submit(DICTEE))
+        wait_state(store, ids[-1], "done")
+    assert store.status(ids[0]) is None
+    assert [store.status(i) is not None for i in ids[1:]] == [True, True]
+    assert jobs.MAX_JOBS == 50
+
+
+def test_delai_depasse_tue_le_processus_et_donne_error(
+    tmp_path: Path, spy: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.INFO, logger="jobs")
+    monkeypatch.setenv("FAKE_GATE", str(tmp_path / "jamais"))
+    fake = tmp_path / "fake.py"
+    fake.write_text(FAKE, encoding="utf-8")
+    store = jobs.JobStore(tmp_path / "runs", command=(sys.executable, str(fake)), timeout_s=0.5)
+    job_id = store.submit(DICTEE)
+    assert wait_state(store, job_id, "done", "error")["state"] == "error"
+    assert f"job={job_id} erreur=delai" in caplog.text
+    assert jobs.JOB_TIMEOUT_S == 30 * 60
+
+
+def test_dictee_bloquee_error_sans_reessai(
+    base: str, store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FAKE_CODE", "2")  # code de sortie « bloque » du CLI
+    job_id = post(base, {"text": DICTEE})[1]["job_id"]
+    wait_state(store, job_id, "error")
+    status, body = call(f"{base}/api/jobs/{job_id}")
+    assert status == 200
+    assert body["state"] == "error" and body["blocked"] is True
+    assert list(validator("Status").iter_errors(body)) == []
+
+
+# --- CSRF et corps de requête ---
+def test_csrf_content_type_json_exige(base: str, spy: Path) -> None:
+    data = json.dumps({"text": DICTEE}).encode()
+    assert call(base + "/api/jobs", data, Content_Type="text/plain")[0] == 403
+    assert spied(spy) == []
+
+
+def test_csrf_origin_etrangere_refusee(base: str, spy: Path) -> None:
+    data = json.dumps({"text": DICTEE}).encode()
+    assert call(base + "/api/jobs", data, Origin="https://evil.example")[0] == 403
+    assert spied(spy) == []
+
+
+def test_csrf_origin_du_meme_hote_acceptee(base: str) -> None:
+    data = json.dumps({"text": DICTEE}).encode()
+    assert call(base + "/api/jobs", data, Origin=base)[0] == 202
+
+
+@pytest.mark.parametrize("longueur", ["-1", "abc", ""])
+def test_content_length_invalide_400(base: str, spy: Path, longueur: str) -> None:
+    hote, port = base.removeprefix("http://").split(":")
+    conn = http.client.HTTPConnection(hote, int(port), timeout=5)
+    conn.putrequest("POST", "/api/jobs")
+    conn.putheader("Content-Type", "application/json")
+    conn.putheader("Content-Length", longueur)
+    conn.endheaders()
+    assert conn.getresponse().status == 400
+    conn.close()
+    assert spied(spy) == []
 
 
 def test_echec_du_parcours_donne_error(
@@ -225,6 +313,20 @@ def test_aucune_donnee_enfant_dans_les_logs(
 
 
 # --- Scénario : échec fermé ---
+def test_echec_ferme_code_ex_config_du_cli(
+    base: str, store: jobs.JobStore, spy: Path, monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:  # fmt: skip
+    caplog.set_level(logging.INFO, logger="jobs")
+    monkeypatch.setenv("FAKE_CODE", "78")  # EX_CONFIG : configuration absente (#150)
+    job_id = post(base, {"text": DICTEE})[1]["job_id"]
+    wait_state(store, job_id, "error")
+    assert f"job={job_id} etat=error code=78" in caplog.text
+    assert "blocked" not in call(f"{base}/api/jobs/{job_id}")[1]
+    (vu,) = spied(spy)  # un seul appel : aucun repli sur les mocks
+    assert "--mocks" not in vu["argv"]
+
+
 def test_echec_ferme_configuration_absente(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     for var in ("OLLAMA_URL", "PIPER_BIN", "PIPER_MODEL"):
         monkeypatch.delenv(var, raising=False)
@@ -261,7 +363,8 @@ def test_status_js_structure_de_la_maquette() -> None:
     src = _status_js()
     for motif in ('"note warn"', '"status"', '"note bad"', '"alert"', '"kid-seg"',
                   '"progressbar"', '"film"', '"aria-current"', '"say"', '"home-scene"',
-                  '"zzz"', "Réessayer", "Mimo dort un peu", MSG, "2000"):  # fmt: skip
+                  '"zzz"', "Réessayer", '"disabled"', "Autre idée", "Mimo dort un peu",
+                  MSG, "2000"):  # fmt: skip
         assert motif in src, motif
     assert "innerHTML" not in src  # tout passe par textContent
     assert not re.search(r"console\.|localStorage|sessionStorage", src)  # dictée jamais gardée
@@ -278,7 +381,11 @@ def test_status_js_structure_de_la_maquette() -> None:
         ({"state": "running", "step": "images"}, {"ecran": "en-cours", "etape": 2}),
         ({"state": "running", "step": "montage"}, {"ecran": "en-cours", "etape": 3}),
         ({"state": "done", "step": "montage"}, {"ecran": "prete"}),
-        ({"state": "error", "step": "voix"}, {"ecran": "erreur"}),
+        ({"state": "error", "step": "voix"}, {"ecran": "erreur", "bloque": False}),
+        (
+            {"state": "error", "step": "storyboard", "blocked": True},
+            {"ecran": "erreur", "bloque": True},
+        ),
         ({"status": "deferred", "message": MSG}, {"ecran": "hors-maison"}),
         ({"state": "inconnu"}, {"ecran": "erreur"}),
     ],

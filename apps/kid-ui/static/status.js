@@ -27,7 +27,7 @@
       return { ecran: "en-cours", etape: i < 0 ? 0 : i };
     }
     if (rep.state === "done") return { ecran: "prete" };
-    return { ecran: "erreur" };
+    return { ecran: "erreur", bloque: rep.blocked === true }; // bloquée : réessayer est inutile
   }
 
   // --- Rendu : tout passe par textContent, aucun texte de l'enfant n'est inséré ---
@@ -113,11 +113,20 @@
       var n = note("note warn", "status", "Mimo dort un peu", MSG_MAISON, ["warn", "Hors maison"]);
       return ["Mimo", [maison, n], bouton("kid-btn", "Accueil", accueil)];
     },
-    erreur: function () {
-      var n = note("note bad", "alert", "Oups, la vidéo a raté",
-        "Mimo a eu un souci. On réessaie ?", ["bad", "Erreur"]);
-      return ["Mimo", [scene(MIMO_ETOURDI, "mimo xl dizzy"), n],
-        bouton("kid-btn primary lg", "Réessayer", reessayer)];
+    erreur: function (v) {
+      var n = v.bloque
+        ? note("note bad", "alert", "Mimo ne peut pas faire celle-là",
+          "Essaie une autre idée.", ["bad", "Autre idée"])
+        : note("note bad", "alert", "Oups, la vidéo a raté",
+          "Mimo a eu un souci. On réessaie ?", ["bad", "Erreur"]);
+      var cta = el("div", "kid-row");
+      var r = bouton("kid-btn primary lg", "Réessayer", reessayer);
+      if (v.bloque) {
+        r.setAttribute("disabled", "");
+        cta.appendChild(bouton("kid-btn", "Autre idée", accueil));
+      }
+      cta.appendChild(r);
+      return ["Mimo", [scene(MIMO_ETOURDI, "mimo xl dizzy"), n], cta];
     },
     prete: function () {
       var d = attrs(el("div", "scene"), { role: "status" });
@@ -146,7 +155,7 @@
 
   // Ne redessine que si l'écran ou l'étape change : pas de clignotement ni d'annonce répétée.
   function rendre(v) {
-    var cle = v.ecran + ":" + (v.etape === undefined ? "" : v.etape);
+    var cle = [v.ecran, v.etape, v.bloque].join(":");
     if (cle === dernier) return;
     dernier = cle;
     monter();
@@ -182,6 +191,8 @@
     rendre(v);
     if (v.ecran === "en-cours") {
       minuteur = setTimeout(interroger, POLL_MS);
+    } else if (v.bloque) {
+      texte = null; // dictée refusée : on ne la renverra pas
     } else if (v.ecran === "prete") {
       texte = null;
       document.dispatchEvent(new CustomEvent("mimo:video-prete", { detail: { job_id: jobId } }));

@@ -31,9 +31,13 @@ Pour l'API jobs (#162), lancer avec l'environnement du dépôt (`uv run python a
 ## API jobs (#162, `contracts/kid-job.schema.json`)
 
 - `POST /api/jobs` `{"text": "…"}` (≤ 500 caractères) → 202 `{"job_id": "<uuid>"}` ; texte invalide → 400.
-- `GET /api/jobs/{id}` → `{"state": "queued|running|done|error", "step": "storyboard|voix|images|montage"}` ; inconnu → 404.
-- Client hors `192.168.1.0/24` (`apps/gpu-worker/lan_guard.py`) : 200 `{"status": "deferred", "message": "Je te génère la vidéo une fois à la maison."}`, aucun job. En `--insecure-dev` sur `127.0.0.1`, le client est donc « hors maison ».
-- La dictée passe par stdin du CLI, jamais en argument, variable d'environnement ni journal ; seul `job_id` est journalisé. Un parcours à la fois.
+- `GET /api/jobs/{id}` → `{"state": "queued|running|done|error", "step": "storyboard|voix|images|montage"}` (+ `blocked`) ; inconnu → 404.
+- Client hors `192.168.1.0/24` (`apps/gpu-worker/lan_guard.py`) : 200 `{"status": "deferred", "message": "Je te génère la vidéo une fois à la maison."}`, aucun job.
+- **Loopback = hors maison** : un client `127.0.0.1` ou `::1` reçoit `deferred` (lan_guard n'accepte que le LAN). En `--insecure-dev` sur `127.0.0.1`, aucun job ne part ; tester depuis le téléphone, ou `--host 192.168.1.x`.
+- Anti-CSRF : `Content-Type: application/json` exigé, et `Origin` (si présente) = hôte servi (`Host`), sinon 403. `Content-Length` absent, négatif ou non entier : 400 ; > 8 Kio : 413.
+- Un seul job actif : nouvelle soumission pendant un job `queued`/`running` → 409. 50 jobs au plus en mémoire (les plus anciens terminés sont oubliés). Délai global 30 min, puis kill et `error`.
+- Dictée bloquée par la classification (code 2 du CLI) : `{"state": "error", "blocked": true}` ; `status.js` désactive « Réessayer » et propose « Autre idée ».
+- La dictée passe par stdin du CLI, jamais en argument, variable d'environnement ni journal ; seul `job_id` est journalisé.
 
 ## Polices
 
