@@ -208,6 +208,19 @@ def test_storyboard_bloque_apres_classification_libre() -> None:
     assert not [a for a in fakes.appels if a in GENERATION]
 
 
+def test_storyboard_bloque_apres_classification_adouci() -> None:
+    fakes = Fakes("adouci")
+    fakes.verdict_storyboard = "bloque"
+    run = lancer(DICTEE, fakes.etapes(), run_id="run-sb-5")
+    RUN.validate(run)
+    assert run["etat"] == "bloque"
+    assert "video_path" not in run
+    assert _noms(run) == ["classification", "storyboard"]
+    assert all(e["statut"] == "ok" for e in run["etapes"])
+    assert fakes.textes_storyboard == [fakes.classification["texte_adouci"]]
+    assert fakes.appels == ["classification", "storyboard"]
+
+
 @pytest.mark.parametrize("verdict", [None, "peut-etre", "", "BLOQUE", 0, ["bloque"]])
 def test_verdict_de_storyboard_absent_ou_inconnu_est_une_erreur(verdict: Any) -> None:
     fakes = Fakes("libre")
