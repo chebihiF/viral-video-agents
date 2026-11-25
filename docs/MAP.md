@@ -15,7 +15,9 @@
 - `README.md` — viral-video-agents
 - `apps/gpu-worker/README.md` — gpu-worker
 - `apps/gpu-worker/comfy_run.py` — Lance un workflow ComfyUI (format API) et attend le résultat.
+- `apps/gpu-worker/gpu_power.py` — Alimentation du PC GPU (#37) : réveil à la demande, veille après inactivité.
 - `apps/gpu-worker/lan_guard.py` — Garde réseau local (#158) : le PC GPU n'est utilisé que depuis la maison.
+- `apps/gpu-worker/tests/test_gpu_power.py` — gpu_power (#37) : réveil à la demande et veille après inactivité, pc-gpu et horloge simulé
 - `apps/gpu-worker/tests/test_lan_guard.py` — lan_guard (#158) : le PC GPU n'est joignable que depuis le réseau local (aucun appel réel 
 - `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
 - `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema

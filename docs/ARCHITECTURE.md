@@ -100,10 +100,18 @@ Sur le PC, ces fichiers sont copiés dans `~/vva/`.
 ## 8. Décisions en attente
 
 - Âge des enfants (ton et règles du conteur).
-- PC éteint : PC allumé aux heures de jeu + Wake-on-LAN (recommandé), ou conteur de secours sur le VPS.
+- ~~PC éteint~~ : tranché le 19/11 (#37), voir « Alimentation du PC GPU » ci-dessous.
 - Modèle d'image : comparer Flux schnell et **Z-Image-Turbo**.
 - Voix off : comparer à l'oreille **Chatterbox Multilingual**, **Qwen3-TTS**, **Kyutai TTS** (Piper = solution de test).
 - Darija : la conversation l'accepte ; reconnaissance vocale et voix off en darija restent à évaluer.
+
+**Alimentation du PC GPU (#37, décision du parent 19/11).**
+
+- Réveil à la demande : `GpuPower.ensure_awake()` appelle `pc-gpu wake` seulement si `status` n'est pas « éveillé », puis rend la main PC éveillé ; échec ou plus de 120 s : `GpuUnavailable`, sans boucle.
+- Veille 5 à 10 min après le dernier job (`idle_s`, 300–600 s, défaut 600) : `tick()` n'appelle `pc-gpu sleep` que si aucun job ne tourne, si `status` dit « éveillé » et si `idle_s` s'est écoulé depuis le dernier `job_finished`.
+- Doute (statut illisible, en erreur ou ambigu) : on n'endort pas ; l'erreur est journalisée sans texte d'enfant.
+- Seule interface vers le PC : `~/.local/bin/pc-gpu wake|sleep|status` (arguments en liste, sans shell), depuis le réseau local seulement (#158) ; ni VPN, ni conteur de secours, ni plage horaire.
+- `worker.py` reçoit la minuterie par injection (`JobQueue(..., power=)`, défaut sans effet) ; code : `apps/gpu-worker/gpu_power.py`.
 
 ## 9. Feuille de route
 
