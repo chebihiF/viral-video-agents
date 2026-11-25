@@ -59,16 +59,16 @@ Fond `--bg`/`--bg-dot` ; cartes `--surface`, secondaire `--surface-2` ; texte `-
 Aucun nouveau token nécessaire pour les états ci-dessus : réutiliser `.kid-chip`, `.say`, `.note`, `.kid-seg`, `.film`.
 
 ## Écarts maquette / tokens livrés (à traiter par les devs ou à arbitrer)
-1. **Polices** : aucun `@font-face` dans `tokens-enfant.css`. Ajouter woff2 locaux (Bricolage Grotesque, Figtree, OFL) avec `font-display: swap` ; sans eux, repli système (acceptable hors ligne).
+1. ~~**Polices**~~ **Traité #222** (woff2 latins locaux, précachés) : aucun `@font-face` dans `tokens-enfant.css`. Ajouter woff2 locaux (Bricolage Grotesque, Figtree, OFL) avec `font-display: swap` ; sans eux, repli système (acceptable hors ligne).
 2. **Arabe** : pas de police arabe. Ajouter Readex Pro ou Tajawal (OFL, locale) dans les deux piles avant la darija en script arabe.
-3. **Mimo en couleurs figées** (`#FF8A1F`, `#1B1340` dans le SVG) : OK, mais le contour sombre `#1B1340` disparaît sur fond nuit `#120E2B` ; la tête reste lisible grâce à l'orange, vérifier visuellement ; sinon ajouter un liseré clair.
+3. **Traité #222** (liseré clair `--mimo-halo` posé en thème nuit selon la spec, à valider par capture du parent) — **Mimo en couleurs figées** (`#FF8A1F`, `#1B1340` dans le SVG) : OK, mais le contour sombre `#1B1340` disparaît sur fond nuit `#120E2B` ; la tête reste lisible grâce à l'orange, vérifier visuellement ; sinon ajouter un liseré clair.
 4. **Pastilles de thème** `.t-nuit/.t-soleil/.t-menthe` et `.poster` (`#1F2A5C`) utilisent des hex en dur (volontaire : aperçu du thème), à ne pas "tokeniser".
 5. **Confettis** : sous reduced-motion l'animation est coupée mais les `i` restent affichés. Ajouter `@media (prefers-reduced-motion: reduce) { .confetti { display: none; } }`.
 6. **RTL** : `.poster .play` (`margin: 0 0 0 -28px`), `.kid-composer textarea` et `.kid-theme` (padding) sont en propriétés physiques : passer en `margin-inline-start` / `padding-inline-*` avant le RTL. Les flèches portent `.dir`.
 7. **`.kid-icon-btn`** 46 px (< 48 de `--touch`) : conforme WCAG 2.2 (>= 24 px) mais incohérent ; le passer à `var(--touch)`.
-8. **Coquille** : `index.html` n'a pas de `hidden` sur l'écran erreur ni de routage ; `shell.js` gère la bascule (`#hash` ou état), et le titre `<title>` doit rester "Mimo". Les liens `#idee-n` sont des ancres provisoires.
-9. **Manque** : pas de classe pour la chip durée/"Bientôt prête" (utiliser `.kid-chip.info` / `.ok`) ni pour `.dur` du poster (positionné, non stylé hors chip).
-10. Radios (`role=radio`) : la navigation aux flèches n'est pas fournie par le CSS, à coder (#161).
+8. **Traité #222** (écran erreur `hidden` au départ, `<title>` fixe, idées de départ en boutons) — **Coquille** : `index.html` n'a pas de `hidden` sur l'écran erreur ni de routage ; `shell.js` gère la bascule (`#hash` ou état), et le titre `<title>` doit rester "Mimo". Les liens `#idee-n` sont des ancres provisoires.
+9. **Traité #222** (`.kid-chip.dur`, `.poster .dur` stylé) — **Manque** : pas de classe pour la chip durée/"Bientôt prête" (utiliser `.kid-chip.info` / `.ok`) ni pour `.dur` du poster (positionné, non stylé hors chip).
+10. **Traité #222** (`accueil.js`) — Radios (`role=radio`) : la navigation aux flèches n'est pas fournie par le CSS, à coder (#161).
 
 ## Questions ouvertes pour le parent
 - Faut-il afficher la durée restante à l'enfant (peut décevoir si estimation fausse) ou seulement "Bientôt prête" ?

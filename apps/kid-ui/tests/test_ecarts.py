@@ -21,10 +21,9 @@ def regle(selecteur: str) -> str:
 
 
 def test_font_face_arabe_local() -> None:
-    faces = re.findall(r"@font-face\s*\{(.*?)\}", CSS, re.S)
-    assert len(faces) >= 3
+    faces = [f for f in re.findall(r"@font-face\s*\{(.*?)\}", CSS, re.S) if "Tajawal" in f]
+    assert len(faces) == 3
     for face in faces:
-        assert 'font-family: "Tajawal"' in face
         assert "font-display: swap" in face
         assert "unicode-range" in face  # l'arabe seulement : le latin garde sa pile
         url = re.search(r'url\("([^"]+)"\)', face)
@@ -88,3 +87,78 @@ def test_cibles_tactiles_48() -> None:
     assert "width: var(--touch)" in icone and "height: var(--touch)" in icone
     assert "46px" not in icone
     assert "min-height: var(--touch)" in regle(".kid-composer textarea")
+
+
+# --- #222 : polices latines, liseré de Mimo, écran erreur, chip durée, radios au clavier ---
+INDEX = (STATIC / "index.html").read_text(encoding="utf-8")
+SW = (STATIC / "sw.js").read_text(encoding="utf-8")
+LATIN = {"Bricolage Grotesque": (700, 800), "Figtree": (500, 600, 700, 800)}
+
+
+def faces_latines() -> list[str]:
+    return [f for f in re.findall(r"@font-face\s*\{(.*?)\}", CSS, re.S) if "Tajawal" not in f]
+
+
+def test_font_face_latines_locales_woff2() -> None:
+    faces = faces_latines()
+    assert len(faces) == sum(len(v) for v in LATIN.values())
+    for famille, graisses in LATIN.items():
+        for graisse in graisses:
+            face = next(
+                f
+                for f in faces
+                if f'font-family: "{famille}"' in f and f"font-weight: {graisse};" in f
+            )
+            assert "font-display: swap" in face
+            assert "unicode-range" in face
+            url = re.search(r'url\("([^"]+)"\)', face)
+            assert url and not re.match(r"^(https?:)?//", url[1]), "pas de CDN"
+            assert (STATIC / url[1]).read_bytes()[:4] == b"wOF2"
+            assert f"/{url[1]}" in SW, "précaché par sw.js"
+
+
+def test_licences_ofl_des_polices_latines() -> None:
+    for nom in ("Bricolage-Grotesque", "Figtree"):
+        texte = (FONTS / f"OFL-{nom}.txt").read_text(encoding="utf-8")
+        assert "SIL Open Font License" in texte
+
+
+def test_mimo_a_un_lisere_clair_la_nuit_seulement() -> None:
+    assert re.search(r"\.mimo\s*\{[^}]*filter:\s*var\(--mimo-halo,\s*none\)", CSS)
+    nuit = re.search(r":root, \[data-theme=\"nuit\"\] \{(.*?)\n\}", CSS, re.S)
+    assert nuit and re.search(r"--mimo-halo:\s*drop-shadow\(", nuit[1])
+    for theme in ("soleil", "menthe"):
+        bloc = re.search(rf"\[data-theme=\"{theme}\"\] \{{(.*?)\n\}}", CSS, re.S)
+        assert bloc and re.search(r"--mimo-halo:\s*none", bloc[1]), theme
+    clair = re.search(r"prefers-color-scheme: light\) \{(.*?)\n\}\n", CSS, re.S)
+    assert clair and "--mimo-halo: none" in clair[1]
+
+
+def test_ecran_erreur_masque_au_depart_et_titre_mimo() -> None:
+    assert re.search(r'<section[^>]*id="ecran-erreur"[^>]*\bhidden\b', INDEX)
+    assert not re.search(r'<section[^>]*id="ecran-accueil"[^>]*\bhidden\b', INDEX)
+    assert "<title>Mimo</title>" in INDEX
+    for js in STATIC.glob("*.js"):
+        assert "document.title" not in js.read_text(encoding="utf-8"), js.name
+
+
+def test_plus_d_ancres_idee_provisoires() -> None:
+    assert "#idee-" not in INDEX
+    assert len(re.findall(r'<button type="button" class="kid-btn" data-idee="', INDEX)) == 3
+
+
+def test_chip_duree_et_duree_du_poster_stylees() -> None:
+    assert re.search(r"\.kid-chip\.dur\s*\{[^}]*font-variant-numeric:\s*tabular-nums", CSS)
+    poster = regle(".poster .dur")
+    assert "position: absolute" in poster and "background: var(--surface)" in poster
+
+
+def test_radios_fleches_clavier() -> None:
+    assert '<script src="/accueil.js"></script>' in INDEX
+    assert "/accueil.js" in SW
+    js = (STATIC / "accueil.js").read_text(encoding="utf-8")
+    for touche in ("ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp", "Home", "End"):
+        assert f'"{touche}"' in js, touche
+    assert "radiogroup" in js and "tabindex" in js and ".focus()" in js and ".click()" in js
+    assert 'direction === "rtl"' in js  # en RTL la flèche droite recule
+    assert "fetch(" not in js and "XMLHttpRequest" not in js
