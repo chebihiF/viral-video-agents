@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "kid-job.schema.json",
   "title": "kid-job",
-  "description": "API jobs de l'appli enfant (v1.0, #162) : POST /api/jobs (Submit -> Accepted 202 ou Deferred 200 hors réseau local) et GET /api/jobs/{id} (Status, ou Deferred hors réseau local). Aucune réponse ne reprend la dictée.",
+  "description": "API jobs de l'appli enfant (v1.1, #162, #165) : POST /api/jobs (Submit -> Accepted 202 ou Deferred 200 hors réseau local) et GET /api/jobs/{id} (Status avec progress, ou Deferred hors réseau local). Aucune réponse ne reprend la dictée.",
   "$defs": {
     "Submit": {
       "type": "object",
@@ -32,6 +32,17 @@
         "message": { "const": "Je te génère la vidéo une fois à la maison." }
       }
     },
+    "Progress": {
+      "type": "object",
+      "description": "Avancement estimé (#165) d'après les durées mesurées (durees.jsonl), jamais d'après la dictée. restant_s = null si l'étape est inconnue ; bientot = moins de 30 s restantes ou dépassement de l'estimation.",
+      "required": ["pct", "restant_s", "bientot"],
+      "additionalProperties": false,
+      "properties": {
+        "pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "restant_s": { "type": ["integer", "null"], "minimum": 0 },
+        "bientot": { "type": "boolean" }
+      }
+    },
     "Status": {
       "type": "object",
       "required": ["state", "step"],
@@ -39,6 +50,10 @@
       "properties": {
         "state": { "enum": ["queued", "running", "done", "error", "deferred"] },
         "step": { "enum": ["storyboard", "images", "voix", "montage"] },
+        "progress": {
+          "$ref": "#/$defs/Progress",
+          "description": "Présent si state = queued, running ou done (100 % à done) ; absent si error."
+        },
         "blocked": {
           "const": true,
           "description": "Présent seulement si state = error parce que la classification a bloqué la dictée : ne pas réessayer."
