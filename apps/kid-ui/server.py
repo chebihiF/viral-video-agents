@@ -398,8 +398,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"kid-ui : {err}", file=sys.stderr)  # noqa: T201
         raise SystemExit(2)
     power = make_power(a)
-    if power is not None:
-        jobs.Veille(power).start()
+    veille = jobs.Veille(power) if power is not None else None
+    if veille is not None:
+        veille.start()
     httpd = make_server(
         a.host,
         a.port,
@@ -410,7 +411,11 @@ def main(argv: list[str] | None = None) -> None:
     )
     scheme = "https" if a.tls_cert else "http"
     print(f"kid-ui sur {scheme}://{a.host}:{a.port}/")  # noqa: T201
-    httpd.serve_forever()
+    try:
+        httpd.serve_forever()
+    finally:
+        if veille is not None:
+            veille.stop()
 
 
 if __name__ == "__main__":

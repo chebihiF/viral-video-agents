@@ -771,3 +771,62 @@ def test_job_en_cours_tick_n_endort_pas(
 def test_alimentation_branchee_seulement_sur_option() -> None:
     assert server.make_power(server.parse_args([])) is None
     assert isinstance(server.make_power(server.parse_args(["--gpu-power"])), gpu_power.GpuPower)
+
+
+def test_cli_introuvable_avec_power_job_finished_puis_veille(tmp_path: Path, spy: Path) -> None:
+    t = [0.0]
+    pc = FakePcGpu(spy, etat="eveille")
+    power = gpu_power.GpuPower(run=pc, clock=lambda: t[0], idle_s=300)
+    st = jobs.JobStore(tmp_path / "runs", command=(str(tmp_path / "introuvable"),), power=power)
+    job_id = st.submit(DICTEE)
+    wait_state(st, job_id, "error")
+    t[0] = 301
+    assert power.tick() is True  # job_finished a bien décompté le job
+    assert pc.verbes().count("sleep") == 1
+
+
+class TickQuiLeve:
+    def __init__(self) -> None:
+        self.n = 0
+
+    def ensure_awake(self) -> None: ...
+    def job_started(self) -> None: ...
+    def job_finished(self) -> None: ...
+
+    def tick(self) -> bool:
+        self.n += 1
+        raise RuntimeError(DICTEE)
+
+
+def test_veille_survit_a_un_tick_qui_leve(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level(logging.DEBUG)
+    p = TickQuiLeve()
+    veille = jobs.Veille(p, period_s=0.01)
+    veille.start()
+    attendre(lambda: p.n >= 3)
+    assert veille.is_alive()
+    veille.stop()
+    assert "veille erreur=RuntimeError" in caplog.text
+    assert DICTEE not in caplog.text
+
+
+def test_main_arrete_la_veille_a_la_sortie(monkeypatch: pytest.MonkeyPatch) -> None:
+    arretees: list[bool] = []
+
+    class Espion:
+        def __init__(self, power: jobs.Power) -> None:
+            self.power = power
+
+        def start(self) -> None: ...
+
+        def stop(self) -> None:
+            arretees.append(True)
+
+    def interrompu(self: object) -> None:
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(jobs, "Veille", Espion)
+    monkeypatch.setattr(server.Server, "serve_forever", interrompu)
+    with pytest.raises(KeyboardInterrupt):
+        server.main(["--insecure-dev", "--port", "0", "--gpu-power"])
+    assert arretees == [True]

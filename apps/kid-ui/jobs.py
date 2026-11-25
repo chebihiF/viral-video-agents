@@ -102,7 +102,10 @@ class Veille:
 
     def _loop(self) -> None:
         while not self._stop.wait(self._period):
-            self._power.tick()  # ne lève jamais (contrat de GpuPower.tick)
+            try:
+                self._power.tick()
+            except Exception as exc:  # le fil survit ; nom seul, jamais le message
+                log.warning("veille erreur=%s", type(exc).__name__)
 
 
 @dataclass

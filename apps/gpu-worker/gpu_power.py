@@ -64,20 +64,24 @@ class GpuPower:
         self._sleeping = False  # veille décidée par tick() ; toute activité l'annule
         self._last_activity = clock()
         self._lock = threading.Lock()
+        # sérialise ensure_awake() et la fin de tick() (dernier contrôle + sleep) : pas de
+        # `status` lu pendant un `sleep` en cours (#223)
+        self._power_lock = threading.Lock()
 
     def ensure_awake(self) -> None:
         """Réveille le PC s'il dort (idempotent) ; GpuUnavailable si impossible."""
-        self._touch()
-        try:
-            if self._status() in (AWAKE, BUSY):
-                return
-            self._pc_gpu("wake", check=True)
-            if self._status() not in (AWAKE, BUSY):
-                raise GpuUnavailable("PC GPU injoignable après réveil")
-        except (OSError, subprocess.SubprocessError) as exc:
-            log.warning("pc-gpu wake : %s", type(exc).__name__)
-            raise GpuUnavailable("PC GPU injoignable") from None
-        self._touch()
+        self._touch()  # avant le verrou : annule une veille pas encore engagée
+        with self._power_lock:
+            try:
+                if self._status() in (AWAKE, BUSY):
+                    return
+                self._pc_gpu("wake", check=True)
+                if self._status() not in (AWAKE, BUSY):
+                    raise GpuUnavailable("PC GPU injoignable après réveil")
+            except (OSError, subprocess.SubprocessError) as exc:
+                log.warning("pc-gpu wake : %s", type(exc).__name__)
+                raise GpuUnavailable("PC GPU injoignable") from None
+            self._touch()
 
     def job_started(self) -> None:
         with self._lock:
@@ -100,11 +104,12 @@ class GpuPower:
         try:
             if self._status() != AWAKE:  # busy, endormi, ambigu : on ne touche à rien
                 return self._abort_sleep()
-            with self._lock:  # dernier contrôle : un job ou une dictée a-t-il annulé la veille ?
-                if not self._sleeping or self._running > 0:
-                    self._sleeping = False
-                    return False
-            self._pc_gpu("sleep", check=True)
+            with self._power_lock:
+                with self._lock:  # dernier contrôle : un job ou une dictée a-t-il annulé la veille ?
+                    if not self._sleeping or self._running > 0:
+                        self._sleeping = False
+                        return False
+                self._pc_gpu("sleep", check=True)
         except (OSError, subprocess.SubprocessError, GpuUnavailable) as exc:
             log.warning("pc-gpu status/sleep : %s", type(exc).__name__)
             return self._abort_sleep()
