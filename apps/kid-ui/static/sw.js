@@ -7,6 +7,7 @@ const PRECACHE = [
   "/shell.css",
   "/theme.js",
   "/shell.js",
+  "/status.js",
   "/mimo.svg",
   "/manifest.webmanifest",
   "/icons/icon-192.png",
