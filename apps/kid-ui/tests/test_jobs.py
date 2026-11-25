@@ -18,6 +18,7 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
+import eta
 import jobs
 import pytest
 import server
@@ -185,11 +186,14 @@ def test_suivi_queued_running_done(
     job_id = post(base, {"text": DICTEE})[1]["job_id"]
     wait_state(store, job_id, "running")
     time.sleep(0.2)  # le faux CLI a lu la dictée et signalé la classification
-    assert call(f"{base}/api/jobs/{job_id}") == (200, {"state": "running", "step": "storyboard"})
+    status, body = call(f"{base}/api/jobs/{job_id}")
+    assert (status, body["state"], body["step"]) == (200, "running", "storyboard")
+    assert list(validator("Status").iter_errors(body)) == []
     gate.touch()
     wait_state(store, job_id, "done")
     status, body = call(f"{base}/api/jobs/{job_id}")
-    assert (status, body) == (200, {"state": "done", "step": "montage"})
+    done = {"pct": 100, "restant_s": 0, "bientot": False}
+    assert (status, body) == (200, {"state": "done", "step": "montage", "progress": done})
     assert list(validator("Status").iter_errors(body)) == []
     etats = re.findall(rf"job={job_id} etat=(\w+)", caplog.text)
     assert etats == ["queued", "running", "done"]
@@ -400,3 +404,248 @@ def test_status_js_vue_par_etat(rep: object, attendu: dict[str, object]) -> None
     )  # fmt: skip
     vue = json.loads(out.stdout)
     assert {k: vue[k] for k in attendu} == attendu
+
+
+# --- #165 : progress (barre et durée restante) ---
+def _journal(runs: Path, images: float, n: int = 3) -> None:
+    """Journal d'un run précédent (n runs réels identiques) : images = image + clip."""
+    d = runs / "ancien"
+    d.mkdir(parents=True, exist_ok=True)
+    etapes = [("classification", 1), ("storyboard", 9), ("voix", 20), ("image", images / 2),
+              ("clip", images / 2), ("montage", 40)]  # fmt: skip
+    lignes = [
+        {
+            "run_id": f"r{i}",
+            "mode": "reel",
+            "etat": "ok",
+            "termine_le": f"2026-11-0{i + 1}T10:00:00Z",
+            "etapes": [{"nom": k, "statut": "ok", "duree_s": float(v)} for k, v in etapes],
+        }
+        for i in range(n)
+    ]
+    (d / "durees.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lignes), encoding="utf-8")
+
+
+@pytest.fixture
+def horloge(tmp_path: Path, spy: Path) -> tuple[jobs.JobStore, list[float]]:
+    fake = tmp_path / "fake_orchestrator.py"
+    fake.write_text(FAKE, encoding="utf-8")
+    t = [0.0]
+    runs = tmp_path / "runs"
+    _journal(runs, images=130)
+    return jobs.JobStore(runs, command=(sys.executable, str(fake)), clock=lambda: t[0]), t
+
+
+def test_progress_d_apres_les_durees_mesurees(
+    horloge: tuple[jobs.JobStore, list[float]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, t = horloge
+    monkeypatch.setenv("FAKE_GATE", str(tmp_path / "gate"))
+    job_id = store.submit(DICTEE)
+    wait_state(store, job_id, "running")
+    time.sleep(0.2)  # classification reçue : l'étape affichée reste « storyboard »
+    lignes = eta.lire_durees(tmp_path / "runs")
+    t[0] = 4
+    s = store.status(job_id)
+    assert s is not None
+    assert s["progress"] == eta.estimer(lignes, "storyboard", 4)
+    assert s["progress"]["restant_s"] == 10 - 4 + 20 + 130 + 40
+    assert list(validator("Status").iter_errors(s)) == []
+    assert DICTEE not in json.dumps(s)
+    (tmp_path / "gate").touch()
+    wait_state(store, job_id, "done")
+
+
+def test_la_barre_ne_recule_jamais(
+    horloge: tuple[jobs.JobStore, list[float]], tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store, t = horloge
+    monkeypatch.setenv("FAKE_GATE", str(tmp_path / "gate"))
+    job_id = store.submit(DICTEE)
+    wait_state(store, job_id, "running")
+    time.sleep(0.2)
+    pcts = []
+    for instant in (0, 8, 3, 9, 1):  # estimation qui baisserait (horloge qui recule)
+        t[0] = instant
+        s = store.status(job_id)
+        assert s is not None
+        pcts.append(s["progress"]["pct"])
+    assert pcts == sorted(pcts)
+    assert pcts[-1] > pcts[0]
+    (tmp_path / "gate").touch()
+    wait_state(store, job_id, "done")
+
+
+def test_progress_sans_journal_valeur_par_defaut(
+    store: jobs.JobStore, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("FAKE_GATE", str(tmp_path / "gate"))
+    job_id = store.submit(DICTEE)
+    s = store.status(job_id)
+    assert s is not None
+    assert s["progress"] == eta.estimer([], "storyboard", 0) | {"pct": s["progress"]["pct"]}
+    assert s["progress"]["restant_s"] is not None
+    assert list(validator("Status").iter_errors(s)) == []
+    (tmp_path / "gate").touch()
+    wait_state(store, job_id, "done")
+
+
+def test_progress_100_a_done_et_absent_en_erreur(
+    store: jobs.JobStore, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    job_id = store.submit(DICTEE)
+    done = wait_state(store, job_id, "done")
+    assert done["progress"] == {"pct": 100, "restant_s": 0, "bientot": False}
+    monkeypatch.setenv("FAKE_CODE", "1")
+    err = wait_state(store, store.submit(DICTEE), "error")
+    assert "progress" not in err
+    assert list(validator("Status").iter_errors(err)) == []
+
+
+def test_progress_ne_modifie_pas_le_journal(
+    horloge: tuple[jobs.JobStore, list[float]], tmp_path: Path
+) -> None:
+    store, _ = horloge
+    f = tmp_path / "runs" / "ancien" / "durees.jsonl"
+    avant = f.read_bytes()
+    wait_state(store, store.submit(DICTEE), "done")
+    assert f.read_bytes() == avant
+
+
+def test_purge_oublie_aussi_le_suivi(tmp_path: Path, spy: Path) -> None:
+    fake = tmp_path / "fake_orchestrator.py"
+    fake.write_text(FAKE, encoding="utf-8")
+    petit = jobs.JobStore(tmp_path / "runs", command=(sys.executable, str(fake)), max_jobs=2)
+    for _ in range(4):
+        wait_state(petit, petit.submit(DICTEE), "done")
+    assert len(petit._suivi) == len(petit._jobs) <= 2  # noqa: SLF001
+
+
+# --- #165 : écran (JS) ---
+def _node(script: str) -> Any:
+    out = subprocess.run(  # noqa: S603
+        ["node", "-e", f"const s = require({json.dumps(str(STATIC / 'status.js'))});" + script],  # noqa: S607
+        capture_output=True, text=True, check=True, timeout=10,
+    )  # fmt: skip
+    return json.loads(out.stdout)
+
+
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node absent")
+
+
+@needs_node
+@pytest.mark.parametrize(
+    ("progress", "attendu"),
+    [
+        ({"pct": 40, "restant_s": 200, "bientot": False}, {"minutes": 3}),
+        ({"pct": 40, "restant_s": 90, "bientot": False}, {"minutes": 2}),
+        ({"pct": 40, "restant_s": 30, "bientot": False}, {"minutes": 1}),  # arrondi, jamais 0 min
+        ({"pct": 90, "restant_s": 29, "bientot": False}, {"bientot": True}),
+        ({"pct": 90, "restant_s": 0, "bientot": True}, {"bientot": True}),  # dépassement
+        ({"pct": 90, "restant_s": 500, "bientot": True}, {"bientot": True}),
+        ({"pct": 0, "restant_s": None, "bientot": False}, None),  # inconnue : pas de faux chiffre
+        ({"pct": 0, "restant_s": -5, "bientot": False}, None),  # jamais de temps négatif
+        (None, None),
+    ],
+)
+def test_status_js_duree_restante(progress: object, attendu: object) -> None:
+    assert _node(f"console.log(JSON.stringify(s.reste({json.dumps(progress)})))") == attendu
+
+
+@needs_node
+def test_status_js_la_barre_ne_recule_jamais_et_vue_porte_progress() -> None:
+    assert _node("console.log(JSON.stringify([s.avancer(60, 45), s.avancer(60, 61)]))") == [60, 61]
+    rep = {"state": "running", "step": "images",
+           "progress": {"pct": 55, "restant_s": 100, "bientot": False}}  # fmt: skip
+    v = _node(f"console.log(JSON.stringify(s.vue({json.dumps(rep)})))")
+    assert (v["pct"], v["reste"]) == (55, {"minutes": 2})
+    v = _node('console.log(JSON.stringify(s.vue({state: "done", step: "montage"})))')
+    assert (v["ecran"], v["pct"]) == ("prete", 100)
+    v = _node(
+        'console.log(JSON.stringify(s.vue({state: "running", step: "voix", progress: {pct: 1e9}})))'
+    )
+    assert v["pct"] == 100  # borné
+
+
+# Mini DOM : de quoi exécuter le rendu réel de status.js sans navigateur.
+DOM = r"""
+const toks = (n) => String(n.className || "").split(/\s+/).filter(Boolean);
+class N {
+  constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.className = "";
+    this.style = {}; this.hidden = false; this.text = null; }
+  setAttribute(k, v) { this.attrs[k] = String(v); if (k === "class") this.className = String(v); }
+  getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
+  appendChild(c) { this.children.push(c); return c; }
+  append(...cs) { cs.forEach((c) => this.children.push(c)); }
+  replaceChildren(...cs) { this.children = []; this.append(...cs); }
+  addEventListener() {}
+  cloneNode() { return new N(this.tag); }
+  set textContent(t) { this.children = []; this.text = String(t); }
+  get textContent() { return (this.text || "") + this.children.map((c) => c.textContent).join(""); }
+  all() { return this.children.flatMap((c) => [c, ...(c.all ? c.all() : [])]); }
+  match(sel) { return sel[0] === "." ? toks(this).includes(sel.slice(1)) : this.tag === sel; }
+  querySelector(sel) { return this.all().find((n) => n.match && n.match(sel)) || null; }
+  querySelectorAll(sel) { return this.all().filter((n) => n.match && n.match(sel)); }
+}
+const body = new N("body");
+global.document = {
+  body, documentElement: { dir: "" }, dir: "",
+  createElement: (t) => new N(t), createElementNS: (_, t) => new N(t),
+  createTextNode: (t) => { const n = new N("#text"); n.text = t; return n; },
+  querySelector: () => null, querySelectorAll: (s) => body.querySelectorAll(s),
+  getElementById: () => null,
+};
+global.CustomEvent = class { constructor(t, o) { this.type = t; this.detail = o && o.detail; } };
+document.dispatchEvent = () => {};
+const reponses = [];
+const timers = [];
+global.fetch = () => Promise.resolve({ ok: true, json: () => Promise.resolve(reponses.shift()) });
+global.setTimeout = (f) => { timers.push(f); return timers.length; };
+global.clearTimeout = () => {};
+const flush = () => new Promise((r) => setImmediate(r));
+async function voir(vus) {
+  await flush(); await flush(); vus.push(etat());
+  const t = timers.shift(); if (t) t();
+}
+function etat() {
+  const seg = body.querySelector(".kid-seg");
+  const eta = body.querySelector(".eta");
+  return { now: seg && seg.attrs["aria-valuenow"], text: seg && seg.attrs["aria-valuetext"],
+    chip: eta ? eta.textContent : null, role: eta && eta.attrs.role,
+    on: seg ? seg.children.filter((i) => i.className === "on").length : null,
+    h1: body.querySelector("h1").textContent };
+}
+"""
+
+
+@needs_node
+def test_status_js_rendu_de_la_barre_et_de_la_duree() -> None:
+    script = (
+        DOM
+        + """
+(async () => {
+  const p = (pct, restant_s, bientot) => ({ state: "running", step: "images",
+    progress: { pct, restant_s, bientot } });
+  reponses.push({ job_id: "j" }, p(60, 200, false), p(45, 100, false), p(70, 10, true),
+    { state: "done", step: "montage", progress: { pct: 100, restant_s: 0, bientot: false } });
+  const vus = [];
+  s.envoyer("une dictee secrete");
+  await voir(vus);  // accepté : barre à 0, pas de chip
+  await voir(vus);  // 60 %, environ 3 min
+  await voir(vus);  // l'estimation baisse (45) : la barre reste à 60
+  await voir(vus);  // bientôt prête
+  await voir(vus);  // prête : 100 %
+  console.log(JSON.stringify(vus));
+})();
+"""
+    )
+    vus = _node(script)
+    assert [(v["now"], v["chip"]) for v in vus] == [
+        ("0", ""), ("60", "Encore environ 3 min"), ("60", "Encore environ 2 min"),
+        ("70", "Bientôt prête"), ("100", None),
+    ]  # fmt: skip
+    assert vus[1]["role"] == "status"
+    assert vus[1]["on"] == 2 and vus[3]["on"] == 2  # 60 % : 2 segments pleins sur 4
+    assert "environ 3 minutes" in vus[1]["text"]
+    assert vus[4]["h1"] == "Mimo" and vus[4]["on"] == 4
+    assert all("secrete" not in json.dumps(v) for v in vus)  # la dictée n'est jamais affichée

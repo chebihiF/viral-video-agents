@@ -20,6 +20,7 @@
 - `apps/gpu-worker/tests/test_worker.py` — gpu-worker (#33) : jobs image -> clip, ComfyUI simulé (aucun appel réseau vers le PC GPU).
 - `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
 - `apps/kid-ui/README.md` — kid-ui
+- `apps/kid-ui/eta.py` — Durée restante estimée d'une vidéo (#165), d'après les durées mesurées (#164).
 - `apps/kid-ui/jobs.py` — Jobs vidéo de l'appli enfant (#162) : la dictée part au CLI orchestrateur (#150) par stdin
 - `apps/kid-ui/make_icons.py` — Icônes PNG de l'appli (mascotte Mimo), stdlib seule : python3 apps/kid-ui/make_icons.py.
 - `apps/kid-ui/server.py` — Serveur minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défaut).
@@ -42,6 +43,7 @@
 - `apps/kid-ui/static/tokens-enfant.css`
 - `apps/kid-ui/tests/test_dictation.py` — Tests de la dictée au micro (#161) : POST /api/dictation, aucune trace, aucun tiers.
 - `apps/kid-ui/tests/test_ecarts.py` — Écarts de la spec #36 (kid-ui.md) : police arabe, reduced-motion, RTL, cibles 48 px.
+- `apps/kid-ui/tests/test_eta.py` — Durée restante estimée (#165) : médianes mesurées, valeur par défaut, aucune dictée.
 - `apps/kid-ui/tests/test_jobs.py` — Envoi de la dictée et suivi du statut (#162) : faux orchestrateur, aucun GPU, aucun réseau
 - `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
 - `apps/kid-ui/tests/test_tls.py` — HTTPS local de l'appli enfant (#160) : démarrage TLS, refus du HTTP nu, écoute locale.
