@@ -125,6 +125,7 @@
 - `contracts/storyboard.schema.json` — données JSON
 - `contracts/tts-job.schema.json` — données JSON
 - `docs/ARCHITECTURE.md` — Architecture — Viral Video Agents
+- `docs/RUN-REEL.md` — Run réel sur le PC GPU (ticket #239)
 - `docs/SCRUM.md` — Scrum — fonctionnement de l'équipe (humain + agents)
 - `docs/adr/ADR-001-architecture.md` — ADR-001 — Architecture générale
 - `docs/adr/ADR-002-stack-dashboard.md` — ADR-002 — Stack du dashboard (et des services Python)
