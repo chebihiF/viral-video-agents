@@ -53,9 +53,11 @@
 - `apps/kid-ui/static/sw.js`
 - `apps/kid-ui/static/theme.js` — Thème de l'enfant : lu en local avant le rendu, jamais envoyé au serveur.
 - `apps/kid-ui/static/tokens-enfant.css`
+- `apps/kid-ui/tests/minidom.js` — Mini DOM pour les tests node de l'UI enfant (#214) : exécute les VRAIS scripts de static/ 
 - `apps/kid-ui/tests/test_dictation.py` — Tests de la dictée au micro (#161) : POST /api/dictation, aucune trace, aucun tiers.
 - `apps/kid-ui/tests/test_ecarts.py` — Écarts de la spec #36 (kid-ui.md) : police arabe, reduced-motion, RTL, cibles 48 px.
 - `apps/kid-ui/tests/test_eta.py` — Durée restante estimée (#165) : médianes mesurées, valeur par défaut, aucune dictée.
+- `apps/kid-ui/tests/test_formulaire.py` — Formulaire enfant de bout en bout (#214) : micro, texte validé, progression, lecteur.
 - `apps/kid-ui/tests/test_jobs.py` — Envoi de la dictée et suivi du statut (#162) : faux orchestrateur, aucun GPU, aucun réseau
 - `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
 - `apps/kid-ui/tests/test_tls.py` — HTTPS local de l'appli enfant (#160) : démarrage TLS, refus du HTTP nu, écoute locale.
