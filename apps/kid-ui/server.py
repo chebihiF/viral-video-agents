@@ -27,6 +27,7 @@ _GPU_WORKER = str(Path(__file__).resolve().parent.parent / "gpu-worker")
 if _GPU_WORKER not in sys.path:
     sys.path.append(_GPU_WORKER)
 
+import gpu_power  # noqa: E402
 import jobs  # noqa: E402
 import lan_guard  # noqa: E402
 import video  # noqa: E402
@@ -337,7 +338,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="DÉMO seulement : la dictée renvoie toujours le même texte (sans ASR réel : 503)",
     )
+    p.add_argument(
+        "--gpu-power",
+        action="store_true",
+        help="réveille le PC GPU avant chaque job et l'endort après inactivité (pc-gpu, #223)",
+    )
     return p.parse_args(argv)
+
+
+def make_power(a: argparse.Namespace) -> gpu_power.GpuPower | None:
+    """Sans --gpu-power, aucun appel à pc-gpu (comportement d'avant #223)."""
+    return gpu_power.GpuPower() if a.gpu_power else None
 
 
 def make_transcriber(a: argparse.Namespace) -> Transcriber | None:
@@ -386,13 +397,16 @@ def main(argv: list[str] | None = None) -> None:
     if err:
         print(f"kid-ui : {err}", file=sys.stderr)  # noqa: T201
         raise SystemExit(2)
+    power = make_power(a)
+    if power is not None:
+        jobs.Veille(power).start()
     httpd = make_server(
         a.host,
         a.port,
         tls_cert=a.tls_cert,
         tls_key=a.tls_key,
         transcriber=make_transcriber(a),
-        store=jobs.JobStore(a.runs_dir),
+        store=jobs.JobStore(a.runs_dir, power=power),
     )
     scheme = "https" if a.tls_cert else "http"
     print(f"kid-ui sur {scheme}://{a.host}:{a.port}/")  # noqa: T201

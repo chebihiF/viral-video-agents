@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import eta
+import gpu_power
 import jobs
 import pytest
 import server
@@ -649,3 +650,124 @@ def test_status_js_rendu_de_la_barre_et_de_la_duree() -> None:
     assert "environ 3 minutes" in vus[1]["text"]
     assert vus[4]["h1"] == "Mimo" and vus[4]["on"] == 4
     assert all("secrete" not in json.dumps(v) for v in vus)  # la dictée n'est jamais affichée
+
+
+# --- #223 : réveil et veille du PC GPU (pc-gpu simulé, aucun appel réel) ---
+
+
+class FakePcGpu:
+    """pc-gpu simulé : note chaque verbe et le nombre de jobs déjà lancés par le faux CLI."""
+
+    def __init__(self, spy: Path, etat: str = "endormi", wake_code: int = 0) -> None:
+        self.spy, self.etat, self.wake_code = spy, etat, wake_code
+        self.gate: threading.Event | None = None  # si posé, `wake` attend son ouverture
+        self.appels: list[tuple[str, int]] = []
+
+    def __call__(self, args: list[str], timeout: float) -> gpu_power.Result:
+        verbe = args[-1]
+        assert args == [gpu_power.PC_GPU, verbe]
+        self.appels.append((verbe, len(list(self.spy.glob("*.json")))))
+        if verbe == "wake":
+            if self.gate is not None:
+                self.gate.wait(10)
+            self.etat = "eveille" if self.wake_code == 0 else self.etat
+            return gpu_power.Result(self.wake_code, "")
+        if verbe == "sleep":
+            self.etat = "endormi"
+            return gpu_power.Result(0, "")
+        return gpu_power.Result(0, self.etat + "\n")
+
+    def verbes(self) -> list[str]:
+        return [v for v, _ in self.appels]
+
+
+def store_alimente(tmp_path: Path, power: jobs.Power) -> jobs.JobStore:
+    fake = tmp_path / "fake_orchestrator.py"
+    fake.write_text(FAKE, encoding="utf-8")
+    return jobs.JobStore(tmp_path / "runs", command=(sys.executable, str(fake)), power=power)
+
+
+def attendre(cond: Any) -> None:
+    deadline = time.monotonic() + 10
+    while not cond():
+        assert time.monotonic() < deadline, "condition non atteinte"
+        time.sleep(0.01)
+
+
+def test_reveil_avant_job(tmp_path: Path, spy: Path) -> None:
+    pc = FakePcGpu(spy, etat="endormi")
+    st = store_alimente(tmp_path, gpu_power.GpuPower(run=pc))
+    job_id = st.submit(DICTEE)
+    wait_state(st, job_id, "done")
+    assert pc.appels == [("status", 0), ("wake", 0), ("status", 0)]  # tout avant le lancement
+    assert len(spied(spy)) == 1
+
+
+def test_j_allume_le_pc_expose_pendant_le_reveil(tmp_path: Path, spy: Path) -> None:
+    pc = FakePcGpu(spy, etat="endormi")
+    pc.gate = threading.Event()
+    st = store_alimente(tmp_path, gpu_power.GpuPower(run=pc))
+    job_id = st.submit(DICTEE)
+    attendre(lambda: "wake" in pc.verbes())
+    s = st.status(job_id)
+    assert s is not None and s["state"] == "queued" and s.get("waking") is True
+    validator("Status").validate(s)
+    pc.gate.set()
+    fin = wait_state(st, job_id, "done")
+    assert "waking" not in fin
+
+
+def test_pc_injoignable_job_en_erreur_sans_texte_d_enfant(
+    tmp_path: Path, spy: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    caplog.set_level(logging.DEBUG)
+    pc = FakePcGpu(spy, etat="endormi", wake_code=1)
+    st = store_alimente(tmp_path, gpu_power.GpuPower(run=pc))
+    job_id = st.submit(DICTEE)
+    s = wait_state(st, job_id, "error")
+    validator("Status").validate(s)
+    assert "blocked" not in s and "waking" not in s
+    assert spied(spy) == []  # le CLI n'est jamais lancé
+    assert f"job={job_id} erreur=GpuUnavailable" in caplog.text
+    assert DICTEE not in caplog.text
+
+
+def test_veille_apres_inactivite_une_seule_fois(spy: Path) -> None:
+    t = [0.0]
+    pc = FakePcGpu(spy, etat="eveille")
+    veille = jobs.Veille(gpu_power.GpuPower(run=pc, clock=lambda: t[0], idle_s=300), period_s=0.01)
+    veille.start()
+    time.sleep(0.05)
+    assert pc.appels == []  # idle_s pas écoulé : pas même un status
+    t[0] = 301
+    attendre(lambda: "sleep" in pc.verbes())
+    time.sleep(0.1)  # plusieurs tick() de plus
+    veille.stop()
+    assert pc.verbes().count("sleep") == 1
+    assert not veille.is_alive()
+
+
+def test_job_en_cours_tick_n_endort_pas(
+    tmp_path: Path, spy: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gate = tmp_path / "gate"
+    monkeypatch.setenv("FAKE_GATE", str(gate))
+    t = [0.0]
+    pc = FakePcGpu(spy, etat="eveille")
+    power = gpu_power.GpuPower(run=pc, clock=lambda: t[0], idle_s=300)
+    st = store_alimente(tmp_path, power)
+    job_id = st.submit(DICTEE)
+    wait_state(st, job_id, "running")
+    t[0] = 10_000
+    assert power.tick() is False
+    gate.touch()
+    wait_state(st, job_id, "done")
+    assert power.tick() is False  # job_finished a relancé le compte à rebours
+    assert "sleep" not in pc.verbes()
+    t[0] = 10_301
+    assert power.tick() is True
+
+
+def test_alimentation_branchee_seulement_sur_option() -> None:
+    assert server.make_power(server.parse_args([])) is None
+    assert isinstance(server.make_power(server.parse_args(["--gpu-power"])), gpu_power.GpuPower)

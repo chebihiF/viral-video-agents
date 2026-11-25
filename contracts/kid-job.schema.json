@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "kid-job.schema.json",
   "title": "kid-job",
-  "description": "API jobs de l'appli enfant (v1.1, #162, #165) : POST /api/jobs (Submit -> Accepted 202 ou Deferred 200 hors réseau local) et GET /api/jobs/{id} (Status avec progress, ou Deferred hors réseau local). Aucune réponse ne reprend la dictée.",
+  "description": "API jobs de l'appli enfant (v1.2, #162, #165, #223) : POST /api/jobs (Submit -> Accepted 202 ou Deferred 200 hors réseau local) et GET /api/jobs/{id} (Status avec progress, ou Deferred hors réseau local). Aucune réponse ne reprend la dictée.",
   "$defs": {
     "Submit": {
       "type": "object",
@@ -57,6 +57,10 @@
         "blocked": {
           "const": true,
           "description": "Présent seulement si state = error parce que la classification a bloqué la dictée : ne pas réessayer."
+        },
+        "waking": {
+          "const": true,
+          "description": "Présent seulement si state = queued pendant le réveil du PC GPU (#223, jusqu'à 360 s) : afficher « j'allume le PC »."
         }
       }
     }
