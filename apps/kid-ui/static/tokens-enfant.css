@@ -1,9 +1,15 @@
 /* tokens-enfant.css — appli "Mimo" (360 px). Direction C : stickers, couleurs franches, mascotte.
-   3 thèmes : nuit (défaut), soleil, menthe. Polices à héberger en local (Bricolage Grotesque + Figtree, OFL). */
+   3 thèmes : nuit (défaut), soleil, menthe. Polices latines (Bricolage Grotesque + Figtree, OFL) : repli système
+   tant qu'elles ne sont pas hébergées. Arabe : Tajawal (OFL, woff2 locaux dans fonts/, sans CDN). */
+
+/* Arabe seulement (unicode-range) : le latin garde sa pile. Sous-ensembles fontsource, licence fonts/OFL-Tajawal.txt. */
+@font-face { font-family: "Tajawal"; font-weight: 500; font-style: normal; font-display: swap; src: url("fonts/tajawal-arabic-500.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: "Tajawal"; font-weight: 700; font-style: normal; font-display: swap; src: url("fonts/tajawal-arabic-700.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
+@font-face { font-family: "Tajawal"; font-weight: 800; font-style: normal; font-display: swap; src: url("fonts/tajawal-arabic-800.woff2") format("woff2"); unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1, U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF, U+FE70-FE74, U+FE76-FEFC; }
 
 :root, .kid-screen {
-  --font-display: "Bricolage Grotesque", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
-  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Bricolage Grotesque", "Tajawal", "Arial Rounded MT Bold", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Figtree", "Tajawal", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --r-sm: 12px; --r-md: 18px; --r-lg: 26px;
   --touch: 48px; --touch-lg: 60px;
   --press: 4px;
@@ -100,7 +106,7 @@
 .kid-bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px 6px; flex: none; min-height: 64px; }
 .kid-bar h1 { flex: 1; min-width: 0; font: 800 22px/1.1 var(--font-display); letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kid-icon-btn {
-  width: 46px; height: 46px; flex: none; display: grid; place-items: center; padding: 0; cursor: pointer;
+  width: var(--touch); height: var(--touch); flex: none; display: grid; place-items: center; padding: 0; cursor: pointer;
   background: var(--surface); color: var(--ink); border: 2px solid var(--line); border-radius: 50%;
   box-shadow: 0 3px 0 var(--edge); transition: transform .12s, box-shadow .12s;
 }
@@ -167,7 +173,7 @@
 .variants { display: flex; flex-direction: column; gap: 10px; }
 .variants button {
   display: grid; grid-template-columns: 44px minmax(0,1fr) 28px; gap: 12px; align-items: center;
-  min-height: 68px; padding: 8px 12px 8px 8px; text-align: start; cursor: pointer;
+  min-height: 68px; padding-block: 8px; padding-inline: 8px 12px; text-align: start; cursor: pointer;
   background: var(--surface-2); color: var(--ink); font: inherit;
   border: 2px solid var(--line); border-radius: var(--r-md); transition: transform .15s, box-shadow .15s;
 }
@@ -189,8 +195,8 @@
   background: var(--surface); border: 2px solid var(--line); border-radius: 32px; box-shadow: 0 4px 0 var(--edge);
 }
 .kid-composer textarea {
-  flex: 1; min-width: 0; min-height: 44px; max-height: 120px; resize: none; border: 0; background: transparent;
-  color: var(--ink); font: 500 16px/1.4 var(--font-body); padding: 10px 6px 10px 14px; outline: none;
+  flex: 1; min-width: 0; min-height: var(--touch); max-height: 120px; resize: none; border: 0; background: transparent;
+  color: var(--ink); font: 500 16px/1.4 var(--font-body); padding-block: 10px; padding-inline: 14px 6px; outline: none;
 }
 .kid-composer textarea::placeholder { color: var(--ink-2); opacity: 1; }
 .kid-composer:focus-within { outline: 3px solid var(--focus); outline-offset: 3px; }
@@ -203,12 +209,12 @@
 .hero mark { display: inline-block; padding: 0 .22em; margin-inline: .05em; background: var(--brand); color: var(--on-brand); border-radius: .28em; transform: rotate(-2.5deg); }
 .starters { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
 .starters li:nth-child(odd) { transform: rotate(-.7deg); } .starters li:nth-child(even) { transform: rotate(.7deg); }
-.starters .kid-btn { width: 100%; justify-content: flex-start; text-align: start; padding: 0 14px 0 8px; gap: 12px; }
+.starters .kid-btn { width: 100%; justify-content: flex-start; text-align: start; padding-block: 0; padding-inline: 8px 14px; gap: 12px; }
 .starters .ico { width: 36px; height: 36px; display: grid; place-items: center; border: 2px solid var(--edge); border-radius: 12px; flex: none; }
 .starters li:nth-child(1) .ico { background: var(--pop); color: var(--on-pop); }
 .starters li:nth-child(2) .ico { background: var(--sky); color: var(--on-sky); }
 .starters li:nth-child(3) .ico { background: var(--brand); color: var(--on-brand); }
-.kid-theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding: 8px 8px 8px 14px; background: var(--surface); border: 2px dashed var(--line); border-radius: var(--r-md); }
+.kid-theme { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; padding-block: 8px; padding-inline: 14px 8px; background: var(--surface); border: 2px dashed var(--line); border-radius: var(--r-md); }
 .kid-theme > span { font: 800 16px var(--font-display); }
 .kid-theme button { display: grid; justify-items: center; gap: 2px; min-width: 56px; min-height: 56px; padding: 4px; background: transparent; color: var(--ink); font: 700 14px/1 var(--font-body); border: 2px solid transparent; border-radius: 14px; cursor: pointer; }
 .kid-theme button[aria-checked="true"] { border-color: var(--ink); background: var(--surface-2); }
@@ -255,7 +261,7 @@
 .confetti i:nth-child(3n+1) { background: var(--sky); }
 .poster { position: relative; align-self: center; width: 138px; aspect-ratio: 9/16; transform: rotate(-2deg); border: 3px solid var(--edge); border-radius: 18px; overflow: hidden; box-shadow: 0 6px 0 var(--edge); background: #1F2A5C; }
 .poster .art, .card .art { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.poster .play { position: absolute; inset-inline-start: 50%; top: 50%; margin: -28px 0 0 -28px; width: 56px; height: 56px; }
+.poster .play { position: absolute; inset-inline-start: 50%; top: 50%; margin-block: -28px 0; margin-inline: -28px 0; width: 56px; height: 56px; }
 .poster .dur { position: absolute; inset-inline-end: 8px; bottom: 8px; }
 
 /* ---------- Mes vidéos ---------- */
@@ -303,4 +309,5 @@
 @keyframes rec { 50% { opacity: .25; } }
 @media (prefers-reduced-motion: reduce) {
   .kid-screen *, .kid-screen *::before, .kid-screen *::after { animation: none !important; transition: none !important; }
+  .confetti { display: none; }
 }
