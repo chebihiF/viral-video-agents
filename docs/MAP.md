@@ -94,6 +94,7 @@
 - `docs/adr/ADR-004-separation-usine-produit.md` — ADR-004 — Séparer l'usine d'agents (A) et l'application vidéo (B)
 - `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
+- `docs/design/kid-ui.md` — Spec UI enfant "Mimo" (ticket #36, pour #161 #162 #163 #165)
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`
 - `evals/cases/classification.recorded.jsonl`
