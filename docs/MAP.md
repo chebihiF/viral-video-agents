@@ -55,6 +55,7 @@
 - `apps/kid-ui/static/tokens-enfant.css`
 - `apps/kid-ui/tests/minidom.js` — Mini DOM pour les tests node de l'UI enfant (#214) : exécute les VRAIS scripts de static/ 
 - `apps/kid-ui/tests/test_asr_local.py` — ASR local faster-whisper (#217) : faux module partout, jamais le vrai ni un modèle.
+- `apps/kid-ui/tests/test_clavier.py` — Bouton Envoyer du clavier (#221) : le texte tapé part par MimoStatus.envoyer.
 - `apps/kid-ui/tests/test_dictation.py` — Tests de la dictée au micro (#161) : POST /api/dictation, aucune trace, aucun tiers.
 - `apps/kid-ui/tests/test_ecarts.py` — Écarts de la spec #36 (kid-ui.md) : police arabe, reduced-motion, RTL, cibles 48 px.
 - `apps/kid-ui/tests/test_eta.py` — Durée restante estimée (#165) : médianes mesurées, valeur par défaut, aucune dictée.

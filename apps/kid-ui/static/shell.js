@@ -49,9 +49,29 @@
     location.reload();
   });
 
-  document.getElementById("idee").form.addEventListener("submit", function (e) {
-    e.preventDefault(); // l'envoi passe par le micro puis ✅ (dictation.js) ; pas de saisie au clavier ici
+  // Saisie au clavier : la flèche Envoyer transmet le texte à MimoStatus (status.js), comme ✅ après la dictée.
+  var TEXTE_MAX = 500; // contrat kid-job : au-delà, POST /api/jobs répond 400
+  var idee = document.getElementById("idee");
+  var fleche = idee.form.querySelector("button[type=submit]");
+
+  function texteSaisi() {
+    return String(idee.value || "").trim().slice(0, TEXTE_MAX);
+  }
+
+  function majFleche() {
+    fleche.disabled = texteSaisi() === "";
+  }
+
+  idee.addEventListener("input", majFleche);
+  idee.form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var texte = texteSaisi();
+    if (!texte) return;
+    idee.value = "";
+    majFleche();
+    window.MimoStatus.envoyer(texte);
   });
+  majFleche();
 
   var radios = document.querySelectorAll(".kid-theme [role=radio]");
   var noms = ["nuit", "soleil", "menthe"];
