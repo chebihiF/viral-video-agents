@@ -63,6 +63,7 @@
 - `apps/kid-ui/tests/test_formulaire.py` — Formulaire enfant de bout en bout (#214) : micro, texte validé, progression, lecteur.
 - `apps/kid-ui/tests/test_jobs.py` — Envoi de la dictée et suivi du statut (#162) : faux orchestrateur, aucun GPU, aucun réseau
 - `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
+- `apps/kid-ui/tests/test_status_retour.py` — Suivi rafraîchi au retour de l'enfant (#233) : `visibilitychange` (visible) et `online`.
 - `apps/kid-ui/tests/test_status_waking.py` — Message « j'allume le PC » (#230) quand le job est en réveil (`waking: true`, kid-job v1.2
 - `apps/kid-ui/tests/test_tls.py` — HTTPS local de l'appli enfant (#160) : démarrage TLS, refus du HTTP nu, écoute locale.
 - `apps/kid-ui/tests/test_video.py` — Lecture et téléchargement de la vidéo terminée (#163) : faux orchestrateur, aucun GPU.

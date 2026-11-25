@@ -47,6 +47,7 @@ Fichiers livrés (ne pas réécrire) : `apps/kid-ui/static/tokens-enfant.css` (t
 - "Bientôt prête" (dernière étape, ou durée < 1 min) : chip `kid-chip ok` "Bientôt prête" + icône étoile, remplace la chip durée ; le Mimo reste `bob`. Annoncé une seule fois via `role=status` (pas à chaque tick de 3 s : ne remplacer que si le texte change, sinon `hx-swap=none`).
 - Étape terminée : `.film .done` (coche) ; courante : `.now` + `aria-current=step` ; texte `.st` ("fait", "en cours", "bientôt"). L'état final arrête le polling (réponse sans `hx-trigger`) et passe à Vidéo prête.
 - Erreur serveur pendant l'attente : écran Erreur (le polling reprend sur Réessayer).
+- Retour au premier plan (`visibilitychange` visible) ou reconnexion (`online`) : un seul appel de statut aussitôt, minuteur réarmé, jamais deux polling ; hors ligne = écran Erreur existant (#233).
 
 ### Hors maison
 `.note.warn[role=status]` : h2 "Mimo dort un peu" (court), `p` : **« Je te génère la vidéo une fois à la maison. »** + `kid-chip warn` "Hors maison". L'idée est gardée localement et envoyée au retour (message `.kid-sys` "Idée gardée"). Pas de bouton Créer actif (`disabled`, tirets). Composer `aria-disabled=true` (pointillé).
