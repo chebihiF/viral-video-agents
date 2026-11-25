@@ -15,6 +15,7 @@ import sys
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit
 
 # lan_guard vit dans apps/gpu-worker (#158) : même garde, une seule implémentation.
 _GPU_WORKER = str(Path(__file__).resolve().parent.parent / "gpu-worker")
@@ -88,8 +89,28 @@ class Handler(SimpleHTTPRequestHandler):
         else:
             self._submit()
 
+    def _same_origin(self) -> bool:
+        """Anti-CSRF : corps JSON déclaré, et Origin (si envoyée) = hôte servi (en-tête Host)."""
+        if self.headers.get_content_type() != "application/json":
+            return False
+        origin = self.headers.get("Origin")
+        return origin is None or urlsplit(origin).netloc == self.headers.get("Host")
+
+    def _body_size(self) -> int | None:
+        try:
+            size = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            return None
+        return size if size >= 0 else None
+
     def _submit(self) -> None:
-        size = int(self.headers.get("Content-Length") or 0)
+        if not self._same_origin():
+            self._json(403, {"error": "requête refusée"})
+            return
+        size = self._body_size()
+        if size is None:
+            self._json(400, {"error": "Content-Length invalide"})
+            return
         if size > BODY_MAX:
             self._json(413, {"error": "corps trop gros"})
             return
@@ -100,6 +121,9 @@ class Handler(SimpleHTTPRequestHandler):
             job_id = self._jobs().submit(body["text"])
         except (ValueError, UnicodeError):  # JSON invalide ou InvalidText : texte jamais cité
             self._json(400, {"error": "texte refusé"})
+            return
+        except jobs.Busy:
+            self._json(409, {"error": "une vidéo est déjà en cours"})
             return
         self._json(202, {"job_id": job_id})
 
