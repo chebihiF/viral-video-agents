@@ -51,7 +51,7 @@ files = ["apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "ev
   "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py", "apps/gpu-worker/lan_guard.py"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests/contracts", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "evals", "apps/gpu-worker/tests", "apps/kid-ui/tests"]
+testpaths = ["tests/contracts", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "evals", "apps/gpu-worker/tests", "apps/kid-ui/tests", "infra/kid-ui/tests"]
 pythonpath = ["infra/scripts", "evals", "apps/gpu-worker", "apps/kid-ui"]
 filterwarnings = ["ignore::DeprecationWarning"]
 markers = ["e2e: parcours de bout en bout avec mocks (ffmpeg local, sans GPU ni réseau)"]

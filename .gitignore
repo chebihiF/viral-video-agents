@@ -14,3 +14,6 @@ outputs/
 
 # Icônes PWA de l'appli enfant (générées par apps/kid-ui/make_icons.py)
 !apps/kid-ui/static/icons/*.png
+
+# Certificats HTTPS locaux de l'appli enfant : clés privées, jamais commitées
+infra/kid-ui/certs/

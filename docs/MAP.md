@@ -21,7 +21,7 @@
 - `apps/gpu-worker/worker.py` — Service de jobs image -> clip (Wan 2.2) appelé par n8n (contrat : contracts/gpu-job.schema
 - `apps/kid-ui/README.md` — kid-ui
 - `apps/kid-ui/make_icons.py` — Icônes PNG de l'appli (mascotte Mimo), stdlib seule : python3 apps/kid-ui/make_icons.py.
-- `apps/kid-ui/server.py` — Serveur statique minimal de l'appli enfant (stdlib seule, écoute 127.0.0.1 par défaut).
+- `apps/kid-ui/server.py` — Serveur statique minimal de l'appli enfant (stdlib seule, HTTPS, écoute 127.0.0.1 par défa
 - `apps/kid-ui/static/icons/icon-192.png`
 - `apps/kid-ui/static/icons/icon-512.png`
 - `apps/kid-ui/static/icons/maskable-512.png`
@@ -34,6 +34,7 @@
 - `apps/kid-ui/static/theme.js` — Thème de l'enfant : lu en local avant le rendu, jamais envoyé au serveur.
 - `apps/kid-ui/static/tokens-enfant.css`
 - `apps/kid-ui/tests/test_pwa.py` — Tests de l'appli enfant installable (#159) : manifest, service worker, coquille, serveur.
+- `apps/kid-ui/tests/test_tls.py` — HTTPS local de l'appli enfant (#160) : démarrage TLS, refus du HTTP nu, écoute locale.
 - `apps/media-service/README.md` — media-service
 - `apps/media-service/pyproject.toml`
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
@@ -103,6 +104,11 @@
 - `evals/storyboard_eval.py` — Éval du prompt storyboard : taux de sorties JSON conformes à contracts/storyboard.schema.j
 - `evals/test_classification_eval.py` — Tests hors GPU de l'éval de classification (#35) : contrat, cas, dry-run, seuils.
 - `evals/test_storyboard_eval.py` — Tests de l'éval storyboard : jamais d'appel Ollama (réseau bloqué).
+- `infra/kid-ui/README.md` — HTTPS local pour l'appli enfant (#160)
+- `infra/kid-ui/make-cert.sh` — Certificat HTTPS local de l'appli enfant (mkcert) : sortie uniquement dans infra/kid-ui/ce
+- `infra/kid-ui/tests/test_cert_script.py` — Passerelle pytest vers test_cert_script.sh (#160) : make check couvre le script de certifi
+- `infra/kid-ui/tests/test_cert_script.sh` — Tests de make-cert.sh (#160) : shellcheck, dry-run sans mkcert, refus d'écrire hors certs/
+- `infra/kid-ui/tests/test_repo_secrets.py` — Scénarios 1 et 4 de #160 : certs/ ignoré, aucune clé ni CA suivie, noms hostiles refusés.
 - `infra/scripts/bootstrap_worktree.sh` — Copie .claude/ et CLAUDE.md (fichiers locaux, jamais commités) du checkout principal vers 
 - `infra/scripts/conftest.py`
 - `infra/scripts/gen_map.py` — Génère docs/MAP.md : une ligne par fichier suivi par git (index uniquement) (chemin — résu
