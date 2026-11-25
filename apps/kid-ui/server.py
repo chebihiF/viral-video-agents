@@ -18,7 +18,7 @@ from email.parser import BytesParser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, MockTranscriber, Transcriber
 
@@ -29,6 +29,7 @@ if _GPU_WORKER not in sys.path:
 
 import jobs  # noqa: E402
 import lan_guard  # noqa: E402
+import video  # noqa: E402
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_HOST = "127.0.0.1"
@@ -77,7 +78,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self) -> None:
         path = self.path.split("?")[0]
-        if not path.startswith("/api/"):
+        if VIDEO_ROUTE.fullmatch(path):
+            handle_video(self)  # bloc « vidéo » plus bas (#163)
+        elif not path.startswith("/api/"):
             super().do_GET()
         elif not lan_guard.is_local(self.client_ip()):
             self.send_json(200, DEFERRED)
@@ -167,6 +170,32 @@ class Server(ThreadingHTTPServer):
 
     def handle_error(self, request: Any, client_address: Any) -> None:
         """Poignée de main avortée ou connexion muette : on ferme sans trace ni journal."""
+
+
+# --- Vidéo terminée (#163) : GET /api/jobs/{id}/video, Range, ?download=1 ---
+VIDEO_ROUTE = re.compile(r"/api/jobs/([^/]+)/video")
+
+
+def handle_video(h: Handler) -> None:
+    """403 hors LAN (sans détail) ; 404 si l'id n'est pas un UUID, si le job n'est pas `done`
+    ou si le MP4 manque. Rien n'est journalisé."""
+    if not lan_guard.is_local(h.client_ip()):
+        h.send_json(403, {"error": "accès refusé"})
+        return
+    m = VIDEO_ROUTE.fullmatch(h.path.split("?")[0])
+    job_id = unquote(m[1]) if m else ""
+    status = h._jobs().status(job_id) if video.JOB_ID.fullmatch(job_id) else None  # noqa: SLF001
+    mp4 = (
+        video.find_mp4(h._jobs().runs_dir, job_id) if status and status["state"] == "done" else None
+    )  # noqa: SLF001
+    if mp4 is None:
+        h.send_json(404, {"error": "vidéo inconnue"})
+        return
+    query = parse_qs(urlsplit(h.path).query)
+    video.send(h, mp4, job_id, download=query.get("download") == ["1"])
+
+
+# --- fin du bloc vidéo ---
 
 
 # --- Dictée au micro (#161) : POST /api/dictation, en mémoire, sans disque ni journal ---
