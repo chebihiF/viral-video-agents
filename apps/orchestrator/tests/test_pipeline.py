@@ -51,6 +51,8 @@ class Fakes:
         self.ordre_wavs = 1  # -1 : WAV rendus dans l'ordre inverse
         self.wav_ids: list[str] | None = None  # plan_id rendus par voix (sinon ceux du job)
         self.montage_job: Mapping[str, Any] = {}
+        self.verdict_storyboard: Any = None  # remplace storyboard.classification si non None
+        self.storyboard_sans_verdict = False  # True : storyboard sans champ classification
 
     def _appel(self, nom: str) -> None:
         self.appels.append(nom)
@@ -65,6 +67,10 @@ class Fakes:
         self._appel("storyboard")
         self.textes_storyboard.append(texte)
         data: dict[str, Any] = _load("examples/storyboard.valid.json")
+        if self.verdict_storyboard is not None:
+            data["classification"] = self.verdict_storyboard
+        if self.storyboard_sans_verdict:
+            del data["classification"]
         return data
 
     def voix(self, job: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -183,6 +189,77 @@ def test_classification_inconnue_est_une_erreur_sans_generation() -> None:
     run = lancer(DICTEE, fakes.etapes(), run_id="run-5")
     assert run["etat"] == "erreur"
     assert fakes.appels == ["classification"]
+
+
+GENERATION = ["voix", "image", "clip", "montage"]
+
+
+def test_storyboard_bloque_apres_classification_libre() -> None:
+    fakes = Fakes("libre")
+    fakes.verdict_storyboard = "bloque"
+    run = lancer(DICTEE, fakes.etapes(), run_id="run-sb-1")
+    RUN.validate(run)
+    assert run["etat"] == "bloque"
+    assert "video_path" not in run
+    assert run["etapes"] == [
+        {"nom": n, "statut": "ok", "duree_s": pytest.approx(0, abs=1)}
+        for n in ("classification", "storyboard")
+    ]
+    assert not [a for a in fakes.appels if a in GENERATION]
+
+
+def test_storyboard_bloque_apres_classification_adouci() -> None:
+    fakes = Fakes("adouci")
+    fakes.verdict_storyboard = "bloque"
+    run = lancer(DICTEE, fakes.etapes(), run_id="run-sb-5")
+    RUN.validate(run)
+    assert run["etat"] == "bloque"
+    assert "video_path" not in run
+    assert _noms(run) == ["classification", "storyboard"]
+    assert all(e["statut"] == "ok" for e in run["etapes"])
+    assert fakes.textes_storyboard == [fakes.classification["texte_adouci"]]
+    assert fakes.appels == ["classification", "storyboard"]
+
+
+@pytest.mark.parametrize("verdict", [None, "peut-etre", "", "BLOQUE", 0, ["bloque"]])
+def test_verdict_de_storyboard_absent_ou_inconnu_est_une_erreur(verdict: Any) -> None:
+    fakes = Fakes("libre")
+    fakes.storyboard_sans_verdict = verdict is None
+    fakes.verdict_storyboard = verdict
+    run = lancer(DICTEE, fakes.etapes(), run_id="run-sb-2")
+    RUN.validate(run)
+    assert run["etat"] == "erreur"
+    assert "video_path" not in run
+    assert run["etapes"][-1]["nom"] == "storyboard"
+    assert run["etapes"][-1]["statut"] == "erreur"
+    assert fakes.appels == ["classification", "storyboard"]
+
+
+@pytest.mark.parametrize("verdict", ["libre", "adouci"])
+def test_storyboard_libre_ou_adouci_continue_jusqu_au_montage(verdict: str) -> None:
+    fakes = Fakes("libre")
+    fakes.verdict_storyboard = verdict
+    run = lancer(DICTEE, fakes.etapes(), run_id="run-sb-3")
+    RUN.validate(run)
+    assert run["etat"] == "ok"
+    assert _noms(run) == ORDRE
+    assert fakes.appels[-1] == "montage"
+
+
+@pytest.mark.parametrize("verdict", ["bloque", "peut-etre"])
+def test_storyboard_refuse_aucun_texte_dans_l_etat_ni_les_logs(
+    verdict: str, caplog: pytest.LogCaptureFixture
+) -> None:
+    fakes = Fakes("libre")
+    fakes.verdict_storyboard = verdict
+    with caplog.at_level(logging.DEBUG):
+        run = lancer(DICTEE, fakes.etapes(), run_id="run-sb-4")
+    storyboard = _load("examples/storyboard.valid.json")
+    secrets = [DICTEE, "hibou", storyboard["compris_fr"], storyboard["recap_darija"]]
+    secrets += [p[c] for p in storyboard["plans"] for c in ("image_prompt", "narration_fr")]
+    traces = json.dumps(run, ensure_ascii=False) + caplog.text
+    assert caplog.records, "le pipeline doit journaliser ses étapes"
+    assert not [s for s in secrets if s in traces]
 
 
 @pytest.mark.parametrize(

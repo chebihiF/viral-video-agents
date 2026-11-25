@@ -48,6 +48,21 @@ def test_contenu_bloque(tmp_path: Path) -> None:
     assert "video_path" not in run
 
 
+def test_storyboard_bloque_code_2(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    base = etapes_factices()
+    refus = dataclasses.replace(
+        base, storyboard=lambda texte: {**base.storyboard(texte), "classification": "bloque"}
+    )
+    monkeypatch.setattr("orchestrator.__main__.etapes_factices", lambda: refus)
+    code, run_json = _lancer(tmp_path, DICTEE)
+    run = json.loads(run_json.read_text("utf-8"))
+    RUN.validate(run)
+    assert code == 2
+    assert run["etat"] == "bloque"
+    assert [e["nom"] for e in run["etapes"]] == ["classification", "storyboard"]
+    assert "video_path" not in run
+
+
 @pytest.mark.parametrize("dictee", ["", "  \n\t ", "a" * 2001])
 def test_dictee_invalide(tmp_path: Path, dictee: str) -> None:
     code, run_json = _lancer(tmp_path, dictee)

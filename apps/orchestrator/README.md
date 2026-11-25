@@ -23,6 +23,7 @@ run["etat"], run.get("video_path")  # ok | bloque | erreur
 
 - Sortie : [`contracts/pipeline-run.schema.json`](../../contracts/pipeline-run.schema.json) (exemple `contracts/examples/pipeline-run.ok.json`).
 - `libre` : le storyboard reçoit la dictée ; `adouci` : le `texte_adouci`, jamais la dictée ; `bloque` : aucune étape de génération, run « bloque ».
+- Second filtre (#244) : le champ `classification` du storyboard est relu. `bloque` : run « bloque » (étapes `classification` et `storyboard` en ok, ni voix, ni image, ni clip, ni montage, CLI code 2) ; absent ou hors `libre|adouci|bloque` : run « erreur » à l'étape `storyboard` (échec fermé).
 - Échec d'une étape (exception ou sortie hors contrat) : run « erreur », dernière étape en `statut: erreur`, suivantes non appelées ; seul le type de l'exception est journalisé.
 - GPU en série : verrou commun à tous les runs du processus (`GPU_LOCK`, injectable via `gpu_lock`), pris une fois pour toute la phase `image` (tous les plans), puis une fois pour la phase `clip` : un seul changement de modèle ComfyUI, plans d'un run non entrelacés avec un autre run.
 - `job_id` GPU distincts par étape (clé d'idempotence du gpu-job) : `<run_id>-img-<n>`, `<run_id>-clip-<n>`.

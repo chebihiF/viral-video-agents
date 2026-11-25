@@ -18,7 +18,7 @@
       "pattern": "^[A-Za-z0-9_-]{1,48}$"
     },
     "etat": {
-      "description": "ok : vidéo produite ; bloque : classification « bloque », rien n'est généré ; erreur : une étape a échoué, les suivantes ne sont pas appelées.",
+      "description": "ok : vidéo produite ; bloque : classification ou storyboard « bloque », rien n'est généré (bloqué au storyboard : classification et storyboard en ok, puis aucune étape) ; erreur : une étape a échoué, les suivantes ne sont pas appelées.",
       "type": "string",
       "enum": ["ok", "bloque", "erreur"]
     },
