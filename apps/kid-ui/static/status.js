@@ -300,14 +300,21 @@
     return r.json();
   }
 
+  function horsLigne() {
+    return typeof navigator !== "undefined" && navigator.onLine === false;
+  }
+
+  // Réseau coupé : l'écran « pas de connexion » du shell est déjà affiché (shell.js) ; on garde le
+  // suivi pour reprendre à « online ». Serveur en panne en ligne : écran d'erreur du suivi.
   function panne() {
     enVol = false;
     panneReseau = true;
-    rendre({ ecran: "erreur" });
+    if (!(horsLigne() && suivi)) rendre({ ecran: "erreur" }); // envoi initial raté : écran « raté »
   }
 
   function traiter(rep) {
     enVol = false;
+    panneReseau = false;
     if (typeof rep.job_id === "string") jobId = rep.job_id;
     var v = vue(rep);
     rendre(v);
@@ -325,9 +332,14 @@
 
   function interroger() {
     enVol = true;
-    fetch("/api/jobs/" + encodeURIComponent(jobId), { cache: "no-store" })
+    var id = jobId;
+    fetch("/api/jobs/" + encodeURIComponent(id), { cache: "no-store" })
       .then(lire)
-      .then(traiter, panne);
+      .then(function (rep) {
+        if (jobId === id) traiter(rep); // réponse tardive d'un suivi abandonné : ignorée
+      }, function () {
+        if (jobId === id) panne();
+      });
   }
 
   function envoyer(t) {
@@ -352,9 +364,8 @@
   // Retour au premier plan ou reconnexion (#233) : un seul appel de statut aussitôt, le minuteur
   // est réarmé par la réponse. Rien si aucun job n'est suivi ou si une requête est déjà en vol.
   function rafraichir() {
-    if (!suivi || enVol || !jobId) return;
+    if (!suivi || enVol || !jobId || horsLigne()) return;
     clearTimeout(minuteur);
-    panneReseau = false;
     interroger();
   }
 
@@ -363,8 +374,8 @@
   }
 
   function reessayer() {
+    if (enVol) return; // une requête est déjà partie : pas de doublon
     if (panneReseau && jobId) {
-      panneReseau = false;
       interroger(); // le polling reprend là où il s'était arrêté
     } else if (texte) {
       envoyer(texte);
@@ -375,6 +386,7 @@
 
   function accueil() {
     clearTimeout(minuteur);
+    suivi = false;
     dernier = "";
     montrer(document.getElementById("ecran-accueil"));
   }
@@ -383,6 +395,7 @@
   function autreIdee() {
     texte = null;
     jobId = null;
+    enVol = false;
     panneReseau = false;
     accueil();
     var micro = document.querySelector('.kid-composer [aria-label="Parler"]');

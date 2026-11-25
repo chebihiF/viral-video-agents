@@ -292,7 +292,8 @@ function demarrer(opts) {
     sonder: async () => {
       const i = minuteurs.findIndex((m) => m.ms === 2000);
       if (i < 0) return false;
-      const [m] = minuteurs.splice(i, 1);
+      const m = minuteurs[i];
+      minuteurs[i] = { f() {}, ms: -1 }; // les identifiants de clearTimeout restent stables
       m.f();
       await api.flush();
       return true;
