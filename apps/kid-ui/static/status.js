@@ -292,6 +292,8 @@
   var jobId = null;
   var panneReseau = false;
   var minuteur = null;
+  var suivi = false; // un job est en cours de suivi (polling armé ou à reprendre après une panne)
+  var enVol = false; // une requête de statut est partie et n'a pas reçu de réponse
 
   function lire(r) {
     if (!r.ok) throw new Error("http " + r.status);
@@ -299,15 +301,19 @@
   }
 
   function panne() {
+    enVol = false;
     panneReseau = true;
     rendre({ ecran: "erreur" });
   }
 
   function traiter(rep) {
+    enVol = false;
     if (typeof rep.job_id === "string") jobId = rep.job_id;
     var v = vue(rep);
     rendre(v);
-    if (v.ecran === "en-cours") {
+    suivi = v.ecran === "en-cours";
+    if (suivi) {
+      clearTimeout(minuteur); // jamais deux minuteurs : un seul polling reste actif
       minuteur = setTimeout(interroger, POLL_MS);
     } else if (v.bloque) {
       texte = null; // dictée refusée : on ne la renverra pas
@@ -318,6 +324,7 @@
   }
 
   function interroger() {
+    enVol = true;
     fetch("/api/jobs/" + encodeURIComponent(jobId), { cache: "no-store" })
       .then(lire)
       .then(traiter, panne);
@@ -327,6 +334,8 @@
     clearTimeout(minuteur);
     texte = t;
     jobId = null;
+    suivi = false;
+    enVol = false;
     panneReseau = false;
     dernier = "";
     pctMax = 0;
@@ -338,6 +347,19 @@
     })
       .then(lire)
       .then(traiter, panne);
+  }
+
+  // Retour au premier plan ou reconnexion (#233) : un seul appel de statut aussitôt, le minuteur
+  // est réarmé par la réponse. Rien si aucun job n'est suivi ou si une requête est déjà en vol.
+  function rafraichir() {
+    if (!suivi || enVol || !jobId) return;
+    clearTimeout(minuteur);
+    panneReseau = false;
+    interroger();
+  }
+
+  function auRetour() {
+    if (document.visibilityState === "visible") rafraichir();
   }
 
   function reessayer() {
@@ -365,6 +387,11 @@
     accueil();
     var micro = document.querySelector('.kid-composer [aria-label="Parler"]');
     if (micro) micro.focus();
+  }
+
+  if (typeof document !== "undefined" && root.addEventListener) {
+    document.addEventListener("visibilitychange", auRetour);
+    root.addEventListener("online", rafraichir);
   }
 
   var api = { vue: vue, avancer: avancer, reste: reste, envoyer: envoyer, ETAPES: ETAPES, POLL_MS: POLL_MS };

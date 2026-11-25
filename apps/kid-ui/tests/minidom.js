@@ -230,10 +230,10 @@ class FauxMediaRecorder extends Target {
   }
 }
 
-// opts.routes(url, init) -> { status, corps } | undefined ; opts.enLigne (défaut true).
+// opts.routes(url, init) -> { status, corps } | { reseau: false } (fetch rejeté) | undefined ; opts.enLigne (défaut true).
 function demarrer(opts) {
   const o = opts || {};
-  const doc = Object.assign(new Target(), { dir: "", activeElement: null });
+  const doc = Object.assign(new Target(), { dir: "", activeElement: null, visibilityState: "visible" });
   const html = h(doc, "html", {});
   const body = h(doc, "body", {});
   html.append(body);
@@ -260,6 +260,7 @@ function demarrer(opts) {
       const json = typeof i.body === "string" ? JSON.parse(i.body) : undefined;
       appels.push({ url, method: i.method || "GET", json, formdata: i.body instanceof FormData, headers: i.headers });
       const rep = (o.routes && o.routes(url, i)) || { status: 404, corps: null };
+      if (rep.reseau === false) return Promise.reject(new TypeError("Failed to fetch")); // réseau coupé
       return Promise.resolve({ ok: rep.status < 400, status: rep.status, json: () => Promise.resolve(rep.corps) });
     },
     setTimeout(f, ms) {
@@ -295,6 +296,11 @@ function demarrer(opts) {
       m.f();
       await api.flush();
       return true;
+    },
+    // Retour au premier plan (ou mise en arrière-plan) : visibilitychange sur document.
+    visibilite: (etat) => {
+      doc.visibilityState = etat;
+      doc.dispatchEvent(new Evt("visibilitychange"));
     },
     reseau: (enLigne) => {
       win.navigator.onLine = enLigne;
