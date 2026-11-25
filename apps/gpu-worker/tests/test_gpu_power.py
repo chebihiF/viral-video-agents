@@ -343,3 +343,34 @@ def test_compteur_de_jobs_sous_concurrence(clock: Clock) -> None:
     run_all(power.job_finished)
     clock.advance(601)
     assert power.tick() is True  # compteur revenu exactement à 0
+
+
+def test_ensure_awake_attend_la_fin_du_sleep(clock: Clock) -> None:
+    """#223 : une dictée qui arrive pendant `sleep` attend sa fin avant de lire `status`."""
+    gate, in_sleep = threading.Event(), threading.Event()
+    calls: list[str] = []
+    etat = ["eveille"]
+
+    def gated(args: list[str], timeout: float) -> Result:
+        calls.append(args[1])
+        if args[1] == "sleep":
+            in_sleep.set()
+            assert gate.wait(5)
+            etat[0] = "endormi"
+        if args[1] == "wake":
+            etat[0] = "eveille"
+        return Result(0, etat[0])
+
+    power = GpuPower(run=gated, clock=clock)
+    clock.advance(601)
+    ticker = threading.Thread(target=power.tick)
+    ticker.start()
+    assert in_sleep.wait(5)
+    waker = threading.Thread(target=power.ensure_awake)
+    waker.start()
+    waker.join(0.2)
+    assert waker.is_alive() and calls == ["status", "sleep"]  # bloqué : pas de status pendant sleep
+    gate.set()
+    ticker.join(5)
+    waker.join(5)
+    assert calls == ["status", "sleep", "status", "wake", "status"]

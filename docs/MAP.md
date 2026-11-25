@@ -54,6 +54,7 @@
 - `apps/kid-ui/static/theme.js` — Thème de l'enfant : lu en local avant le rendu, jamais envoyé au serveur.
 - `apps/kid-ui/static/tokens-enfant.css`
 - `apps/kid-ui/tests/minidom.js` — Mini DOM pour les tests node de l'UI enfant (#214) : exécute les VRAIS scripts de static/ 
+- `apps/kid-ui/tests/test_asr_local.py` — ASR local faster-whisper (#217) : faux module partout, jamais le vrai ni un modèle.
 - `apps/kid-ui/tests/test_dictation.py` — Tests de la dictée au micro (#161) : POST /api/dictation, aucune trace, aucun tiers.
 - `apps/kid-ui/tests/test_ecarts.py` — Écarts de la spec #36 (kid-ui.md) : police arabe, reduced-motion, RTL, cibles 48 px.
 - `apps/kid-ui/tests/test_eta.py` — Durée restante estimée (#165) : médianes mesurées, valeur par défaut, aucune dictée.
@@ -156,6 +157,6 @@
 - `prompts/README.md` — prompts
 - `prompts/classification.v1.md` — classification.v1
 - `prompts/storyboard.v1.md`
-- `pyproject.toml`
+- `pyproject.toml` — ASR local de la dictée (#217) : `uv sync --extra asr` ; absent de la CI (tests avec faux m
 - `tests/contracts/test_contracts_kid_job.py` — Contrat contracts/kid-job.schema.json : API jobs de l'appli enfant (#162).
 - `tests/contracts/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).

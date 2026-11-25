@@ -71,6 +71,8 @@ def test_schema_valide_draft_2020_12() -> None:
         ("Progress", PROG, True),
         ("Status", {"state": "error", "step": "storyboard", "blocked": True}, True),
         ("Status", {"state": "error", "step": "storyboard", "blocked": False}, False),
+        ("Status", {"state": "queued", "step": "storyboard", "waking": True}, True),
+        ("Status", {"state": "queued", "step": "storyboard", "waking": False}, False),
     ],
 )
 def test_exemples(defn: str, data: Any, valide: bool) -> None:

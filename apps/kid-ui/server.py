@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import os
 import re
 import ssl
 import sys
@@ -20,13 +21,21 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, MockTranscriber, Transcriber
+from transcriber import (
+    ALLOWED_MIMES,
+    DEFAULT_ASR_MODEL,
+    MAX_AUDIO_BYTES,
+    FasterWhisperTranscriber,
+    MockTranscriber,
+    Transcriber,
+)
 
 # lan_guard vit dans apps/gpu-worker (#158) : même garde, une seule implémentation.
 _GPU_WORKER = str(Path(__file__).resolve().parent.parent / "gpu-worker")
 if _GPU_WORKER not in sys.path:
     sys.path.append(_GPU_WORKER)
 
+import gpu_power  # noqa: E402
 import jobs  # noqa: E402
 import lan_guard  # noqa: E402
 import video  # noqa: E402
@@ -337,11 +346,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="DÉMO seulement : la dictée renvoie toujours le même texte (sans ASR réel : 503)",
     )
+    p.add_argument(
+        "--gpu-power",
+        action="store_true",
+        help="réveille le PC GPU avant chaque job et l'endort après inactivité (pc-gpu, #223)",
+    )
+    p.add_argument(
+        "--asr",
+        choices=["faster-whisper"],
+        help="ASR local réel sur CPU (#217) ; sans --asr ni --mock-asr, /api/dictation répond 503",
+    )
+    p.add_argument(
+        "--asr-model",
+        type=Path,
+        default=Path(os.environ.get("VVA_ASR_MODEL", DEFAULT_ASR_MODEL)),
+        help="dossier du modèle CTranslate2 (env VVA_ASR_MODEL ; voir README, jamais téléchargé)",
+    )
     return p.parse_args(argv)
 
 
+def make_power(a: argparse.Namespace) -> gpu_power.GpuPower | None:
+    """Sans --gpu-power, aucun appel à pc-gpu (comportement d'avant #223)."""
+    return gpu_power.GpuPower() if a.gpu_power else None
+
+
 def make_transcriber(a: argparse.Namespace) -> Transcriber | None:
-    """Pas d'ASR réel livré : sans --mock-asr, /api/dictation répond 503."""
+    """--asr faster-whisper : modèle chargé au démarrage ; --mock-asr : démo ; sinon 503."""
+    if a.asr == "faster-whisper":
+        real = FasterWhisperTranscriber(a.asr_model)
+        try:
+            real.load()
+        except (ImportError, OSError, ValueError, RuntimeError) as exc:
+            msg = f"kid-ui : ASR indisponible ({type(exc).__name__}) : {exc}"
+            print(msg, file=sys.stderr)  # noqa: T201
+            raise SystemExit(2) from None
+        return real
     return MockTranscriber() if a.mock_asr else None
 
 
@@ -364,6 +403,10 @@ def validate(a: argparse.Namespace) -> str | None:
     host_err = check_host(a.host)
     if host_err:
         return host_err
+    if a.asr and a.mock_asr:
+        return "--asr et --mock-asr sont exclusifs : choisissez l'un des deux."
+    if a.asr and not Path(a.asr_model).is_dir():
+        return f"modèle ASR introuvable : {a.asr_model} (conversion : apps/kid-ui/README.md)."
     if bool(a.tls_cert) != bool(a.tls_key):
         return "--tls-cert et --tls-key vont ensemble : donnez les deux."
     if a.tls_cert:
@@ -386,17 +429,26 @@ def main(argv: list[str] | None = None) -> None:
     if err:
         print(f"kid-ui : {err}", file=sys.stderr)  # noqa: T201
         raise SystemExit(2)
+    transcriber = make_transcriber(a)  # avant la Veille : un échec ne laisse aucun thread
+    power = make_power(a)
+    veille = jobs.Veille(power) if power is not None else None
+    if veille is not None:
+        veille.start()
     httpd = make_server(
         a.host,
         a.port,
         tls_cert=a.tls_cert,
         tls_key=a.tls_key,
-        transcriber=make_transcriber(a),
-        store=jobs.JobStore(a.runs_dir),
+        transcriber=transcriber,
+        store=jobs.JobStore(a.runs_dir, power=power),
     )
     scheme = "https" if a.tls_cert else "http"
     print(f"kid-ui sur {scheme}://{a.host}:{a.port}/")  # noqa: T201
-    httpd.serve_forever()
+    try:
+        httpd.serve_forever()
+    finally:
+        if veille is not None:
+            veille.stop()
 
 
 if __name__ == "__main__":
