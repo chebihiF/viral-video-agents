@@ -160,6 +160,12 @@
 - `infra/scripts/test_bootstrap_worktree.py` — bootstrap_worktree.sh copie .claude/ sans worktrees/ ni telemetry/ et sans écraser.
 - `infra/scripts/test_no_claude_tracked.py` — Garde-fou : aucun chemin .claude/ ni CLAUDE.md ne doit être suivi par git.
 - `infra/scripts/test_pool.py` — pool.sh : un ticket = une branche sur un poste libre du pool (#14).
+- `infra/vpn/README.md` — infra/vpn : réveil du PC GPU hors du LAN (ADR-005, option A)
+- `infra/vpn/tests/test_wol_relay.py` — Tests du relais WoL : envoi injectable, aucun paquet réel.
+- `infra/vpn/wg0.hub.conf.example` — Hub (VPS) : /etc/wireguard/wg0.conf. Gabarit : aucune clé réelle.
+- `infra/vpn/wg0.relay.conf.example` — Pair relais LAN : /etc/wireguard/wg0.conf. Gabarit : aucune clé réelle.
+- `infra/vpn/wol-relay.env.example` — Variables du relais (fichier hors dépôt, droits 600). Valeurs à remplir par le parent.
+- `infra/vpn/wol_relay.py` — Relais LAN : requête authentifiée (via WireGuard) puis magic packet WoL.
 - `n8n/workflows/README.md` — n8n workflows
 - `prompts/README.md` — prompts
 - `prompts/classification.v1.md` — classification.v1

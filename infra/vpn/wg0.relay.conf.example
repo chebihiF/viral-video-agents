@@ -1,0 +1,11 @@
+# Pair relais LAN : /etc/wireguard/wg0.conf. Gabarit : aucune clé réelle.
+[Interface]
+Address = 10.8.0.2/24
+PrivateKey = <RELAY_PRIVATE_KEY>
+
+[Peer]
+PublicKey = <HUB_PUBLIC_KEY>
+PresharedKey = <RELAY_PRESHARED_KEY>
+Endpoint = <VPS_PUBLIC_HOST>:51820
+AllowedIPs = 10.8.0.0/24            # le VPN seulement, pas de route par défaut
+PersistentKeepalive = 25            # connexion sortante maintenue (CGNAT)
