@@ -5,8 +5,10 @@ from __future__ import annotations
 import http.client
 import json
 import logging
+import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import threading
@@ -17,6 +19,7 @@ from pathlib import Path
 import jobs
 import pytest
 import server
+import video
 
 STATIC = Path(server.STATIC_DIR)
 MP4 = bytes(range(256)) * 8  # 2048 octets de « vidéo » de test
@@ -239,3 +242,79 @@ def test_player_js_urls(job_id: object, attendu: dict[str, str] | None) -> None:
         capture_output=True, text=True, check=True, timeout=10,
     )  # fmt: skip
     assert json.loads(out.stdout) == attendu
+
+
+def test_sous_dossier_en_lien_symbolique_refuse(
+    addr: tuple[str, int], store: jobs.JobStore, tmp_path: Path
+) -> None:
+    ailleurs = tmp_path / "ailleurs"
+    ailleurs.mkdir()
+    (ailleurs / "final.mp4").write_bytes(b"secret")
+    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    d = store.runs_dir / UNKNOWN
+    d.mkdir(parents=True)
+    (d / "run").symlink_to(ailleurs, target_is_directory=True)
+    assert get(addr, f"/api/jobs/{UNKNOWN}/video")[0] == 404
+
+
+def test_dossier_du_job_en_lien_symbolique_refuse(
+    addr: tuple[str, int], store: jobs.JobStore, tmp_path: Path
+) -> None:
+    ailleurs = tmp_path / "ailleurs"
+    ailleurs.mkdir()
+    (ailleurs / "final.mp4").write_bytes(b"secret")
+    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    store.runs_dir.mkdir(parents=True)
+    (store.runs_dir / UNKNOWN).symlink_to(ailleurs, target_is_directory=True)
+    assert get(addr, f"/api/jobs/{UNKNOWN}/video")[0] == 404
+
+
+def test_fichier_non_regulier_404(addr: tuple[str, int], store: jobs.JobStore) -> None:
+    """Un tube nommé final.mp4 ne bloque jamais le serveur (O_NONBLOCK + S_ISREG)."""
+    store._jobs[UNKNOWN] = jobs.Status(state="done", step="montage")
+    d = store.runs_dir / UNKNOWN
+    d.mkdir(parents=True)
+    os.mkfifo(d / "final.mp4")
+    assert get(addr, f"/api/jobs/{UNKNOWN}/video")[0] == 404
+
+
+def test_send_refuse_un_non_regulier_meme_si_find_a_ete_contourne(tmp_path: Path) -> None:
+    fifo = tmp_path / "final.mp4"
+    os.mkfifo(fifo)
+    reponses: list[int] = []
+
+    class H:
+        def send_json(self, code: int, _payload: object) -> None:
+            reponses.append(code)
+
+    video.send(H(), fifo, UNKNOWN, download=False)
+    assert reponses == [404]
+
+
+@pytest.mark.parametrize(
+    "rng", ["bytes=" + "9" * 40 + "-", "bytes=-" + "9" * 40, "bytes=0-" + "9" * 25]
+)
+def test_plage_aux_nombres_demesures(rng: str) -> None:
+    assert video.parse_range(rng, 2048) is None
+
+
+def test_erreur_ssl_ou_os_pendant_l_envoi_ferme_sans_lever(tmp_path: Path) -> None:
+    mp4 = tmp_path / "final.mp4"
+    mp4.write_bytes(MP4)
+
+    class W:
+        def write(self, _b: bytes) -> None:
+            raise ssl.SSLError("boom")
+
+    class H:
+        wfile = W()
+        close_connection = False
+        headers: dict[str, str] = {}  # noqa: RUF012
+
+        def send_response(self, _c: int) -> None: ...
+        def send_header(self, _k: str, _v: str) -> None: ...
+        def end_headers(self) -> None: ...
+
+    h = H()
+    video.send(h, mp4, UNKNOWN, download=False)
+    assert h.close_connection is True

@@ -10,35 +10,38 @@ from __future__ import annotations
 import os
 import re
 import stat
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 CHUNK = 64 * 1024
 FILE_NAME = "final.mp4"
 JOB_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-_RANGE = re.compile(r"bytes=(\d*)-(\d*)")
+_RANGE = re.compile(r"bytes=(\d{0,19})-(\d{0,19})")
 
 
-def _regular(path: Path) -> bool:
+def _kind(path: Path, expected: Callable[[int], bool]) -> bool:
+    """Vrai si `path` lui-même (lien non suivi) est du type attendu : lien symbolique => faux."""
     try:
-        return stat.S_ISREG(os.lstat(path).st_mode)
+        return expected(os.lstat(path).st_mode)
     except OSError:
         return False
 
 
 def find_mp4(runs_dir: Path, job_id: str) -> Path | None:
-    """MP4 du job, ou None. `job_id` doit être un UUID minuscule : sinon rien n'est cherché."""
+    """MP4 du job, ou None. `job_id` doit être un UUID minuscule : sinon rien n'est cherché.
+    Aucun lien symbolique n'est suivi : ni le dossier du job, ni un sous-dossier, ni le fichier."""
     if not JOB_ID.fullmatch(job_id):
         return None
     base = runs_dir / job_id
+    if not _kind(base, stat.S_ISDIR):
+        return None
     try:
-        candidates = [
-            base / FILE_NAME,
-            *sorted(p / FILE_NAME for p in base.iterdir() if p.is_dir()),
-        ]
+        subs = sorted(p for p in base.iterdir() if _kind(p, stat.S_ISDIR))
     except OSError:
         return None
-    return next((c for c in candidates if _regular(c)), None)
+    candidates = [base / FILE_NAME, *(p / FILE_NAME for p in subs)]
+    return next((c for c in candidates if _kind(c, stat.S_ISREG)), None)
 
 
 def parse_range(header: str | None, size: int) -> tuple[int, int] | None | str:
@@ -60,12 +63,16 @@ def parse_range(header: str | None, size: int) -> tuple[int, int] | None | str:
 def send(h: Any, mp4: Path, job_id: str, *, download: bool) -> None:
     """Répond 200/206/416 pour le gestionnaire `h` (Handler) ; 404 si le fichier a disparu."""
     try:
-        fd = os.open(mp4, os.O_RDONLY | os.O_NOFOLLOW)
+        fd = os.open(mp4, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)  # jamais bloqué par un tube
     except OSError:
         h.send_json(404, {"error": "vidéo inconnue"})
         return
     with os.fdopen(fd, "rb") as f:
-        size = os.fstat(fd).st_size
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            h.send_json(404, {"error": "vidéo inconnue"})
+            return
+        size = info.st_size
         rng = parse_range(h.headers.get("Range"), size)
         h.send_response(416 if rng == "unsatisfiable" else 206 if rng else 200)
         start, end = rng if isinstance(rng, tuple) else (0, size - 1)
@@ -95,5 +102,5 @@ def copy_range(h: Any, f: Any, start: int, length: int) -> None:
                 break
             h.wfile.write(chunk)
             length -= len(chunk)
-    except (BrokenPipeError, ConnectionResetError, TimeoutError):  # le lecteur a changé de plage
+    except OSError:  # lecteur parti ou plage changée (BrokenPipe, Reset, délai, ssl.SSLError)
         h.close_connection = True
