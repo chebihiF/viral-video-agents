@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import subprocess
+import threading
 
 import gpu_power
 import pytest
@@ -268,3 +269,77 @@ def test_defaut_est_le_runner_subprocess(clock: Clock) -> None:
     with pytest.raises(AssertionError, match="interdit"):
         GpuPower(clock=clock).ensure_awake()
 
+
+
+def test_job_demarre_pendant_status_annule_la_veille(clock: Clock) -> None:
+    """Course : un job arrive entre la décision de tick() et l'appel à sleep."""
+    box: dict[str, GpuPower] = {}
+
+    def racing(args: list[str], timeout: float) -> Result:
+        calls.append(args[1])
+        if args[1] == "status":
+            box["p"].job_started()  # le job démarre pendant `status`
+        return Result(0, "eveille")
+
+    calls: list[str] = []
+    power = GpuPower(run=racing, clock=clock)
+    box["p"] = power
+    clock.advance(601)
+    assert power.tick() is False
+    assert "sleep" not in calls
+
+
+def test_ensure_awake_pendant_status_annule_la_veille(clock: Clock) -> None:
+    calls: list[str] = []
+    box: dict[str, GpuPower] = {}
+
+    def racing(args: list[str], timeout: float) -> Result:
+        calls.append(args[1])
+        if args[1] == "status" and calls.count("status") == 1:
+            box["p"].ensure_awake()  # une dictée commence pendant le tick
+        return Result(0, "eveille")
+
+    power = GpuPower(run=racing, clock=clock)
+    box["p"] = power
+    clock.advance(601)
+    assert power.tick() is False
+    assert "sleep" not in calls
+
+
+def test_apres_wake_busy_est_accepte(clock: Clock) -> None:
+    pc = FakePcGpu("endormi ou injoignable", "busy")
+    _power(pc, clock).ensure_awake()
+    assert pc.count("wake") == 1
+
+
+def test_wake_code_non_nul_journalise_sans_donnee(
+    clock: Clock, caplog: pytest.LogCaptureFixture
+) -> None:
+    pc = FakePcGpu("endormi ou injoignable", wake_rc=1)
+    with caplog.at_level(logging.INFO, logger="gpu_power"), pytest.raises(GpuUnavailable):
+        _power(pc, clock).ensure_awake()
+    assert "pc-gpu wake" in caplog.text and "code 1" in caplog.text
+
+
+def test_compteur_de_jobs_sous_concurrence(clock: Clock) -> None:
+    pc = FakePcGpu("eveille")
+    power = _power(pc, clock)
+    threads, loops = 8, 2000
+
+    def hammer(fn: object) -> None:
+        for _ in range(loops):
+            fn()  # type: ignore[operator]
+
+    def run_all(fn: object) -> None:
+        ts = [threading.Thread(target=hammer, args=(fn,)) for _ in range(threads)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+
+    run_all(power.job_started)
+    clock.advance(601)
+    assert power.tick() is False  # 16 000 jobs « en cours »
+    run_all(power.job_finished)
+    clock.advance(601)
+    assert power.tick() is True  # compteur revenu exactement à 0

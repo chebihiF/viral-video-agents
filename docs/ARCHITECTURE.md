@@ -111,6 +111,8 @@ Sur le PC, ces fichiers sont copiés dans `~/vva/`.
 - Veille 5 à 10 min après le dernier job (`idle_s`, 300–600 s, défaut 600) : `tick()` n'appelle `pc-gpu sleep` que si aucun job ne tourne, si `status` dit « éveillé » et si `idle_s` s'est écoulé depuis le dernier `job_finished`.
 - Doute (statut illisible, en erreur ou ambigu) : on n'endort pas ; l'erreur est journalisée sans texte d'enfant.
 - Seule interface vers le PC : `~/.local/bin/pc-gpu wake|sleep|status` (arguments en liste, sans shell), depuis le réseau local seulement (#158) ; ni VPN, ni conteur de secours, ni plage horaire.
+- Pire cas de blocage de `ensure_awake()` : 3 appels à `pc-gpu` (`status`, `wake`, `status`) de 120 s au plus chacun, soit 360 s ; l'appelant doit l'exécuter hors de la boucle de requêtes (thread ou tâche) et afficher « j'allume le PC » à l'enfant.
+- Décision ouverte (instancie qui ?) : le compteur de jobs doit vivre côté Mac relais ou VPS, jamais sur le PC GPU, qui ne peut pas se réveiller seul. `worker.py` n'est donc pas branché sur une vraie minuterie (défaut sans effet) ; à trancher avant de câbler.
 - `worker.py` reçoit la minuterie par injection (`JobQueue(..., power=)`, défaut sans effet) ; code : `apps/gpu-worker/gpu_power.py`.
 
 ## 9. Feuille de route
