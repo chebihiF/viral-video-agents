@@ -141,19 +141,24 @@ def test_rafale_pendant_la_requete_en_vol_un_seul_appel() -> None:
 
 # --- Scénario : hors ligne ---
 @needs_node
-def test_hors_ligne_au_retour_ecran_existant_sans_erreur_technique() -> None:
+def test_hors_ligne_au_retour_ecran_pas_de_connexion_sans_appel_ni_erreur_technique() -> None:
     r = run("""
-      const ui = demarrer({ routes, enLigne: false });
+      const ui = demarrer({ routes });
       await lancer(ui);
       coupe = true;
+      ui.reseau(false);
+      const avant = gets(ui);
       ui.visibilite("visible");
       await ui.flush();
-      const t = ui.q("#ecran-statut").textContent;
-      console.log(JSON.stringify({ visibles: ui.visibles(), t, timers: vivants(ui) }));
+      const hors = gets(ui) - avant;
+      await ui.sonder(); // le minuteur déjà armé échoue : toujours pas d'écran « raté »
+      const t = ui.q("#ecran-erreur").textContent + ui.q("#ecran-statut").textContent;
+      console.log(JSON.stringify({ visibles: ui.visibles(), t, hors, timers: vivants(ui) }));
     """)
-    assert r["visibles"] == ["ecran-statut"]  # l'écran d'erreur existant (panne réseau du suivi)
-    assert "Oups, la vidéo a raté" in r["t"]
-    assert "Réessayer" in r["t"]
+    assert r["visibles"] == ["ecran-erreur"]  # l'écran « pas de connexion » du shell
+    assert r["hors"] == 0  # hors ligne : aucun appel au retour
+    assert "Oups, pas de connexion" in r["t"]
+    assert "raté" not in r["t"]
     assert not any(m in r["t"] for m in ("TypeError", "Failed", "http", "fetch"))
     assert r["timers"] == 0
 
@@ -166,7 +171,7 @@ def test_la_reconnexion_reprend_le_suivi() -> None:
       coupe = true;
       ui.reseau(false);
       ui.visibilite("visible");
-      await ui.flush();
+      await ui.sonder();
       const coupeVisibles = ui.visibles();
       coupe = false;
       etat = { state: "running", step: "montage", progress: { pct: 90 } };
@@ -175,10 +180,55 @@ def test_la_reconnexion_reprend_le_suivi() -> None:
       console.log(JSON.stringify({ coupeVisibles, visibles: ui.visibles(), v: valeur(ui),
         timers: vivants(ui) }));
     """)
-    assert r["coupeVisibles"] == ["ecran-statut"]
+    assert r["coupeVisibles"] == ["ecran-erreur"]
     assert r["visibles"] == ["ecran-statut"]
     assert r["v"] == "90"
     assert r["timers"] == 1
+
+
+# --- Panne serveur en ligne : écran « raté », Réessayer sans doublon ---
+@needs_node
+def test_reessayer_ignore_pendant_une_requete_en_vol() -> None:
+    r = run("""
+      const ui = demarrer({ routes });
+      await lancer(ui);
+      coupe = true;
+      await ui.sonder(); // en ligne mais requête rejetée : écran d'erreur du suivi
+      coupe = false;
+      const avant = ui.appels.length; // GET et POST confondus : un renvoi serait un POST
+      ui.bouton("Réessayer").click();
+      ui.bouton("Réessayer").click();
+      await ui.flush();
+      console.log(JSON.stringify({ appels: ui.appels.length - avant, timers: vivants(ui),
+        visibles: ui.visibles() }));
+    """)
+    assert r["appels"] == 1
+    assert r["timers"] == 1
+    assert r["visibles"] == ["ecran-statut"]
+
+
+# --- Autre idée : le suivi s'arrête, une réponse tardive est ignorée ---
+@needs_node
+def test_apres_autre_idee_plus_d_appel_et_reponse_tardive_ignoree() -> None:
+    r = run("""
+      const ui = demarrer({ routes });
+      await lancer(ui);
+      coupe = true;
+      await ui.sonder();
+      coupe = false;
+      ui.bouton("Réessayer").click(); // requête en vol...
+      ui.bouton("Autre idée").click(); // ...l'enfant repart à l'accueil
+      await ui.flush();
+      const avant = gets(ui);
+      ui.visibilite("visible");
+      ui.reseau(true);
+      await ui.flush();
+      console.log(JSON.stringify({ visibles: ui.visibles(), relances: gets(ui) - avant,
+        timers: vivants(ui) }));
+    """)
+    assert r["visibles"] == ["ecran-accueil"]  # la réponse tardive n'a pas rouvert le suivi
+    assert r["relances"] == 0
+    assert r["timers"] == 0
 
 
 # --- Sans suivi actif, rien ne part ---
