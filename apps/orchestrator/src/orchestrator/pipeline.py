@@ -79,10 +79,11 @@ def lancer(
         texte = _etape(
             run, "classification", lambda: _texte_autorise(etapes.classifier(dictee), dictee)
         )
-        if texte is None:
+        plans = None if texte is None else _storyboard(run, texte, etapes)
+        if plans is None:  # bloque par la classification ou par le storyboard
             run["etat"] = "bloque"
         else:
-            run["video_path"] = _generer(run, texte, etapes, f"{workdir}/{rid}", gpu_lock)
+            run["video_path"] = _generer(run, plans, etapes, f"{workdir}/{rid}", gpu_lock)
             run["etat"] = "ok"
     except _EtapeEchouee:
         pass
@@ -133,11 +134,15 @@ def _texte_autorise(classification: Job, dictee: str) -> str | None:
     raise SortieNonConforme("classification hors contrat")
 
 
+def _storyboard(run: Run, texte: str, etapes: Etapes) -> list[Job] | None:
+    """Plans du storyboard, ou None si son verdict est « bloque » (second filtre, #244)."""
+    return _etape(run, "storyboard", lambda: _plans(etapes.storyboard(texte)))
+
+
 def _generer(
-    run: Run, texte: str, etapes: Etapes, dossier: str, gpu_lock: AbstractContextManager[Any]
+    run: Run, plans: list[Job], etapes: Etapes, dossier: str, gpu_lock: AbstractContextManager[Any]
 ) -> str:
     rid = run["run_id"]
-    plans = _etape(run, "storyboard", lambda: _plans(etapes.storyboard(texte)))
     wavs = _etape(run, "voix", lambda: _wavs(etapes.voix(_tts_job(plans, dossier)), len(plans)))
     with gpu_lock:  # une prise par phase : les plans d'un run ne sont pas entrelacés
         images = _etape(run, "image", lambda: _images(etapes, rid, plans))
@@ -147,7 +152,13 @@ def _generer(
     return _etape(run, "montage", lambda: _video(etapes.montage(job)))
 
 
-def _plans(storyboard: Job) -> list[Job]:
+def _plans(storyboard: Job) -> list[Job] | None:
+    """Plans validés ; None si « bloque ». Verdict absent ou inconnu : échec fermé."""
+    verdict = storyboard.get("classification")
+    if verdict == "bloque":
+        return None
+    if verdict not in ("libre", "adouci"):
+        raise SortieNonConforme("storyboard : verdict hors contrat")
     plans = storyboard.get("plans")
     cles = ("image_prompt", "motion_prompt", "narration_fr")
     if not isinstance(plans, list) or not plans:
