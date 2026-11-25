@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import ipaddress
 import json
+import os
 import re
 import ssl
 import sys
@@ -20,7 +21,14 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
-from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, MockTranscriber, Transcriber
+from transcriber import (
+    ALLOWED_MIMES,
+    DEFAULT_ASR_MODEL,
+    MAX_AUDIO_BYTES,
+    FasterWhisperTranscriber,
+    MockTranscriber,
+    Transcriber,
+)
 
 # lan_guard vit dans apps/gpu-worker (#158) : même garde, une seule implémentation.
 _GPU_WORKER = str(Path(__file__).resolve().parent.parent / "gpu-worker")
@@ -337,11 +345,31 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="DÉMO seulement : la dictée renvoie toujours le même texte (sans ASR réel : 503)",
     )
+    p.add_argument(
+        "--asr",
+        choices=["faster-whisper"],
+        help="ASR local réel sur CPU (#217) ; sans --asr ni --mock-asr, /api/dictation répond 503",
+    )
+    p.add_argument(
+        "--asr-model",
+        type=Path,
+        default=Path(os.environ.get("VVA_ASR_MODEL", DEFAULT_ASR_MODEL)),
+        help="dossier du modèle CTranslate2 (env VVA_ASR_MODEL ; voir README, jamais téléchargé)",
+    )
     return p.parse_args(argv)
 
 
 def make_transcriber(a: argparse.Namespace) -> Transcriber | None:
-    """Pas d'ASR réel livré : sans --mock-asr, /api/dictation répond 503."""
+    """--asr faster-whisper : modèle chargé au démarrage ; --mock-asr : démo ; sinon 503."""
+    if a.asr == "faster-whisper":
+        real = FasterWhisperTranscriber(a.asr_model)
+        try:
+            real.load()
+        except (ImportError, OSError, ValueError, RuntimeError) as exc:
+            msg = f"kid-ui : ASR indisponible ({type(exc).__name__}) : {exc}"
+            print(msg, file=sys.stderr)  # noqa: T201
+            raise SystemExit(2) from None
+        return real
     return MockTranscriber() if a.mock_asr else None
 
 
@@ -364,6 +392,10 @@ def validate(a: argparse.Namespace) -> str | None:
     host_err = check_host(a.host)
     if host_err:
         return host_err
+    if a.asr and a.mock_asr:
+        return "--asr et --mock-asr sont exclusifs : choisissez l'un des deux."
+    if a.asr and not Path(a.asr_model).is_dir():
+        return f"modèle ASR introuvable : {a.asr_model} (conversion : apps/kid-ui/README.md)."
     if bool(a.tls_cert) != bool(a.tls_key):
         return "--tls-cert et --tls-key vont ensemble : donnez les deux."
     if a.tls_cert:

@@ -8,9 +8,28 @@ Appli enfant « Mimo » (#159) : coquille statique installable sur l'écran d'ac
 python3 apps/kid-ui/server.py --tls-cert infra/kid-ui/certs/cert.pem --tls-key infra/kid-ui/certs/key.pem [--host 192.168.1.20] [--port 8090]
 python3 apps/kid-ui/server.py --insecure-dev   # HTTP local, développement seulement
 python3 apps/kid-ui/server.py --mock-asr ...   # démo de la dictée : texte fixe, aucune vraie transcription
+uv run --extra asr python apps/kid-ui/server.py --asr faster-whisper [--asr-model <dossier>] ...   # ASR local réel (#217)
 ```
 
-Dictée (#161) : `POST /api/dictation` répond 503 tant qu'aucun ASR réel n'est branché (ticket ultérieur) ; `--mock-asr` sert uniquement de démo (texte fixe, jamais en production).
+Dictée (#161) : `POST /api/dictation` répond 503 sans `--asr` ni `--mock-asr` ; `--mock-asr` sert uniquement de démo (texte fixe, jamais en production). `--asr` et `--mock-asr` sont exclusifs.
+
+### ASR local darija (#217) : faster-whisper sur CPU
+
+`--asr faster-whisper` charge au démarrage un modèle CTranslate2 en int8 sur le CPU du Mac (`device=cpu`, `local_files_only=True` : aucun téléchargement ni appel réseau au lancement ni à la dictée). L'audio est décodé en mémoire (`BytesIO`) : jamais écrit sur disque, jamais journalisé. Le modèle est cherché dans `--asr-model`, sinon `$VVA_ASR_MODEL`, sinon `~/.cache/vva/asr/whisper-small-darija-ct2`. Si le dossier ou `faster-whisper` manque, le serveur refuse de démarrer (code 2) au lieu de répondre 500 à chaque dictée.
+
+Choix (scout, #217) : `faster-whisper` (MIT) + `Anass-Srk/fine-tuned-whisper-small-darija` (Apache-2.0). Le darija se transcrit avec `language="ar"`. **Le WER et la latence (estimation ~3-6 s pour 30 s, non mesurée) restent à mesurer sur de l'audio darija réel** avant de s'y fier ; rien n'est chiffré ici.
+
+Installation et conversion du modèle (une fois, à la main, avec réseau ; jamais exécutées en CI, qui n'installe ni `faster-whisper` ni modèle et teste avec un faux module) :
+
+```sh
+uv sync --extra asr                       # installe faster-whisper (extra optionnel)
+uv run --with ctranslate2 --with transformers --with torch ct2-transformers-converter \
+  --model Anass-Srk/fine-tuned-whisper-small-darija \
+  --output_dir ~/.cache/vva/asr/whisper-small-darija-ct2 \
+  --copy_files tokenizer.json preprocessor_config.json --quantization int8
+```
+
+Vérifier la licence affichée sur la page du modèle avant usage, puis lancer avec `--asr faster-whisper`. Les fichiers du modèle restent hors dépôt.
 Pour l'API jobs (#162), lancer avec l'environnement du dépôt (`uv run python apps/kid-ui/server.py …`) : le serveur appelle `python -m orchestrator run --dictee-file - --out <runs>/<job_id>` (sans `--mocks`, configuration `OLLAMA_URL`, `PIPER_BIN`, `PIPER_MODEL` requise, sinon job `error`). Runs dans `--runs-dir` (défaut `~/.cache/vva/kid-ui-runs`).
 
 Écoute `127.0.0.1` par défaut ; `--host` pour l'IP LAN. Sans certificat, le serveur refuse de démarrer (HTTP) sauf `--insecure-dev`. Génération du certificat et installation sur le téléphone : `infra/kid-ui/README.md` (#160).
