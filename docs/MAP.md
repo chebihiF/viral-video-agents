@@ -132,6 +132,7 @@
 - `docs/adr/ADR-002-stack-dashboard.md` — ADR-002 — Stack du dashboard (et des services Python)
 - `docs/adr/ADR-003-memoire-agents.md` — ADR-003 — Mémoire des agents : mémoire locale vs ADR
 - `docs/adr/ADR-004-separation-usine-produit.md` — ADR-004 — Séparer l'usine d'agents (A) et l'application vidéo (B)
+- `docs/adr/ADR-005-reveil-vpn.md` — ADR-005 — Réveil du PC GPU hors du réseau local (VPN)
 - `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
 - `docs/design/galerie.md` — Spec galerie parent (ticket #151)
