@@ -1,0 +1,18 @@
+# Hub (VPS) : /etc/wireguard/wg0.conf. Gabarit : aucune clé réelle.
+# Générer les clés sur la machine concernée (wg genkey | tee priv | wg pubkey), jamais dans le dépôt.
+[Interface]
+Address = 10.8.0.1/24
+ListenPort = 51820                  # seul port UDP à ouvrir (pare-feu Hostinger)
+PrivateKey = <HUB_PRIVATE_KEY>
+
+# Relais LAN (appelé en sortie par le relais : pas de redirection de port chez soi)
+[Peer]
+PublicKey = <RELAY_PUBLIC_KEY>
+PresharedKey = <RELAY_PRESHARED_KEY>
+AllowedIPs = 10.8.0.2/32
+
+# Téléphone / poste du parent
+[Peer]
+PublicKey = <PHONE_PUBLIC_KEY>
+PresharedKey = <PHONE_PRESHARED_KEY>
+AllowedIPs = 10.8.0.3/32
