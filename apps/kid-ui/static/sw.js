@@ -12,7 +12,10 @@ const PRECACHE = [
   "/manifest.webmanifest",
   "/icons/icon-192.png",
   "/icons/icon-512.png",
-  "/icons/maskable-512.png"
+  "/icons/maskable-512.png",
+  "/fonts/tajawal-arabic-500.woff2",
+  "/fonts/tajawal-arabic-700.woff2",
+  "/fonts/tajawal-arabic-800.woff2"
 ];
 
 // Nom du cache dérivé du contenu de PRECACHE (FNV-1a 32 bits) : toute modification de la liste
