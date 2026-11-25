@@ -1,10 +1,11 @@
 """CLI de l'orchestrateur (#138) : `python -m orchestrator run --mocks --dictee-file F --out DIR`.
 
 Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 configuration absente
-(sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL ; échec fermé avant tout appel réseau).
+(sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL, COMFY_URL en boucle locale ; échec fermé
+avant tout appel réseau).
 Sous-commande `purge` (#152) : codes 0 ok, 1 suppression échouée, 2 usage.
 Sous-commande `galerie` (#151) : page HTML statique des runs ; codes 0 ok, 1 écriture, 2 usage.
-Image et clip réels (gpu-worker) ne sont pas branchés : le run finit « erreur » (#150).
+Image et clip réels via l'API ComfyUI (#245) : clips téléchargés sous `<out>/<run_id>/`.
 La dictée n'est ni écrite, ni journalisée, ni affichée.
 """
 
@@ -124,14 +125,14 @@ def _lire_dictee(source: str) -> str | None:
     return texte if texte.strip() and len(texte) <= DICTEE_MAX else None
 
 
-def _etapes(mocks: bool) -> Etapes | str:
+def _etapes(mocks: bool, out: Path) -> Etapes | str:
     """Étapes du parcours ; message d'erreur (sans dictée) si la configuration manque."""
     if mocks:
         return etapes_factices()
     try:
         from orchestrator.etapes import etapes_reelles  # extra `media`, Python 3.12
 
-        return etapes_reelles()
+        return etapes_reelles(out=out)
     except ErreurConfiguration as exc:
         return f"configuration absente : {exc}"
     except ImportError:
@@ -150,12 +151,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             f"dictée refusée : lisible, non vide, {DICTEE_MAX} caractères au plus", file=sys.stderr
         )
         return EX_USAGE
-    etapes = _etapes(args.mocks)
+    out: Path = args.out
+    etapes = _etapes(args.mocks, out)
     if isinstance(etapes, str):
         print(etapes, file=sys.stderr)
         return EX_CONFIG
     logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
-    out: Path = args.out
     run = lancer(dictee, etapes, workdir=str(out), mode="mocks" if args.mocks else "reel")
     out.mkdir(parents=True, exist_ok=True)
     (out / "run.json").write_text(json.dumps(run, indent=2) + "\n", encoding="utf-8")

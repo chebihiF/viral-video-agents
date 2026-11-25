@@ -41,7 +41,7 @@ make run-mock [DICTEE=F]                                        # sortie dans .v
 
 - Écrit `DIR/run.json` (`pipeline-run.schema.json`, sans dictée) ; `etat` ok : code 0, erreur : 1, bloque : 2.
 - Dictée vide, illisible ou de plus de 2000 caractères, ou arguments invalides : code 64, rien d'écrit.
-- Sans `--mocks` : « étapes réelles non configurées », code 78.
+- Sans `--mocks` : étapes réelles (Ollama, Piper, ComfyUI, montage) ; `OLLAMA_URL`, `PIPER_BIN`, `PIPER_MODEL` ou `COMFY_URL` absente ou invalide : code 78, aucun appel réseau. Clips téléchargés sous `DIR/<run_id>/`.
 - `--mocks` (`mocks.py`) : étapes factices, sans GPU ni fichier ; le mot-clé `MOCK-BLOQUE` dans la dictée la fait classer « bloque ». `video_path` est fictif.
 - La dictée n'est ni écrite, ni affichée, ni journalisée (logs `run=… etape=…` sur stderr).
 
@@ -75,6 +75,23 @@ etapes = Etapes(classifier, storyboard, voix_piper(), image, clip, montage_reel(
 - `voix_piper(env=None)` : `tts-job` -> `TtsResult` via `media_service.tts.synthetiser` ; crée `output_dir` ; `PIPER_BIN` / `PIPER_MODEL` lus dans `env` (sinon l'environnement). Piper ou modèle absent : `ErreurConfiguration` claire avant toute synthèse, le pipeline range le run en « erreur » sur l'étape `voix`.
 - `montage_reel()` : durées des WAV (ffprobe) -> `subtitles.write_ass` (`<sortie>.ass` à côté du MP4) -> `run_montage` avec `subtitles_path` -> chemin du MP4 (1080x1920). L'ASS est supprimé si le montage échoue.
 - Pas de fuite : erreurs du montage réécrites en `ErreurMontage` (type seul, sans le message de FFmpeg), ni cause ni contexte ; les messages de voix nomment le plan, jamais son texte.
+
+## Étapes GPU réelles via ComfyUI (#245)
+
+```python
+from orchestrator.steps_gpu import EtapesGpu, comfy_depuis_env, decharger_ollama
+
+gpu = EtapesGpu(comfy_depuis_env(os.environ), decharger_ollama(client_ollama), out=Path("runs"))
+etapes = Etapes(classifier, storyboard, voix, gpu.image, gpu.clip, montage)
+```
+
+- `COMFY_URL` : boucle locale seulement (`http://127.0.0.1:8188`, `http://localhost:8188`, `http://[::1]:8188`), par exemple l'extrémité d'un tunnel ouvert à la main. Absente, autre hôte, identifiants, chemin ou requête dans l'URL : `ErreurConfiguration` (CLI : code 78), aucun appel réseau.
+- `image(job_id, prompt)` : `comfyui/workflows/flux_schnell_t2i_api.json` (`{{PROMPT}}` remplacé dans la structure JSON) → `/prompt`, `/history/{id}`, `/view` (PNG vérifié) → `/upload/image` (`overwrite`) ; rend `<job_id>.png`, relatif à `ComfyUI/input`. Nom rendu différent : échec.
+- `clip(gpu_job)` : gpu-job vérifié (`job_id` `<run_id>-clip-<n>`, `image_path`, `frames` 4n+1) → `wan22_5b_i2v_api.json` (`{{PROMPT}}` = `motion_prompt`, `{{IMAGE}}` = `image_path`, `length` = `frames`) ; MP4 (`ftyp` vérifié) écrit sous `<out>/<run_id>/<job_id>.mp4` (création exclusive, sans suivre de lien symbolique).
+- VRAM 8 Go : Ollama déchargé (`POST <OLLAMA_URL>/api/generate`, `keep_alive: 0`) avant chaque image (un run voisin a pu le recharger) ; `POST /free` (`unload_models`, `free_memory`) une fois en entrant dans la phase clip. Appels faits sous le verrou GPU du pipeline.
+- Durcissement (comme `steps_llm`) : proxy d'environnement ignoré, redirection refusée, 30 s par requête, rendu borné (image 600 s, clip 1800 s, `/history` lu chaque seconde), réponses bornées (JSON 1 Mo, PNG 50 Mo, MP4 200 Mo). Les noms de fichiers rendus par ComfyUI ne servent qu'à `/view` (validés : ni `..`, ni `/`) ; jamais de chemin local.
+- Échec (`ErreurComfy`, `OllamaInjoignable`) : message générique, type seul journalisé, ni prompt ni texte de ComfyUI ; le run est « erreur » sur l'étape, sans MP4 final.
+- Tests : `tests/test_steps_gpu.py` (`FauxComfy` en mémoire et derrière un serveur HTTP sur 127.0.0.1) ; aucun GPU, aucun PC distant.
 
 ## Parcours de bout en bout avec mocks (#139)
 
