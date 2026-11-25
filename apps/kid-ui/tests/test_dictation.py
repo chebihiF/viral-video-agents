@@ -228,7 +228,8 @@ def test_aucun_service_de_reconnaissance_tiers() -> None:
 def test_aucune_url_externe() -> None:
     for f in sources():
         for url in re.findall(r"https?://[^\s\"')]+", f.read_text("utf-8")):
-            assert url.startswith(("http://www.w3.org", "https://127.0.0.1")), (f.name, url)
+            ok = url.startswith("http://www.w3.org") or re.match(r"https://127\.0\.0\.1[:/]", url)
+            assert ok, (f.name, url)
 
 
 def test_dictation_js_local_et_sans_stockage() -> None:
@@ -276,3 +277,44 @@ def test_texte_tronque_au_maximum_du_contrat() -> None:
         body = c.post(multipart(AUDIO))[2]
         assert VALIDATOR.is_valid(body)
         assert len(body["text"]) == 2000
+
+
+# --- --mock-asr : démo seulement, défaut = 503 ---
+def test_mock_asr_option_demo_seulement() -> None:
+    assert server.make_transcriber(server.parse_args([])) is None
+    mock = server.make_transcriber(server.parse_args(["--mock-asr"]))
+    assert isinstance(mock, transcriber.MockTranscriber)
+
+
+def test_readme_documente_mock_asr_comme_demo() -> None:
+    readme = (APP / "README.md").read_text("utf-8")
+    assert "--mock-asr" in readme
+    assert "démo" in readme.lower()
+
+
+# --- dictation.js : robustesse (tests statiques, pas de navigateur en CI) ---
+def dictation_js() -> str:
+    return (STATIC / "dictation.js").read_text("utf-8")
+
+
+def test_js_libere_le_micro_si_mediarecorder_echoue() -> None:
+    js = dictation_js()
+    m = re.search(r"try\s*\{[^}]*new MediaRecorder[^}]*\}\s*catch[^{]*\{[^}]*getTracks\(\)", js)
+    assert m, "new MediaRecorder doit être dans un try/catch qui coupe les pistes"
+
+
+def test_js_garde_d_identite_d_ecran_apres_reponse() -> None:
+    js = dictation_js()
+    assert js.count("ecran === mon") >= 2  # envoi (réponse) et résultat
+
+
+def test_js_ferme_l_ecoute_si_le_reseau_change() -> None:
+    js = dictation_js()
+    assert re.search(r'addEventListener\("online",\s*fermerEcoute', js)
+    assert re.search(r'addEventListener\("offline"', js)
+    assert "fermerEcoute();" in js.split('"offline"', 1)[1].split("});", 1)[0]
+
+
+def test_js_type_audio_jamais_vide() -> None:
+    js = dictation_js()
+    assert re.search(r"recorder\.mimeType\s*\|\|\s*type\s*\|\|\s*\"audio/webm\"", js)

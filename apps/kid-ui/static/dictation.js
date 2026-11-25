@@ -37,7 +37,13 @@
     detail.textContent = origine[1];
     puce.lastChild.textContent = origine[2];
   }
-  window.addEventListener("offline", restaurerErreur);
+
+  // Le réseau change : la coquille bascule d'écran, on retire l'écoute (micro coupé, audio oublié).
+  window.addEventListener("online", fermerEcoute);
+  window.addEventListener("offline", function () {
+    fermerEcoute();
+    restaurerErreur();
+  });
 
   function afficherErreur(t, d, p) {
     fermerEcoute();
@@ -134,6 +140,7 @@
   }
 
   function envoi(blob) {
+    var mon = ecran; // la réponse n'est utilisée que si cet écran est toujours affiché
     ecran.etat.textContent = "J'envoie…";
     ecran.live.firstChild.hidden = true;
     ecran.barres.hidden = true;
@@ -149,11 +156,12 @@
       .then(function (rep) {
         var texte = rep.ok && rep.corps && typeof rep.corps.text === "string" ? rep.corps.text.trim() : "";
         if (!texte) throw new Error("vide");
-        resultat(texte);
+        if (ecran === mon) resultat(texte);
       })
       .catch(function () {
-        if (!ecran) return; // annulé entre-temps
-        afficherErreur("Oups, je n'ai pas compris", "Mimo n'a pas réussi à t'écouter. Réessaie.", "Dictée");
+        if (ecran === mon) {
+          afficherErreur("Oups, je n'ai pas compris", "Mimo n'a pas réussi à t'écouter. Réessaie.", "Dictée");
+        }
       });
   }
 
@@ -183,14 +191,23 @@
     var type = choisirType();
     var options = { audioBitsPerSecond: 32000 };
     if (type) options.mimeType = type;
-    var recorder = new MediaRecorder(stream, options);
+    var recorder;
+    try {
+      recorder = new MediaRecorder(stream, options);
+    } catch (e) {
+      stream.getTracks().forEach(function (t) {
+        t.stop();
+      });
+      erreurMicro();
+      return;
+    }
     session = { recorder: recorder, stream: stream, chunks: [], timer: null, annule: false };
     var courante = session;
     recorder.addEventListener("dataavailable", function (e) {
       if (e.data && e.data.size) courante.chunks.push(e.data);
     });
     recorder.addEventListener("stop", function () {
-      var blob = courante.annule ? null : new Blob(courante.chunks, { type: recorder.mimeType });
+      var blob = courante.annule ? null : new Blob(courante.chunks, { type: recorder.mimeType || type || "audio/webm" });
       courante.stream.getTracks().forEach(function (t) {
         t.stop();
       });

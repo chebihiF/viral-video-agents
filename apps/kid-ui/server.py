@@ -14,7 +14,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, Transcriber
+from transcriber import ALLOWED_MIMES, MAX_AUDIO_BYTES, MockTranscriber, Transcriber
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 DEFAULT_HOST = "127.0.0.1"
@@ -215,7 +215,17 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="autorise le HTTP sans TLS (développement ; le micro et la PWA n'y fonctionnent pas)",
     )
+    p.add_argument(
+        "--mock-asr",
+        action="store_true",
+        help="DÉMO seulement : la dictée renvoie toujours le même texte (sans ASR réel : 503)",
+    )
     return p.parse_args(argv)
+
+
+def make_transcriber(a: argparse.Namespace) -> Transcriber | None:
+    """Pas d'ASR réel livré : sans --mock-asr, /api/dictation répond 503."""
+    return MockTranscriber() if a.mock_asr else None
 
 
 def check_host(host: str) -> str | None:
@@ -259,7 +269,9 @@ def main(argv: list[str] | None = None) -> None:
     if err:
         print(f"kid-ui : {err}", file=sys.stderr)  # noqa: T201
         raise SystemExit(2)
-    httpd = make_server(a.host, a.port, tls_cert=a.tls_cert, tls_key=a.tls_key)
+    httpd = make_server(
+        a.host, a.port, tls_cert=a.tls_cert, tls_key=a.tls_key, transcriber=make_transcriber(a)
+    )
     scheme = "https" if a.tls_cert else "http"
     print(f"kid-ui sur {scheme}://{a.host}:{a.port}/")  # noqa: T201
     httpd.serve_forever()

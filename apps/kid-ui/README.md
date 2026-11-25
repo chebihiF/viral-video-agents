@@ -7,7 +7,10 @@ Appli enfant « Mimo » (#159) : coquille statique installable sur l'écran d'ac
 ```sh
 python3 apps/kid-ui/server.py --tls-cert infra/kid-ui/certs/cert.pem --tls-key infra/kid-ui/certs/key.pem [--host 192.168.1.20] [--port 8090]
 python3 apps/kid-ui/server.py --insecure-dev   # HTTP local, développement seulement
+python3 apps/kid-ui/server.py --mock-asr ...   # démo de la dictée : texte fixe, aucune vraie transcription
 ```
+
+Dictée (#161) : `POST /api/dictation` répond 503 tant qu'aucun ASR réel n'est branché (ticket ultérieur) ; `--mock-asr` sert uniquement de démo (texte fixe, jamais en production).
 
 Écoute `127.0.0.1` par défaut ; `--host` pour l'IP LAN. Sans certificat, le serveur refuse de démarrer (HTTP) sauf `--insecure-dev`. Génération du certificat et installation sur le téléphone : `infra/kid-ui/README.md` (#160).
 
