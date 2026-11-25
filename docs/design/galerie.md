@@ -1,6 +1,6 @@
 # Spec galerie parent (ticket #151)
 
-Page statique `galerie.html` pour le parent, ouverte en local (`file://`) : un seul fichier, CSS inline, **aucun JS, aucune URL http(s)**, aucune police distante. Aucun texte d'enfant (idée, transcription) : seulement `run_id`, état, durée. Sobre : ce n'est pas l'UI Mimo (pas de mascotte ni d'autocollants), mais mêmes principes (icône + mot, focus visible, reduced-motion). Direction Mimo validée par le parent ; le visuel de la galerie reste volontairement neutre. Non testé avec le parent.
+Page statique `galerie.html` pour le parent, ouverte en local (`file://`) : un seul fichier, CSS inline, **aucun JS, aucune URL http(s)**, aucune police distante. Aucun texte d'enfant (idée, transcription) : seulement `run_id`, état, durée. Sobre : ce n'est pas l'UI Mimo (pas de mascotte ni d'autocollants), mais mêmes principes (icône + mot, focus visible, reduced-motion). Le visuel de la galerie reste volontairement neutre. Direction validée par le parent (25/11).
 
 ## Structure
 ```html
@@ -20,6 +20,7 @@ Page statique `galerie.html` pour le parent, ouverte en local (`file://`) : un s
 - États (icône + mot, jamais la couleur seule) : `✔ Terminé` (ok), `● En cours` (info), `▲ Échec` (danger), `○ En attente` (neutre). Icônes `aria-hidden`.
 - `<video>` **seulement si Terminé** (`src` relatif, `controls`, `preload="none"`, pas d'`autoplay`). Autres états : pas de lecteur ; durée affichée "—" si inconnue (jamais de faux chiffre).
 - Durée en minutes + secondes (`1 min 42 s`), `<time datetime>` ISO 8601.
+- Le contrat écrit `video_path` en chemin absolu (poste de production) : seul son nom de fichier est gardé, cherché dans le dossier du run ; pas de fichier régulier (lien symbolique exclu) = pas de lecteur.
 - Tout `run_id` est échappé HTML par le générateur (valeur de fichier, pas de confiance).
 - Tri : plus récent d'abord. Pas de pagination en v1.
 
@@ -51,5 +52,5 @@ Pas d'animation prévue en v1 ; la règle reduced-motion est une garde. Contrast
 ## Accessibilité
 Un `h1`, un `h2` par carte (le `run_id`), liste sémantique, lecteur natif au clavier, cibles >= 44 px (contrôles natifs). Mobile d'abord (une colonne sous 300 px, 360 px OK).
 
-## Questions pour le parent
-- Afficher aussi la date de création du run (utile au tri) ?
+## Décision
+- La date de création n'est pas affichée en v1 (le tri par date reste). À rouvrir si le parent la demande.

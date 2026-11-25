@@ -4,7 +4,6 @@ Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 config
 (sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL ; échec fermé avant tout appel réseau).
 Sous-commande `purge` (#152) : codes 0 ok, 1 suppression échouée, 2 usage.
 Sous-commande `galerie` (#151) : page HTML statique des runs ; codes 0 ok, 1 écriture, 2 usage.
-Sous-commande `galerie` (#151) : page HTML statique ; codes 0 ok, 1 écriture impossible, 2 usage.
 Image et clip réels (gpu-worker) ne sont pas branchés : le run finit « erreur » (#150).
 La dictée n'est ni écrite, ni journalisée, ni affichée.
 """
@@ -143,8 +142,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.commande == "purge":
         return _purger(args)
-    if args.commande == "galerie":
-        return _galerie(args)
     if args.commande == "galerie":
         return _galerie(args)
     dictee = _lire_dictee(args.dictee_file)

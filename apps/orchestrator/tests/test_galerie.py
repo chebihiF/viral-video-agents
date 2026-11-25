@@ -38,6 +38,8 @@ def _run(
     if termine_le:
         run["termine_le"] = termine_le
     run.update(extra)
+    if etat == "ok":
+        (dossier / "final.mp4").write_bytes(b"x")
     (dossier / "run.json").write_text(json.dumps(run), encoding="utf-8")
     return dossier
 
@@ -161,16 +163,28 @@ def test_nom_de_dossier_echappe_et_encode(tmp_path: Path) -> None:
     assert 'src="runs/a%20b/final.mp4"' in page
 
 
+def test_video_path_absolu_du_contrat(tmp_path: Path) -> None:
+    exemple = Path(__file__).parents[3] / "contracts" / "examples" / "pipeline-run.ok.json"
+    run = json.loads(exemple.read_text(encoding="utf-8"))
+    assert run["video_path"].startswith("/")
+    dossier = tmp_path / "runs" / "run-0001"
+    dossier.mkdir(parents=True)
+    (dossier / "run.json").write_text(json.dumps(run), encoding="utf-8")
+    (dossier / "final.mp4").write_bytes(b"x")
+    page = _galerie(tmp_path / "runs")
+    assert 'src="runs/run-0001/final.mp4"' in page
+    assert "/data/jobs" not in page
+
+
+def test_video_absent_sans_lecteur(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    (_run(runs, "aaa") / "final.mp4").unlink()
+    assert "<video" not in _galerie(runs)
+
+
 @pytest.mark.parametrize(
     "video",
-    [
-        "../../etc/x.mp4",
-        "/etc/x.mp4",
-        "http://exemple.test/x.mp4",
-        "a\\b.mp4",
-        "ok.txt",
-        "a/../../b.mp4",
-    ],
+    ["http://exemple.test/x.mp4", "ok.txt", ".mp4", "dossier/", "..", ""],
 )
 def test_video_path_hostile_sans_lecteur(tmp_path: Path, video: str) -> None:
     runs = tmp_path / "runs"
@@ -178,7 +192,75 @@ def test_video_path_hostile_sans_lecteur(tmp_path: Path, video: str) -> None:
     page = _galerie(runs)
     assert "<video" not in page
     assert "exemple.test" not in page
-    assert "etc/x" not in page
+
+
+def test_video_path_avec_remontee_ne_sort_pas_du_dossier(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    _run(runs, "aaa", video_path="../../etc/final.mp4")
+    page = _galerie(runs)
+    assert 'src="runs/aaa/final.mp4"' in page
+    assert ".." not in page.split("</style>")[1]
+
+
+def test_video_lien_symbolique_sans_lecteur(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    dossier = _run(runs, "aaa")
+    (dossier / "final.mp4").unlink()
+    cible = tmp_path / "ailleurs.mp4"
+    cible.write_bytes(b"x")
+    (dossier / "final.mp4").symlink_to(cible)
+    assert "<video" not in _galerie(runs)
+
+
+def test_dossier_lien_symbolique_ignore(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    reel = _run(tmp_path / "ailleurs", "zzz")
+    runs.mkdir()
+    (runs / "lien").symlink_to(reel, target_is_directory=True)
+    page = _galerie(runs)
+    assert "zzz" not in page
+    assert "0 run" in page
+
+
+def test_run_json_lien_symbolique_ignore(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    reel = _run(tmp_path / "ailleurs", "zzz")
+    (runs / "lien").mkdir(parents=True)
+    (runs / "lien" / "run.json").symlink_to(reel / "run.json")
+    page = _galerie(runs)
+    assert "zzz" not in page
+    assert "0 run" in page
+
+
+def test_nom_de_dossier_hostile_encode_dans_src(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    _run(runs, 'a"<&', "ok", run_id="aaa")
+    page = _galerie(runs)
+    assert 'src="runs/a%22%3C%26/final.mp4"' in page
+    assert 'a"<&' not in page
+
+
+def test_sortie_lien_symbolique_refusee(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    runs = tmp_path / "runs"
+    _run(runs, "aaa")
+    cible = tmp_path / "precieux.txt"
+    cible.write_text("intact", encoding="utf-8")
+    out = tmp_path / "galerie.html"
+    out.symlink_to(cible)
+    assert main(["galerie", "--runs", str(runs), "--out", str(out)]) == 1
+    assert cible.read_text(encoding="utf-8") == "intact"
+    assert capsys.readouterr().err
+
+
+def test_run_id_dupliques_ids_html_uniques(tmp_path: Path) -> None:
+    runs = tmp_path / "runs"
+    _run(runs, "un", run_id="aaa")
+    _run(runs, "deux", run_id="aaa")
+    page = _galerie(runs)
+    ids = re.findall(r'<h2 id="([^"]+)"', page)
+    assert len(ids) == 2
+    assert len(set(ids)) == 2
+    assert all(f'aria-labelledby="{i}"' in page for i in ids)
 
 
 def test_ignore_entrees_invalides(tmp_path: Path) -> None:

@@ -3,7 +3,8 @@
 Entrée : `DIR/<dossier>/run.json` (pipeline-run.schema.json). Ne sont rendus que `run_id`, l'état,
 la durée (somme des étapes) et le lien relatif vers le MP4 des runs `ok` : jamais d'autre champ,
 donc jamais de dictée ni de texte adouci. Tout texte est échappé ; aucun script, aucune URL
-http(s). Aucun lien symbolique n'est suivi (dossier de run, `run.json`). Stdlib seule, Python 3.9+.
+http(s). Aucun lien symbolique n'est suivi (dossier, `run.json`, MP4, page).
+Stdlib seule, Python 3.9+.
 Spec visuelle : docs/design/galerie.md.
 """
 
@@ -16,7 +17,7 @@ import os
 import re
 import stat
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 _RUN_ID = re.compile(r"[A-Za-z0-9_-]{1,48}")
@@ -57,7 +58,7 @@ class Entree:
     run_id: str
     etat: str
     duree_s: float | None
-    video: Path | None  # chemin du MP4 (run `ok` seulement, chemin validé)
+    video: Path | None  # MP4 du dossier du run (run `ok`, fichier régulier)
     termine_le: str
 
 
@@ -96,15 +97,20 @@ def _duree(run: dict[str, object]) -> float | None:
     return total
 
 
-def _video_valide(chemin: object) -> str | None:
-    """`video_path` s'il est relatif, sans `..`, sans schéma ni antislash, et finit par .mp4."""
-    if not isinstance(chemin, str) or not chemin.endswith(".mp4"):
+def _video(dossier: Path, chemin: object) -> Path | None:
+    """MP4 du run : seul le nom de `video_path` est gardé (le contrat écrit un chemin absolu, celui
+    du poste qui a produit le run), rattaché au dossier du run. None si ce n'est pas un fichier
+    régulier (lien symbolique exclu) : pas de lecteur."""
+    if not isinstance(chemin, str):
         return None
-    if any(c in chemin for c in ("\\", ":", "\x00")) or chemin.startswith("/"):
+    nom = PurePosixPath(chemin).name
+    if len(nom) <= len(".mp4") or not nom.endswith(".mp4") or "\x00" in nom:
         return None
-    if any(seg in ("", ".", "..") for seg in chemin.split("/")):
+    video = dossier / nom
+    try:
+        return video if stat.S_ISREG(os.lstat(video).st_mode) else None
+    except OSError:
         return None
-    return chemin
 
 
 def _entree(dossier: Path) -> Entree | None:
@@ -114,13 +120,13 @@ def _entree(dossier: Path) -> Entree | None:
     run_id, etat = run.get("run_id"), run.get("etat")
     if not isinstance(run_id, str) or not _RUN_ID.fullmatch(run_id) or etat not in _ETATS:
         return None
-    video = _video_valide(run.get("video_path")) if etat == "ok" else None
+    video = _video(dossier, run.get("video_path")) if etat == "ok" else None
     fin = run.get("termine_le")
     return Entree(
         run_id=run_id,
         etat=str(etat),
         duree_s=_duree(run),
-        video=dossier / video if video else None,
+        video=video,
         termine_le=fin if isinstance(fin, str) and _TERMINE_LE.fullmatch(fin) else "",
     )
 
@@ -147,8 +153,9 @@ def _lien(video: Path, page: Path) -> str | None:
     return "/".join(quote(seg, safe="") for seg in Path(rel).parts)
 
 
-def _carte(entree: Entree, page: Path) -> str:
+def _carte(entree: Entree, page: Path, ident: str) -> str:
     rid = html.escape(entree.run_id)
+    ident = html.escape(ident)
     classe, icone, mot = _ETATS[entree.etat]
     if entree.duree_s is None:
         duree = "—"
@@ -160,19 +167,31 @@ def _carte(entree: Entree, page: Path) -> str:
         f'\n    <video controls preload="none" src="{html.escape(lien)}"></video>' if lien else ""
     )
     return (
-        f'  <li><article class="run" aria-labelledby="r-{rid}">\n'
-        f'    <h2 id="r-{rid}"><code>{rid}</code></h2>\n'
+        f'  <li><article class="run" aria-labelledby="{ident}">\n'
+        f'    <h2 id="{ident}"><code>{rid}</code></h2>\n'
         f'    <p class="state {classe}"><span aria-hidden="true">{icone}</span> {mot}</p>\n'
         f'    <p class="dur">{duree}</p>{lecteur}\n'
         "  </article></li>"
     )
 
 
+def _ids(entrees: list[Entree]) -> list[str]:
+    """Identifiants HTML `r-<run_id>`, suffixés `-2`, `-3`… si un run_id revient."""
+    vus: dict[str, int] = {}
+    ids = []
+    for e in entrees:
+        vus[e.run_id] = vus.get(e.run_id, 0) + 1
+        n = vus[e.run_id]
+        ids.append(f"r-{e.run_id}" if n == 1 else f"r-{e.run_id}-{n}")
+    return ids
+
+
 def rendre(entrees: list[Entree], page: Path) -> str:
     """HTML autonome de la galerie ; `page` sert à calculer les liens relatifs."""
     n = len(entrees)
     if entrees:
-        cartes = "\n".join(_carte(e, page) for e in entrees)
+        ids = _ids(entrees)
+        cartes = "\n".join(_carte(e, page, ids[k]) for k, e in enumerate(entrees))
         corps = f'<ul class="runs">\n{cartes}\n</ul>'
     else:
         corps = '<p class="empty" role="status">Aucune vidéo pour l\'instant.</p>'
@@ -188,6 +207,8 @@ def rendre(entrees: list[Entree], page: Path) -> str:
 
 def generer(racine: Path, out: Path) -> int:
     """Écrit la galerie dans `out` ; renvoie le nombre de runs listés. Lève OSError."""
+    if out.is_symlink():
+        raise OSError("sortie en lien symbolique refusée")
     entrees = lister(racine)
     out.write_text(rendre(entrees, out), encoding="utf-8")
     return len(entrees)
