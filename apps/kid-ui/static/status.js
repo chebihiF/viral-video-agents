@@ -5,6 +5,7 @@
 (function (root) {
   "use strict";
   var POLL_MS = 2000;
+  var BIENTOT_S = 30;
   var MSG_MAISON = "Je te génère la vidéo une fois à la maison.";
   var SVG = "http://www.w3.org/2000/svg";
   // Ordre réel du parcours (orchestrator.pipeline) : la voix passe avant les images.
@@ -17,16 +18,38 @@
     montage: "Je monte la vidéo…"
   };
 
+  // Durée restante (#165) : { bientot: true } sous 30 s ou en dépassement (jamais de temps négatif
+  // ni de 0), { minutes: n } arrondi à la minute (au moins 1), null si inconnue (pas de faux chiffre).
+  function reste(progress) {
+    if (!progress || typeof progress !== "object") return null;
+    var s = progress.restant_s;
+    if (progress.bientot === true) return { bientot: true };
+    if (typeof s !== "number" || !isFinite(s) || s < 0) return null;
+    if (s < BIENTOT_S) return { bientot: true };
+    return { minutes: Math.max(1, Math.round(s / 60)) };
+  }
+
+  function pourcent(progress) {
+    var p = progress && progress.pct;
+    return typeof p === "number" && isFinite(p) ? Math.max(0, Math.min(100, Math.floor(p))) : 0;
+  }
+
+  // La barre ne recule jamais : on garde le plus grand pourcentage déjà affiché.
+  function avancer(precedent, pct) {
+    return Math.max(precedent, pct);
+  }
+
   // Réponse de l'API (contracts/kid-job.schema.json) -> écran à afficher. Pure, testée sous node.
   function vue(rep) {
     if (rep === null || rep === undefined) return { ecran: "envoi" };
     if (rep.status === "deferred" || rep.state === "deferred") return { ecran: "hors-maison" };
-    if (typeof rep.job_id === "string") return { ecran: "en-cours", etape: 0 };
+    if (typeof rep.job_id === "string") return { ecran: "en-cours", etape: 0, pct: 0, reste: null };
     if (rep.state === "queued" || rep.state === "running") {
       var i = ETAPES.indexOf(rep.step);
-      return { ecran: "en-cours", etape: i < 0 ? 0 : i };
+      return { ecran: "en-cours", etape: i < 0 ? 0 : i, pct: pourcent(rep.progress),
+        reste: reste(rep.progress) };
     }
-    if (rep.state === "done") return { ecran: "prete" };
+    if (rep.state === "done") return { ecran: "prete", pct: 100 };
     return { ecran: "erreur", bloque: rep.blocked === true }; // bloquée : réessayer est inutile
   }
 
@@ -61,6 +84,66 @@
     return s;
   }
 
+  function icone(chemins) {
+    var s = attrs(document.createElementNS(SVG, "svg"), {
+      viewBox: "0 0 24 24", "aria-hidden": "true", fill: "none", stroke: "currentColor",
+      "stroke-width": "2.5", "stroke-linecap": "round", "stroke-linejoin": "round"
+    });
+    chemins.forEach(function (d) {
+      s.appendChild(attrs(document.createElementNS(SVG, "path"), { d: d }));
+    });
+    return s;
+  }
+
+  var HORLOGE = ["M12 3a9 9 0 100 18 9 9 0 000-18z", "M12 7v5l3 2"];
+  var ETOILE = ["M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"];
+
+  // Texte et icône de la chip de durée ; lu et écrit via textContent seulement.
+  function libelleReste(r) {
+    return r.bientot ? "Bientôt prête" : "Encore environ " + r.minutes + " min";
+  }
+
+  function chipReste(r) {
+    var c = el("span", "kid-chip " + (r.bientot ? "ok" : "info"));
+    c.append(icone(r.bientot ? ETOILE : HORLOGE), document.createTextNode(libelleReste(r)));
+    return c;
+  }
+
+  // Zone annoncée une seule fois par changement de texte (role=status), vide si durée inconnue.
+  function zoneReste() {
+    return attrs(el("div", "eta"), { role: "status", "aria-live": "polite" });
+  }
+
+  function majReste(zone, r) {
+    var cle = r ? libelleReste(r) : "";
+    if (zone.getAttribute("data-label") === cle) return; // même texte : rien à annoncer
+    zone.setAttribute("data-label", cle);
+    if (r) zone.replaceChildren(chipReste(r));
+    else zone.replaceChildren();
+  }
+
+  // Barre à 4 segments remplis selon le pourcentage ; un segment partiel porte un dégradé.
+  function barre() {
+    var seg = attrs(el("div", "kid-seg"), {
+      role: "progressbar", "aria-label": "Avancement", "aria-valuemin": "0", "aria-valuemax": "100"
+    });
+    for (var j = 0; j < 4; j++) seg.appendChild(el("i"));
+    return seg;
+  }
+
+  function majBarre(seg, pct, r) {
+    seg.setAttribute("aria-valuenow", String(pct));
+    seg.setAttribute("aria-valuetext", pct + " pour cent" + (r
+      ? r.bientot ? ", bientôt prête" : ", environ " + r.minutes + " minutes restantes" : ""));
+    var sens = document.documentElement.dir === "rtl" || document.dir === "rtl" ? "to left" : "to right";
+    Array.prototype.forEach.call(seg.children, function (i, j) {
+      var part = Math.max(0, Math.min(100, (pct - j * 25) * 4));
+      i.className = part >= 100 ? "on" : "";
+      i.style.background = part > 0 && part < 100
+        ? "linear-gradient(" + sens + ", var(--brand) " + part + "%, var(--surface-2) " + part + "%)" : "";
+    });
+  }
+
   function scene(source, classes) {
     var d = el("div", "scene");
     d.appendChild(mimo(source, classes));
@@ -89,14 +172,12 @@
       return ["Mimo", [scene(MIMO, "mimo big bob"), say], null];
     },
     "en-cours": function (v) {
-      var seg = attrs(el("div", "kid-seg"), {
-        role: "progressbar", "aria-label": "Avancement", "aria-valuemin": "0",
-        "aria-valuemax": String(ETAPES.length), "aria-valuenow": String(v.etape + 1),
-        "aria-valuetext": "Étape " + (v.etape + 1) + " sur " + ETAPES.length
-      });
+      var seg = barre();
+      var zone = zoneReste();
+      majBarre(seg, v.pct, v.reste);
+      majReste(zone, v.reste);
       var film = el("ol", "film");
       ETAPES.forEach(function (nom, j) {
-        seg.appendChild(el("i", j <= v.etape ? "on" : null));
         var li = el("li", j < v.etape ? "done" : j === v.etape ? "now" : null);
         if (j === v.etape) li.setAttribute("aria-current", "step");
         li.append(el("span", "fr", String(j + 1)), el("b", null, NOMS[nom]),
@@ -105,7 +186,7 @@
       });
       var say = el("p", "say");
       say.append(spin(), document.createTextNode(PHRASES[ETAPES[v.etape]]));
-      return ["Ta vidéo arrive", [scene(MIMO, "mimo big bob"), seg, film, say], null];
+      return ["Ta vidéo arrive", [scene(MIMO, "mimo big bob"), seg, film, say, zone], null];
     },
     "hors-maison": function () {
       var maison = el("div", "home-scene");
@@ -131,12 +212,20 @@
     prete: function () {
       var d = attrs(el("div", "scene"), { role: "status" });
       d.append(mimo(MIMO, "mimo xl bob"), el("h2", null, "Ta vidéo est prête !"));
-      return ["Mimo", [d], null];
+      var seg = barre();
+      majBarre(seg, 100, null);
+      return ["Mimo", [d, seg], null];
     }
   };
 
   var ecran = null;
   var dernier = "";
+  var pctMax = 0;
+
+  function majProgression(v) {
+    majBarre(ecran.querySelector(".kid-seg"), v.pct, v.reste);
+    majReste(ecran.querySelector(".eta"), v.reste);
+  }
 
   function monter() {
     if (ecran) return;
@@ -155,8 +244,15 @@
 
   // Ne redessine que si l'écran ou l'étape change : pas de clignotement ni d'annonce répétée.
   function rendre(v) {
+    if (v.ecran === "en-cours" || v.ecran === "prete") {
+      pctMax = avancer(pctMax, v.pct || 0);
+      v.pct = pctMax;
+    }
     var cle = [v.ecran, v.etape, v.bloque].join(":");
-    if (cle === dernier) return;
+    if (cle === dernier) {
+      if (v.ecran === "en-cours") majProgression(v); // même écran : barre et durée en place
+      return;
+    }
     dernier = cle;
     monter();
     var r = ECRANS[v.ecran](v);
@@ -211,6 +307,7 @@
     jobId = null;
     panneReseau = false;
     dernier = "";
+    pctMax = 0;
     rendre(vue(null));
     fetch("/api/jobs", {
       method: "POST",
@@ -238,7 +335,7 @@
     montrer(document.getElementById("ecran-accueil"));
   }
 
-  var api = { vue: vue, envoyer: envoyer, ETAPES: ETAPES, POLL_MS: POLL_MS };
+  var api = { vue: vue, avancer: avancer, reste: reste, envoyer: envoyer, ETAPES: ETAPES, POLL_MS: POLL_MS };
   if (typeof module === "object" && module.exports) {
     module.exports = api;
   } else {

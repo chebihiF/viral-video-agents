@@ -37,6 +37,7 @@ Pour l'API jobs (#162), lancer avec l'environnement du dépôt (`uv run python a
 - Anti-CSRF : `Content-Type: application/json` exigé, et `Origin` (si présente) = hôte servi (`Host`), sinon 403. `Content-Length` absent, négatif ou non entier : 400 ; > 8 Kio : 413.
 - Un seul job actif : nouvelle soumission pendant un job `queued`/`running` → 409. 50 jobs au plus en mémoire (les plus anciens terminés sont oubliés). Délai global 30 min, puis kill et `error`.
 - Dictée bloquée par la classification (code 2 du CLI) : `{"state": "error", "blocked": true}` ; `status.js` désactive « Réessayer » et propose « Autre idée ».
+- Avancement (#165) : `GET /api/jobs/{id}` ajoute `progress {pct, restant_s, bientot}` (absent en `error`, 100 % à `done`). `eta.py` estime d'après la médiane par étape des 10 derniers runs réels terminés lus dans `<runs-dir>/*/durees.jsonl` (lecture seule) ; sans mesure, constantes `DEFAUT_S` (ordre de grandeur a priori, non mesuré). `bientot` sous 30 s ou en dépassement ; `restant_s` null si inconnu. Le pourcentage ne recule jamais ; `status.js` affiche la barre et « Encore environ N min » (jamais de secondes, jamais 0).
 - La dictée passe par stdin du CLI, jamais en argument, variable d'environnement ni journal ; seul `job_id` est journalisé.
 
 ## Polices

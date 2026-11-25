@@ -6,7 +6,9 @@ La dictée n'est ni journalisée, ni passée en argument, ni en variable d'envir
 fermée) sont lues ; le reste est jeté. Un seul job actif à la fois (le PC GPU est unique) :
 une soumission pendant un job queued/running est refusée (Busy). Délai global JOB_TIMEOUT_S,
 puis kill et état error. Dictée bloquée par la classification (code 2 du CLI) : error avec
-`blocked`, à ne pas réessayer. Contrat : contracts/kid-job.schema.json.
+`blocked`, à ne pas réessayer. Avancement (#165) : `progress` estimé par eta.py d'après les durées
+mesurées (journaux `durees.jsonl` des runs précédents, lus une fois à la soumission, lecture seule),
+jamais d'après la dictée ; le pourcentage ne recule jamais. Contrat : contracts/kid-job.schema.json.
 """
 
 from __future__ import annotations
@@ -16,11 +18,15 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import uuid
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, NotRequired, TypedDict
+from typing import Any, Literal, NotRequired, TypedDict
+
+import eta
 
 TEXT_MAX = 500
 MAX_JOBS = 50  # jobs gardés en mémoire ; au-delà, les plus anciens terminés sont oubliés
@@ -56,7 +62,17 @@ log = logging.getLogger(__name__)
 class Status(TypedDict):
     state: State
     step: Step
+    progress: NotRequired[eta.Progress]
     blocked: NotRequired[bool]
+
+
+@dataclass
+class _Suivi:
+    """Base de l'estimation d'un job : durées mesurées au départ, début d'étape, pct atteint."""
+
+    lignes: list[Any]
+    debut_etape: float
+    pct: int = field(default=0)
 
 
 class InvalidText(ValueError):
@@ -83,13 +99,16 @@ class JobStore:
         *,
         max_jobs: int = MAX_JOBS,
         timeout_s: float = JOB_TIMEOUT_S,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._runs = runs_dir
         self._command = tuple(command)
         self._max = max_jobs
         self._timeout = timeout_s
+        self._clock = clock
         self._lock = threading.Lock()
         self._jobs: dict[str, Status] = {}
+        self._suivi: dict[str, _Suivi] = {}
         self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="kid-job")
 
     @property
@@ -103,11 +122,13 @@ class JobStore:
     def submit(self, text: object) -> str:
         dictee = valid_text(text)
         job_id = str(uuid.uuid4())
+        lignes = eta.lire_durees(self._runs)  # hors verrou : lecture disque, jamais bloquante
         with self._lock:
             if any(s["state"] in ("queued", "running") for s in self._jobs.values()):
                 raise Busy("un job est déjà en cours")
             self._purge()
             self._jobs[job_id] = Status(state="queued", step="storyboard")
+            self._suivi[job_id] = _Suivi(lignes, self._clock())
         log.info("job=%s etat=queued", job_id)
         self._pool.submit(self._run, job_id, dictee)
         return job_id
@@ -115,13 +136,24 @@ class JobStore:
     def status(self, job_id: str) -> Status | None:
         with self._lock:
             s = self._jobs.get(job_id)
-            return None if s is None else Status(**s)  # copie
+            if s is None:
+                return None
+            copie = Status(**s)
+            suivi = self._suivi[job_id]
+            if s["state"] == "done":
+                copie["progress"] = eta.Progress(pct=100, restant_s=0, bientot=False)
+            elif s["state"] in ("queued", "running"):
+                p = eta.estimer(suivi.lignes, s["step"], self._clock() - suivi.debut_etape)
+                suivi.pct = p["pct"] = max(suivi.pct, p["pct"])  # la barre ne recule jamais
+                copie["progress"] = p
+            return copie
 
     def _purge(self) -> None:
         """Oublie les plus anciens jobs terminés : au plus max_jobs - 1 restent (verrou tenu)."""
         finis = [k for k, s in self._jobs.items() if s["state"] in ("done", "error")]
         for k in finis[: max(0, len(self._jobs) - self._max + 1)]:
             del self._jobs[k]
+            del self._suivi[k]
 
     def _set(self, job_id: str, status: Status) -> None:
         with self._lock:
@@ -133,6 +165,10 @@ class JobStore:
     def _update(self, job_id: str, *, state: State | None = None, step: Step | None = None) -> None:
         with self._lock:
             s = self._jobs[job_id]
+            if step is not None and step != s["step"]:
+                self._suivi[job_id].debut_etape = self._clock()
+            elif state == "running" and s["state"] == "queued":
+                self._suivi[job_id].debut_etape = self._clock()  # l'attente en file ne compte pas
         self._set(job_id, Status(state=state or s["state"], step=step or s["step"]))
 
     def _run(self, job_id: str, dictee: str) -> None:
