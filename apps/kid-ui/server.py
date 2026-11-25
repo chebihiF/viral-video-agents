@@ -40,6 +40,7 @@ API_JOBS = "/api/jobs"
 _JOB_PATH = re.compile(r"/api/jobs/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})")
 BODY_MAX = 8192  # octets : 500 caractères échappés en JSON tiennent largement
 DEFERRED = {"status": "deferred", "message": lan_guard.MSG_HORS_RESEAU}
+REFUS = {"error": "requête refusée"}  # 403 sans détail : hors LAN ou page tierce
 
 TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -86,9 +87,9 @@ class Handler(SimpleHTTPRequestHandler):
         else:
             self.send_json(404, {"error": "job inconnu"})
 
-    def _same_origin(self) -> bool:
-        """Anti-CSRF : corps JSON déclaré, et Origin (si envoyée) = hôte servi (en-tête Host)."""
-        if self.headers.get_content_type() != "application/json":
+    def same_origin(self, ctype: str) -> bool:
+        """Anti-CSRF : type de corps attendu déclaré, et Origin (si envoyée) = hôte servi (Host)."""
+        if self.headers.get_content_type() != ctype:
             return False
         origin = self.headers.get("Origin")
         return origin is None or urlsplit(origin).netloc == self.headers.get("Host")
@@ -104,8 +105,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not lan_guard.is_local(self.client_ip()):
             self.send_json(200, DEFERRED)  # corps non lu : rien de l'enfant ne part
             return
-        if not self._same_origin():
-            self.send_json(403, {"error": "requête refusée"})
+        if not self.same_origin("application/json"):
+            self.send_json(403, REFUS)
             return
         size = self._body_size()
         if size is None:
@@ -212,12 +213,15 @@ def audio_part(body: bytes, ctype: str) -> tuple[bytes, str] | None:
 
 
 def handle_dictation(h: Handler) -> None:
+    if not lan_guard.is_local(h.client_ip()) or not h.same_origin("multipart/form-data"):
+        h.send_json(403, REFUS)  # avant tout parsing : le corps (audio d'enfant) n'est pas lu
+        return
     ctype = h.headers.get("Content-Type", "")
     try:
         length = int(h.headers.get("Content-Length", ""))
     except ValueError:
         length = -1
-    if not ctype.lower().startswith("multipart/form-data") or length < 0:
+    if length < 0:
         h.send_json(400, {"error": "requete_invalide"})
         return
     if length > MAX_BODY_BYTES:
