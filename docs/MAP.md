@@ -58,6 +58,7 @@
 - `apps/kid-ui/tests/test_clavier.py` — Bouton Envoyer du clavier (#221) : le texte tapé part par MimoStatus.envoyer.
 - `apps/kid-ui/tests/test_dictation.py` — Tests de la dictée au micro (#161) : POST /api/dictation, aucune trace, aucun tiers.
 - `apps/kid-ui/tests/test_ecarts.py` — Écarts de la spec #36 (kid-ui.md) : police arabe, reduced-motion, RTL, cibles 48 px.
+- `apps/kid-ui/tests/test_erreurs_dictee.py` — Messages d'erreur de dictée adaptés à l'enfant (#234) : 3 cas distincts + repli générique.
 - `apps/kid-ui/tests/test_eta.py` — Durée restante estimée (#165) : médianes mesurées, valeur par défaut, aucune dictée.
 - `apps/kid-ui/tests/test_formulaire.py` — Formulaire enfant de bout en bout (#214) : micro, texte validé, progression, lecteur.
 - `apps/kid-ui/tests/test_jobs.py` — Envoi de la dictée et suivi du statut (#162) : faux orchestrateur, aucun GPU, aucun réseau
