@@ -52,6 +52,7 @@
 - `apps/orchestrator/src/orchestrator/__init__.py` — Orchestrateur du pipeline vidéo (#53).
 - `apps/orchestrator/src/orchestrator/__main__.py` — CLI de l'orchestrateur (#138) : `python -m orchestrator run --mocks --dictee-file F --out 
 - `apps/orchestrator/src/orchestrator/etapes.py` — Assemblage des étapes réelles (#150) : Ollama, Piper, montage ; image et clip injectables.
+- `apps/orchestrator/src/orchestrator/galerie.py` — Galerie locale des vidéos produites (#151) : une page HTML statique, autonome, sans réseau
 - `apps/orchestrator/src/orchestrator/mocks.py` — Étapes factices valides (#138) : aucune génération réelle, aucun fichier écrit, pas de GPU
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
 - `apps/orchestrator/src/orchestrator/purge.py` — Purge des runs anciens (#152) : supprime les dossiers de run plus vieux que N jours.
@@ -61,6 +62,7 @@
 - `apps/orchestrator/tests/test_cli.py` — CLI orchestrateur (#138) : 4 scénarios Gherkin, mode mocks, run.json validé par le contrat
 - `apps/orchestrator/tests/test_e2e_mock.py` — Parcours de bout en bout dictée -> MP4 avec mocks (#139) : `make e2e-mock`.
 - `apps/orchestrator/tests/test_etapes.py` — Étapes réelles assemblées (#150) : faux Ollama et faux Piper, aucun réseau, aucun GPU.
+- `apps/orchestrator/tests/test_galerie.py` — Galerie locale (#151) : liste, sans texte d'enfant, état vide, hors ligne. Runs synthétiqu
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
 - `apps/orchestrator/tests/test_purge.py` — Purge des runs anciens (#152) : dry-run, suppression, sécurité, usage. Dossiers synthétiqu
 - `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
@@ -94,6 +96,7 @@
 - `docs/adr/ADR-004-separation-usine-produit.md` — ADR-004 — Séparer l'usine d'agents (A) et l'application vidéo (B)
 - `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
+- `docs/design/galerie.md` — Spec galerie parent (ticket #151)
 - `docs/design/kid-ui.md` — Spec UI enfant "Mimo" (ticket #36, pour #161 #162 #163 #165)
 - `evals/README.md` — evals
 - `evals/cases/classification.jsonl`

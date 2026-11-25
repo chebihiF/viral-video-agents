@@ -3,6 +3,7 @@
 Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 configuration absente
 (sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL ; échec fermé avant tout appel réseau).
 Sous-commande `purge` (#152) : codes 0 ok, 1 suppression échouée, 2 usage.
+Sous-commande `galerie` (#151) : page HTML statique des runs ; codes 0 ok, 1 écriture, 2 usage.
 Image et clip réels (gpu-worker) ne sont pas branchés : le run finit « erreur » (#150).
 La dictée n'est ni écrite, ni journalisée, ni affichée.
 """
@@ -18,6 +19,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import NoReturn
 
+from orchestrator.galerie import generer
 from orchestrator.mocks import etapes_factices
 from orchestrator.pipeline import Etapes, lancer, ligne_durees
 from orchestrator.purge import supprimer, trouver_anciens
@@ -53,7 +55,26 @@ def _parser() -> argparse.ArgumentParser:
     purge.add_argument("--older-than-days", required=True, type=int, metavar="N", help="N >= 1")
     purge.add_argument("--apply", action="store_true", help="supprime (sinon : liste seulement)")
     purge.add_argument("--dry-run", action="store_true", help="liste sans supprimer (défaut)")
+    galerie = sub.add_parser("galerie", help="génère une page HTML locale des vidéos produites")
+    galerie.code_usage = EX_PURGE_USAGE
+    galerie.add_argument("--runs", required=True, type=Path, help="dossier contenant les runs")
+    galerie.add_argument("--out", required=True, type=Path, help="fichier HTML à écrire")
     return parser
+
+
+def _galerie(args: argparse.Namespace) -> int:
+    """Génère la galerie ; n'imprime que le nombre de runs."""
+    racine: Path = args.runs
+    if racine.is_symlink() or not racine.is_dir():
+        print("dossier des runs absent ou invalide", file=sys.stderr)
+        return EX_PURGE_USAGE
+    try:
+        total = generer(racine, args.out)
+    except OSError:
+        print("galerie non écrite : dossier des runs ou sortie inaccessible", file=sys.stderr)
+        return 1
+    print(f"galerie runs={total}")
+    return 0
 
 
 def _purger(args: argparse.Namespace) -> int:
@@ -121,6 +142,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.commande == "purge":
         return _purger(args)
+    if args.commande == "galerie":
+        return _galerie(args)
     dictee = _lire_dictee(args.dictee_file)
     if dictee is None:
         print(
