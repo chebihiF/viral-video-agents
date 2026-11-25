@@ -202,11 +202,8 @@
           "Mimo a eu un souci. On réessaie ?", ["bad", "Erreur"]);
       var cta = el("div", "kid-row");
       var r = bouton("kid-btn primary lg", "Réessayer", reessayer);
-      if (v.bloque) {
-        r.setAttribute("disabled", "");
-        cta.appendChild(bouton("kid-btn", "Autre idée", accueil));
-      }
-      cta.appendChild(r);
+      if (v.bloque) r.setAttribute("disabled", "");
+      cta.append(bouton("kid-btn", "Autre idée", autreIdee), r); // toujours proposée
       return ["Mimo", [scene(MIMO_ETOURDI, "mimo xl dizzy"), n], cta];
     },
     prete: function () {
@@ -333,6 +330,16 @@
     clearTimeout(minuteur);
     dernier = "";
     montrer(document.getElementById("ecran-accueil"));
+  }
+
+  // « Autre idée » : on oublie le texte et le job, retour à l'accueil (micro) pour dicter autre chose.
+  function autreIdee() {
+    texte = null;
+    jobId = null;
+    panneReseau = false;
+    accueil();
+    var micro = document.querySelector('.kid-composer [aria-label="Parler"]');
+    if (micro) micro.focus();
   }
 
   var api = { vue: vue, avancer: avancer, reste: reste, envoyer: envoyer, ETAPES: ETAPES, POLL_MS: POLL_MS };

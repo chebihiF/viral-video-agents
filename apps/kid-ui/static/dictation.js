@@ -3,6 +3,7 @@
 // Le texte dicté n'est inséré que par textContent / value, jamais comme HTML.
 (function () {
   var MAX_MS = 30000; // ~1 Mo max côté serveur
+  var TEXTE_MAX = 500; // contrat kid-job : au-delà, POST /api/jobs répond 400
   var accueil = document.getElementById("ecran-accueil");
   var erreur = document.getElementById("ecran-erreur");
   var micro = document.querySelector('.kid-composer [aria-label="Parler"]');
@@ -39,7 +40,10 @@
   }
 
   // Le réseau change : la coquille bascule d'écran, on retire l'écoute (micro coupé, audio oublié).
-  window.addEventListener("online", fermerEcoute);
+  window.addEventListener("online", function () {
+    if (ecran) retourAccueil(); // écoute interrompue : on ne laisse pas un écran vide
+    else fermerEcoute();
+  });
   window.addEventListener("offline", function () {
     fermerEcoute();
     restaurerErreur();
@@ -154,7 +158,7 @@
         });
       })
       .then(function (rep) {
-        var texte = rep.ok && rep.corps && typeof rep.corps.text === "string" ? rep.corps.text.trim() : "";
+        var texte = rep.ok && rep.corps && typeof rep.corps.text === "string" ? rep.corps.text.trim().slice(0, TEXTE_MAX) : "";
         if (!texte) throw new Error("vide");
         if (ecran === mon) resultat(texte);
       })
@@ -165,6 +169,12 @@
       });
   }
 
+  // Rien ne part avant ce clic : l'écran d'écoute est retiré, MimoStatus (status.js) envoie puis suit.
+  function valider(texte) {
+    fermerEcoute();
+    MimoStatus.envoyer(texte);
+  }
+
   function resultat(texte) {
     if (!ecran) return;
     ecran.etat.textContent = "Tu as dit";
@@ -172,8 +182,7 @@
     ecran.rangee.append(
       bouton("", "Annuler", annuler),
       bouton("primary", "✅ C'est bon", function () {
-        idee.value = texte;
-        retourAccueil(idee);
+        valider(texte);
       })
     );
     ecran.rangee.lastChild.focus();
