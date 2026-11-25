@@ -106,6 +106,7 @@
 - `infra/kid-ui/make-cert.sh` — Certificat HTTPS local de l'appli enfant (mkcert) : sortie uniquement dans infra/kid-ui/ce
 - `infra/kid-ui/tests/test_cert_script.py` — Passerelle pytest vers test_cert_script.sh (#160) : make check couvre le script de certifi
 - `infra/kid-ui/tests/test_cert_script.sh` — Tests de make-cert.sh (#160) : shellcheck, dry-run sans mkcert, refus d'écrire hors certs/
+- `infra/kid-ui/tests/test_repo_secrets.py` — Scénarios 1 et 4 de #160 : certs/ ignoré, aucune clé ni CA suivie, noms hostiles refusés.
 - `infra/scripts/bootstrap_worktree.sh` — Copie .claude/ et CLAUDE.md (fichiers locaux, jamais commités) du checkout principal vers 
 - `infra/scripts/conftest.py`
 - `infra/scripts/gen_map.py` — Génère docs/MAP.md : une ligne par fichier suivi par git (index uniquement) (chemin — résu
