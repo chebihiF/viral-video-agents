@@ -193,6 +193,38 @@ def test_same_job_id_twice_renders_one_clip(serve: Server) -> None:
     assert comfy.calls == ["story-1-plan-1"]
 
 
+class SpyPower:
+    """Enregistre les appels de la minuterie de veille (#37) ; le job est-il « en cours » ?"""
+
+    def __init__(self) -> None:
+        self.events: list[str] = []
+
+    def job_started(self) -> None:
+        self.events.append("started")
+
+    def job_finished(self) -> None:
+        self.events.append("finished")
+
+
+@pytest.mark.parametrize("fail", [False, True], ids=["done", "failed"])
+def test_power_hooks_wrap_each_job(tmp_path: Path, fail: bool) -> None:
+    power = SpyPower()
+    comfy = FakeComfy(fail=fail)
+    jobs = worker.JobQueue(comfy, tmp_path, power=power)
+    jobs.start()
+    jobs.submit(worker.JobRequest("story-1-plan-1", "img.png", "p", 5))
+    jobs.stop(TIMEOUT)  # vide la file puis s'arrête
+    assert power.events == ["started", "finished"]
+
+
+def test_power_defaults_to_noop(tmp_path: Path) -> None:
+    jobs = worker.JobQueue(FakeComfy(), tmp_path)
+    jobs.start()
+    jobs.submit(worker.JobRequest("story-1-plan-1", "img.png", "p", 5))
+    jobs.stop(TIMEOUT)
+    assert (jobs.get("story-1-plan-1") or {})["status"] == "done"
+
+
 def test_frames_not_4n_plus_1_is_422_and_nothing_runs(serve: Server) -> None:
     comfy = FakeComfy()
     base = serve(comfy)

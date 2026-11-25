@@ -48,7 +48,7 @@ python_version = "3.12"
 strict = true
 files = ["apps/media-service/src", "apps/orchestrator/src", "infra/scripts", "evals/classification_eval.py", "evals/test_classification_eval.py",
   "apps/kid-ui/server.py", "apps/kid-ui/transcriber.py", "apps/kid-ui/jobs.py", "apps/kid-ui/make_icons.py",
-  "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py", "apps/gpu-worker/lan_guard.py"]
+  "apps/gpu-worker/worker.py", "apps/gpu-worker/comfy_run.py", "apps/gpu-worker/lan_guard.py", "apps/gpu-worker/gpu_power.py"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/contracts", "apps/media-service/tests", "apps/orchestrator/tests", "infra/scripts", "evals", "apps/gpu-worker/tests", "apps/kid-ui/tests", "infra/kid-ui/tests"]
