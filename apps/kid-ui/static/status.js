@@ -47,7 +47,7 @@
     if (rep.state === "queued" || rep.state === "running") {
       var i = ETAPES.indexOf(rep.step);
       return { ecran: "en-cours", etape: i < 0 ? 0 : i, pct: pourcent(rep.progress),
-        reste: reste(rep.progress) };
+        reste: reste(rep.progress), reveil: rep.waking === true };
     }
     if (rep.state === "done") return { ecran: "prete", pct: 100 };
     return { ecran: "erreur", bloque: rep.blocked === true }; // bloquée : réessayer est inutile
@@ -122,6 +122,28 @@
     else zone.replaceChildren();
   }
 
+  // Réveil du PC GPU (#230, kid-job v1.2 `waking`) : même principe, région role=status annoncée
+  // une fois à l'apparition ; le texte est fixe, jamais celui de la dictée.
+  var MSG_REVEIL = "J'allume le PC";
+  var PRISE = ["M12 3v8", "M7.5 6.5a7 7 0 109 0"];
+
+  function zoneReveil() {
+    return attrs(el("div", "waking"), { role: "status", "aria-live": "polite" });
+  }
+
+  function majReveil(zone, actif) {
+    var cle = actif ? MSG_REVEIL : "";
+    if (zone.getAttribute("data-label") === cle) return;
+    zone.setAttribute("data-label", cle);
+    if (actif) {
+      var c = el("span", "kid-chip warn");
+      c.append(icone(PRISE), document.createTextNode(MSG_REVEIL));
+      zone.replaceChildren(c);
+    } else {
+      zone.replaceChildren();
+    }
+  }
+
   // Barre à 4 segments remplis selon le pourcentage ; un segment partiel porte un dégradé.
   function barre() {
     var seg = attrs(el("div", "kid-seg"), {
@@ -174,8 +196,10 @@
     "en-cours": function (v) {
       var seg = barre();
       var zone = zoneReste();
+      var reveil = zoneReveil();
       majBarre(seg, v.pct, v.reste);
       majReste(zone, v.reste);
+      majReveil(reveil, v.reveil === true);
       var film = el("ol", "film");
       ETAPES.forEach(function (nom, j) {
         var li = el("li", j < v.etape ? "done" : j === v.etape ? "now" : null);
@@ -186,7 +210,7 @@
       });
       var say = el("p", "say");
       say.append(spin(), document.createTextNode(PHRASES[ETAPES[v.etape]]));
-      return ["Ta vidéo arrive", [scene(MIMO, "mimo big bob"), seg, film, say, zone], null];
+      return ["Ta vidéo arrive", [scene(MIMO, "mimo big bob"), seg, film, say, reveil, zone], null];
     },
     "hors-maison": function () {
       var maison = el("div", "home-scene");
@@ -222,6 +246,7 @@
   function majProgression(v) {
     majBarre(ecran.querySelector(".kid-seg"), v.pct, v.reste);
     majReste(ecran.querySelector(".eta"), v.reste);
+    majReveil(ecran.querySelector(".waking"), v.reveil === true);
   }
 
   function monter() {
