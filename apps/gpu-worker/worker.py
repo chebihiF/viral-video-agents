@@ -22,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 import comfy_run
 import lan_guard
@@ -49,6 +49,23 @@ class JobRequest:
 
 
 ClipRunner = Callable[[JobRequest], str]
+
+
+class PowerHooks(Protocol):
+    """Minuterie de veille du PC (gpu_power.GpuPower) : prévenue autour de chaque job."""
+
+    def job_started(self) -> None: ...
+    def job_finished(self) -> None: ...
+
+
+class NoPower:
+    """Défaut : ne fait rien (tests, exécution locale)."""
+
+    def job_started(self) -> None:
+        pass
+
+    def job_finished(self) -> None:
+        pass
 
 
 def _field_errors(p: dict[str, Any]) -> list[str]:
@@ -89,8 +106,9 @@ class JobQueue:
     l'idempotence survit au redémarrage ; un job resté queued/running est vu comme interrompu.
     """
 
-    def __init__(self, runner: ClipRunner, out_root: Path) -> None:
+    def __init__(self, runner: ClipRunner, out_root: Path, power: PowerHooks | None = None) -> None:
         self._runner = runner
+        self._power: PowerHooks = power or NoPower()
         self._out_root = out_root
         self._jobs: dict[str, dict[str, str]] = {}
         self._lock = threading.Lock()
@@ -162,11 +180,14 @@ class JobQueue:
     def _loop(self) -> None:
         while (req := self._pending.get()) is not None:
             self._set(req.job_id, "running")
+            self._power.job_started()
             try:
                 self._set(req.job_id, "done", output_path=self._runner(req))
             except Exception as exc:  # le worker survit à tout échec de rendu
                 # jamais le texte brut de ComfyUI (il peut citer le prompt)
                 self._set(req.job_id, "failed", error=f"{type(exc).__name__}: échec du rendu ComfyUI")
+            finally:
+                self._power.job_finished()
 
 
 class ComfyRunner:
