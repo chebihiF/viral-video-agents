@@ -85,3 +85,16 @@ make e2e-mock   # pytest -m e2e : dictée -> MP4, ffmpeg local requis, sans GPU 
 - Scénarios : MP4 H.264 + AAC 1080x1920 de durée = somme des WAV (±0,2 s) ; un `.ass` à côté du MP4 avec un événement par mot ; dictée « bloque » : aucun MP4, run « bloque » ; Piper absent : run « erreur » sur `voix`, aucun MP4 ni ASS ; étapes image/clip de deux runs concurrents sans chevauchement.
 - Marqueur `e2e` ; test sauté si `ffmpeg` / `ffprobe` sont absents. Sorties en dossier temporaire pytest, dictée de test fixe et neutre, aucune dictée dans les logs ni `run.json`.
 - Aussi exécuté par `make test` / `make check`.
+
+## Purge des runs anciens (#152)
+
+```
+python -m orchestrator purge --runs DIR --older-than-days N            # liste seulement (défaut)
+python -m orchestrator purge --runs DIR --older-than-days N --apply    # supprime
+```
+
+- Ne considère que les sous-dossiers directs de `DIR` contenant un `run.json` valide (`schema_version` 1.0, `run_id`, `etat`) ; âge = date de modification de `run.json` ; supprimé si plus de N jours.
+- Ignorés, jamais touchés : dossier sans `run.json` valide, lien symbolique (dossier de run ou `run.json`) ; les liens internes à un run sont retirés sans être suivis, rien hors de `DIR` n'est affecté.
+- `--dry-run` est accepté (comportement par défaut) ; `--apply` avec `--dry-run` est refusé.
+- Sortie : une ligne par run ancien, `<run_id> age_jours=<n> a_supprimer|supprime` ; jamais de texte de dictée.
+- Codes : 0 ok, 1 suppression échouée (type d'exception seul), 2 usage (N < 1, N non entier, `DIR` absent ou lien symbolique, arguments invalides).
