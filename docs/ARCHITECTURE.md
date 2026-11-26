@@ -60,7 +60,7 @@ Enfant ──▶ Open WebUI (VPS) ◀──▶ Qwen3 « studio » (PC)
 | ComfyUI-Manager, ComfyUI-GGUF | Extensions | GGUF = modèles compressés pour 8 Go |
 | **Flux.1 schnell** Q4 | Images clés | Apache 2.0, 4 étapes, ~13 s par image 768×1344 |
 | **Wan 2.2 TI2V 5B** Q8 | Image → vidéo | Apache 2.0 |
-| **Piper** (voix `fr_FR-siwis-medium`) | Voix off de test | `~/vva/tts`, sur CPU |
+| **SILMA TTS** v1 (150M, poids Apache 2.0) | Voix par réplique (personnages, voix off), clonage depuis une référence < 8 s | Choisi le 26/11 (#249, ADR-006) ; **pas encore installé**, qualité en darija non testée ; enveloppe `apps/media-service/scripts/silma_cli.py`, sous le verrou GPU. Piper abandonné |
 
 ### Sur le VPS (à faire)
 
@@ -102,7 +102,7 @@ Sur le PC, ces fichiers sont copiés dans `~/vva/`.
 - Âge des enfants (ton et règles du conteur).
 - ~~PC éteint~~ : tranché le 19/11 (#37), voir « Alimentation du PC GPU » ci-dessous.
 - Modèle d'image : comparer Flux schnell et **Z-Image-Turbo**.
-- Voix off : comparer à l'oreille **Chatterbox Multilingual**, **Qwen3-TTS**, **Kyutai TTS** (Piper = solution de test).
+- Voix : SILMA TTS retenu pour un essai (ADR-006, #249) ; la darija n'est pas annoncée par sa fiche : qualité à juger à l'oreille au ticket d'installation. Voix de référence (une par personnage, une pour la voix off) : attend le parent.
 - Darija : la conversation l'accepte ; reconnaissance vocale et voix off en darija restent à évaluer.
 
 **Alimentation du PC GPU (#37, décision du parent 19/11).**
