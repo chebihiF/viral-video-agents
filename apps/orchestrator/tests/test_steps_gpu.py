@@ -278,6 +278,18 @@ def test_memoire_graphique_free_a_chaque_changement_de_phase(tmp_path: Path) -> 
     assert faux.frees == [{"unload_models": True, "free_memory": True}] * 3
 
 
+def test_avant_voix_libere_comfyui_et_decharge_ollama(tmp_path: Path) -> None:
+    """#249 : SILMA tourne sur le GPU ; ni Flux, ni Wan, ni Ollama ne restent en VRAM."""
+    gpu, faux, journal = _gpu(tmp_path)
+    gpu.clip(_job(1))
+    gpu.avant_voix()
+    gpu.image("r246-img-1", PROMPT)  # après la voix : ComfyUI libéré de nouveau
+    free, ollama, prompt = VRAM
+    decharge = [ollama] * len(MODELES)
+    attendu = [free, prompt, free, *decharge, free, *decharge, prompt]
+    assert [ligne for ligne in journal if ligne in VRAM] == attendu
+
+
 def test_dechargement_de_tous_les_modeles_listes_par_ps() -> None:
     journal: list[str] = []
     ollama = FauxOllama(journal)

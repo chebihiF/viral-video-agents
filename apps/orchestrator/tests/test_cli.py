@@ -5,15 +5,17 @@ from __future__ import annotations
 import dataclasses
 import io
 import json
+import shutil
 import subprocess
 import sys
+import wave
 from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 import test_steps_gpu
-from fakes import env_faux_piper
+from fakes import SECONDES_PAR_MOT, _clip_lavfi, appels_faux_silma, env_faux_silma
 from jsonschema import Draft202012Validator
 from test_etapes import LIBRE, STORYBOARD
 from test_steps_gpu import MP4, FauxComfy
@@ -113,7 +115,7 @@ def test_stdin(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 def test_sans_mocks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    for variable in ("OLLAMA_URL", "PIPER_BIN", "PIPER_MODEL"):
+    for variable in ("OLLAMA_URL", "SILMA_BIN", "SILMA_MODEL_DIR", "SILMA_VOIX", "VOIX_OFF_ID"):
         monkeypatch.delenv(variable, raising=False)
     fichier = tmp_path / "d.txt"
     fichier.write_text(DICTEE, encoding="utf-8")
@@ -241,19 +243,63 @@ def _opener(monkeypatch: pytest.MonkeyPatch, reponses: list[Any]) -> _FauxOpener
     return faux
 
 
-def test_reel_sans_piper_echoue_ferme_sans_reseau(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+# Scénario (#249): configuration absente ou invalide
+
+
+def _absente(env: dict[str, str], tmp_path: Path, variable: str) -> None:
+    del env[variable]
+
+
+def _introuvable(env: dict[str, str], tmp_path: Path, variable: str) -> None:
+    env[variable] = str(tmp_path / "personnel" / "introuvable")
+
+
+def _reference_effacee(env: dict[str, str], tmp_path: Path, variable: str) -> None:
+    Path(env["SILMA_VOIX"]).with_name("narratrice.wav").unlink()
+
+
+@pytest.mark.parametrize(
+    ("variable", "casser"),
+    [
+        ("SILMA_BIN", _absente),
+        ("SILMA_BIN", _introuvable),
+        ("SILMA_MODEL_DIR", _absente),
+        ("SILMA_MODEL_DIR", _introuvable),
+        ("SILMA_VOIX", _absente),
+        ("SILMA_VOIX", _introuvable),
+        ("SILMA_VOIX", _reference_effacee),
+        ("VOIX_OFF_ID", _absente),
+    ],
+)
+def test_reel_configuration_silma_invalide_code_78_sans_reseau_ni_moteur(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    variable: str,
+    casser: Callable[..., None],
 ) -> None:
-    faux = _opener(monkeypatch, [])
-    monkeypatch.setenv("OLLAMA_URL", "http://ollama.test:11434")
-    monkeypatch.delenv("PIPER_BIN", raising=False)
+    from orchestrator import steps_gpu
+
+    ollama = _opener(monkeypatch, [])
+    comfy = _FauxOpener([])
+    monkeypatch.setattr(steps_gpu, "_OPENER", comfy)
+    env = env_faux_silma(tmp_path / "silma")
+    moteur = dict(env)
+    env |= {"OLLAMA_URL": "http://ollama.test:11434", "COMFY_URL": "http://127.0.0.1:8188"}
+    casser(env, tmp_path, variable)
+    for nom in (*env, "SILMA_BIN", "SILMA_MODEL_DIR", "SILMA_VOIX", "VOIX_OFF_ID"):
+        monkeypatch.delenv(nom, raising=False)
+    for nom, valeur in env.items():
+        monkeypatch.setenv(nom, valeur)
     out = tmp_path / "o"
     code = main(["run", "--dictee-file", str(_dictee(tmp_path)), "--out", str(out)])
     sortie = capsys.readouterr()
     assert code == 78
-    assert "PIPER_BIN" in sortie.err
+    assert variable in sortie.err
+    assert str(tmp_path) not in sortie.out + sortie.err and "personnel" not in sortie.err
     assert "hibou" not in sortie.out + sortie.err
-    assert faux.appels == 0
+    assert (ollama.appels, comfy.appels) == (0, 0)
+    assert appels_faux_silma(moteur) == []
     assert not out.exists()
 
 
@@ -266,7 +312,7 @@ def test_reel_sans_ollama_echoue_ferme(
     assert "OLLAMA_URL" in capsys.readouterr().err
 
 
-# --- Parcours réel (#245) : faux Ollama, Piper et ComfyUI derrière de vrais serveurs HTTP ---
+# --- Parcours réel (#245, #249) : faux Ollama, SILMA et ComfyUI derrière de vrais serveurs HTTP ---
 
 
 class _FauxOllamaHttp:
@@ -295,32 +341,56 @@ class _Reel:
     comfy: FauxComfy
     ollama: _FauxOllamaHttp
     montages: list[Any]
+    voix: list[Any]
 
 
 @pytest.fixture
 def reel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, serveurs: Any
 ) -> Iterator[Callable[..., _Reel]]:
-    def preparer(mode: str = "ok", cible: str | None = None) -> _Reel:
+    def preparer(mode: str = "ok", cible: str | None = None, clip: bytes | None = None) -> _Reel:
+        """`clip` : MP4 réel rendu par le faux ComfyUI, montage FFmpeg réel ; sinon factice."""
+        from orchestrator import etapes
+
         journal: list[str] = []
-        comfy = FauxComfy(journal, mode, cible)
+        comfy = _ComfyClip(clip, journal, mode, cible) if clip else FauxComfy(journal, mode, cible)
         ollama = _FauxOllamaHttp(journal)
-        env = env_faux_piper(tmp_path)
+        env = env_faux_silma(tmp_path / "silma")
         env["OLLAMA_URL"] = serveurs(ollama.repondre).url
         env["COMFY_URL"] = serveurs(comfy.repondre).url
         for nom, valeur in env.items():
             monkeypatch.setenv(nom, valeur)
         montages: list[Any] = []
+        voix: list[Any] = []
+        voix_silma = etapes.voix_silma
+
+        def voix_tracee(environnement: Any) -> Callable[[Any], Any]:
+            etape = voix_silma(environnement)
+            return lambda job: voix.append(etape(job)) or voix[-1]
 
         def montage(job: Any) -> str:
             montages.append(job)
             Path(job["output_path"]).write_bytes(MP4)
             return str(job["output_path"])
 
-        monkeypatch.setattr("orchestrator.etapes.montage_reel", lambda: montage)
-        return _Reel(tmp_path / "o", journal, comfy, ollama, montages)
+        monkeypatch.setattr(etapes, "voix_silma", voix_tracee)
+        if clip is None:
+            monkeypatch.setattr(etapes, "montage_reel", lambda: montage)
+        return _Reel(tmp_path / "o", journal, comfy, ollama, montages, voix)
 
     yield preparer
+
+
+class _ComfyClip(FauxComfy):
+    """Faux ComfyUI dont `/view` d'un clip rend un vrai MP4 (montage FFmpeg réel)."""
+
+    def __init__(self, clip: bytes, *args: Any) -> None:
+        super().__init__(*args)
+        self.clip = clip
+
+    def repondre(self, methode: str, chemin: str, corps: bytes | None) -> tuple[int, bytes]:
+        code, contenu = super().repondre(methode, chemin, corps)
+        return (code, self.clip) if contenu == MP4 else (code, contenu)
 
 
 def _run_reel(tmp_path: Path, reel: _Reel) -> tuple[int, dict[str, Any]]:
@@ -349,11 +419,60 @@ def test_reel_dictee_vers_mp4_avec_faux_comfyui(
         assert not [p for p in prompts if p in texte]
 
 
+# Scénario (#249): dictée vers MP4 avec un faux moteur
+
+
+TTS_RESULT = Draft202012Validator(
+    {
+        "$ref": "#/$defs/TtsResult",
+        "$defs": json.loads((CONTRACTS / "tts-job.schema.json").read_text("utf-8"))["$defs"],
+    }
+)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg absent")
+def test_reel_dictee_vers_mp4_avec_faux_silma_et_montage_reel(
+    tmp_path: Path, reel: Callable[..., _Reel]
+) -> None:
+    clip = tmp_path / "clip.mp4"
+    _clip_lavfi(clip)
+    r = reel(clip=clip.read_bytes())
+    code, run = _run_reel(tmp_path, r)
+    assert (code, run["etat"]) == (0, "ok")
+    [resultat] = r.voix
+    TTS_RESULT.validate(resultat)
+    repliques = resultat["repliques"]
+    assert [x["replique_id"] for x in repliques] == [f"plan-{n}" for n in range(1, 3)]
+    narrations = [p["narration_fr"] for p in STORYBOARD["plans"]]
+    for x, narration in zip(repliques, narrations, strict=True):
+        with wave.open(x["wav_path"], "rb") as w:
+            assert x["duree_s"] == pytest.approx(w.getnframes() / w.getframerate())
+        assert x["duree_s"] == pytest.approx(SECONDES_PAR_MOT * len(narration.split()))
+    final = Path(run["video_path"])
+    assert final.is_file() and final.stat().st_size > 0
+    sonde = subprocess.run(  # noqa: S603
+        [  # noqa: S607
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "stream=codec_type",
+            "-of",
+            "csv=p=0",
+            str(final),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert sorted(sonde.stdout.split()) == ["audio", "video"]
+
+
 def test_reel_memoire_graphique(tmp_path: Path, reel: Callable[..., _Reel]) -> None:
     r = reel()
     _run_reel(tmp_path, r)
     images = len(STORYBOARD["plans"])
-    assert r.ollama.dechargements == [{"model": "qwen3:8b", "keep_alive": 0}] * images
+    assert r.ollama.dechargements == [{"model": "qwen3:8b", "keep_alive": 0}] * (images + 1)
     free, ps, decharge, prompt = (
         "comfy POST /free",
         "ollama GET /api/ps",
@@ -361,8 +480,9 @@ def test_reel_memoire_graphique(tmp_path: Path, reel: Callable[..., _Reel]) -> N
         "comfy POST /prompt",
     )
     vram = [ligne for ligne in r.journal if ligne in (free, ps, decharge, prompt)]
+    avant_voix = [free, ps, decharge]  # #249 : SILMA seul sur le GPU
     phase_image = [free] + [ps, decharge, prompt] * images
-    assert vram == phase_image + [free] + [prompt] * images  # /free avant le premier clip
+    assert vram == avant_voix + phase_image + [free] + [prompt] * images
 
 
 @pytest.mark.parametrize(("cible", "etape"), [("SaveImage", "image"), ("SaveVideo", "clip")])
@@ -441,7 +561,7 @@ def test_reel_comfy_url_refusee_code_78_sans_reseau(
     ollama = _opener(monkeypatch, [])
     comfy = _FauxOpener([])
     monkeypatch.setattr(steps_gpu, "_OPENER", comfy)
-    for nom, valeur in env_faux_piper(tmp_path).items():
+    for nom, valeur in env_faux_silma(tmp_path / "silma").items():
         monkeypatch.setenv(nom, valeur)
     monkeypatch.setenv("OLLAMA_URL", "http://ollama.test:11434")
     if url is None:

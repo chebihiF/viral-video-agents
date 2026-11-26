@@ -1,6 +1,6 @@
 """Parcours de bout en bout dictée -> MP4 avec mocks (#139) : `make e2e-mock`.
 
-CLI réel, faux Piper, clips lavfi, montage FFmpeg réel avec ASS. Aucun réseau, aucun GPU.
+CLI réel, faux SILMA (#249), clips lavfi, montage FFmpeg réel avec ASS. Aucun réseau, aucun GPU.
 """
 
 from __future__ import annotations
@@ -15,12 +15,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from fakes import SECONDES_PAR_MOT, TraceGpu, env_faux_piper, etapes_e2e
+from fakes import SECONDES_PAR_MOT, TraceGpu, env_faux_silma, etapes_e2e
 
 from orchestrator import __main__ as cli
 from orchestrator.mocks import MOT_BLOQUE, etapes_factices
 from orchestrator.pipeline import Etapes, lancer
-from orchestrator.steps_media import voix_piper
+from orchestrator.steps_media import voix_silma
 
 pytestmark = [
     pytest.mark.e2e,
@@ -71,7 +71,7 @@ def _ffprobe(mp4: Path) -> dict[str, Any]:
 
 
 def _etapes(tmp_path: Path) -> Etapes:
-    return etapes_e2e(tmp_path / "clips", env_piper=env_faux_piper(tmp_path))
+    return etapes_e2e(tmp_path / "clips", env_silma=env_faux_silma(tmp_path / "silma"))
 
 
 def _narrations() -> list[str]:
@@ -133,18 +133,18 @@ def test_contenu_bloque_sans_mp4(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert [e["nom"] for e in run["etapes"]] == ["classification"]
     assert "video_path" not in run
     assert list(tmp_path.rglob("*.mp4")) == []
-    assert list(tmp_path.rglob("*.wav")) == []
+    assert list((tmp_path / "out").rglob("*.wav")) == []  # la voix de référence est hors du run
 
 
-def test_piper_absent_erreur_sur_voix_sans_mp4_partiel(
+def test_silma_absent_erreur_sur_voix_sans_mp4_partiel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     base = _etapes(tmp_path)
-    sans_piper = Etapes(
-        base.classifier, base.storyboard, voix_piper({}), base.image, base.clip, base.montage
+    sans_silma = Etapes(
+        base.classifier, base.storyboard, voix_silma({}), base.image, base.clip, base.montage
     )
     with caplog.at_level(logging.DEBUG):
-        code, out = _cli(tmp_path, monkeypatch, sans_piper)
+        code, out = _cli(tmp_path, monkeypatch, sans_silma)
 
     run = _run(out)
     assert code == 1 and run["etat"] == "erreur"
@@ -166,15 +166,16 @@ def test_aucune_dictee_dans_les_logs(
 
 
 def test_etapes_gpu_en_serie(tmp_path: Path) -> None:
+    """#249 : la voix (SILMA) ne chevauche aucune étape image ou clip, tous runs confondus."""
     trace = TraceGpu()
-    env = env_faux_piper(tmp_path)
+    env = env_faux_silma(tmp_path / "silma")
 
     def montage_neutre(job: Any) -> str:
         return str(
             job["output_path"]
         )  # le montage réel est couvert ailleurs ; ici seul le GPU compte
 
-    etapes = etapes_e2e(tmp_path / "clips", env_piper=env, trace=trace, montage=montage_neutre)
+    etapes = etapes_e2e(tmp_path / "clips", env_silma=env, trace=trace, montage=montage_neutre)
     runs: list[dict[str, Any]] = []
 
     def parcours(rid: str) -> None:
@@ -187,5 +188,6 @@ def test_etapes_gpu_en_serie(tmp_path: Path) -> None:
         f.join(timeout=120)
 
     assert [r["etat"] for r in runs] == ["ok", "ok"]
-    assert len(trace.intervalles) == 2 * 2 * 2  # 2 runs x 2 plans x (image + clip)
+    assert len(trace.intervalles) == 2 * (1 + 2 * 2)  # 2 runs x (voix + 2 plans x (image + clip))
+    assert [nom for nom, *_ in trace.intervalles].count("voix") == 2
     assert trace.chevauchements() == []

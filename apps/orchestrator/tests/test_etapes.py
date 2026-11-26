@@ -1,15 +1,14 @@
-"""Étapes réelles assemblées (#150, #245) : faux Ollama, Piper et ComfyUI ; aucun réseau ni GPU."""
+"""Étapes réelles assemblées (#150, #245, #249) : faux Ollama, SILMA, ComfyUI ; ni réseau ni GPU."""
 
 from __future__ import annotations
 
 import json
 import logging
-import stat
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fakes import VOIX_OFF, appels_faux_silma, env_faux_silma
 from jsonschema import Draft202012Validator
 from test_steps_gpu import FauxComfy, Horloge
 
@@ -26,17 +25,6 @@ COMFY = "http://127.0.0.1:8188"
 LIBRE = json.loads((CONTRACTS / "examples" / "classification.libre.json").read_text("utf-8"))
 STORYBOARD = json.loads((CONTRACTS / "examples" / "storyboard.valid.json").read_text("utf-8"))
 RUN = Draft202012Validator(json.loads((CONTRACTS / "pipeline-run.schema.json").read_text("utf-8")))
-
-FAKE_PIPER = f"""#!{sys.executable}
-import sys, wave
-out = sys.argv[sys.argv.index("--output_file") + 1]
-text = sys.stdin.read()
-with wave.open(out, "wb") as w:
-    w.setnchannels(1)
-    w.setsampwidth(2)
-    w.setframerate(24000)
-    w.writeframes(b"\\0\\0" * 6000 * max(1, len(text.split())))
-"""
 
 
 class FauxOllama:
@@ -56,17 +44,7 @@ class FauxOllama:
 
 @pytest.fixture
 def env(tmp_path: Path) -> dict[str, str]:
-    binaire = tmp_path / "piper"
-    binaire.write_text(FAKE_PIPER, encoding="utf-8")
-    binaire.chmod(binaire.stat().st_mode | stat.S_IXUSR)
-    modele = tmp_path / "voix.onnx"
-    modele.write_bytes(b"model")
-    return {
-        "OLLAMA_URL": URL,
-        "PIPER_BIN": str(binaire),
-        "PIPER_MODEL": str(modele),
-        "COMFY_URL": COMFY,
-    }
+    return {"OLLAMA_URL": URL, "COMFY_URL": COMFY, **env_faux_silma(tmp_path / "silma")}
 
 
 # Scénario: étapes injectées
@@ -88,15 +66,68 @@ def test_cinq_etapes_presentes_et_classification_par_ollama(
 # Scénarios: configuration absente (échec fermé, aucun appel réseau)
 
 
-@pytest.mark.parametrize("variable", ["OLLAMA_URL", "PIPER_BIN", "PIPER_MODEL", "COMFY_URL"])
+VARIABLES = ["OLLAMA_URL", "SILMA_BIN", "SILMA_MODEL_DIR", "SILMA_VOIX", "VOIX_OFF_ID", "COMFY_URL"]
+
+
+@pytest.mark.parametrize("variable", VARIABLES)
 def test_configuration_absente_leve_avant_tout_appel(
     env: dict[str, str], tmp_path: Path, variable: str
 ) -> None:
     del env[variable]
     faux = FauxOllama()
-    with pytest.raises(ErreurConfiguration, match=variable):
+    with pytest.raises(ErreurConfiguration, match=variable) as err:
         etapes_reelles(env, out=tmp_path, transport=faux)
+    assert str(tmp_path) not in str(err.value)
     assert faux.requetes == []
+    assert appels_faux_silma({**env, "SILMA_BIN": str(tmp_path / "silma" / "silma")}) == []
+
+
+@pytest.mark.parametrize("variable", ["SILMA_BIN", "SILMA_MODEL_DIR", "SILMA_VOIX"])
+def test_fichier_silma_introuvable_nomme_la_variable_sans_chemin(
+    env: dict[str, str], tmp_path: Path, variable: str
+) -> None:
+    env[variable] = str(tmp_path / "introuvable")
+    faux = FauxOllama()
+    with pytest.raises(ErreurConfiguration, match=variable) as err:
+        etapes_reelles(env, out=tmp_path, transport=faux)
+    assert str(tmp_path) not in str(err.value) and "/" not in str(err.value)
+    assert faux.requetes == []
+
+
+@pytest.mark.parametrize("valeur", ["renard", "../voix", " "])
+def test_voix_off_non_configuree_dans_silma_voix(
+    env: dict[str, str], tmp_path: Path, valeur: str
+) -> None:
+    env["VOIX_OFF_ID"] = valeur
+    with pytest.raises(ErreurConfiguration, match="VOIX_OFF_ID"):
+        etapes_reelles(env, out=tmp_path, transport=FauxOllama())
+
+
+# Scénario (#249): un seul modèle lourd à la fois
+
+
+def test_voix_apres_free_et_dechargement_d_ollama(env: dict[str, str], tmp_path: Path) -> None:
+    journal: list[str] = []
+    faux = FauxComfy(journal)
+
+    def decharge() -> None:
+        journal.append(f"ollama decharge (moteur lancé {len(appels_faux_silma(env))} fois)")
+
+    etapes = etapes_reelles(
+        env, out=tmp_path, transport=FauxOllama(), comfy=_comfy(faux), decharge=decharge
+    )
+    assert etapes.voix_off_id == VOIX_OFF
+    job = {
+        "schema_version": "2.0",
+        "output_dir": str(tmp_path / "voix"),
+        "repliques": [
+            {"replique_id": "r1", "voix_id": VOIX_OFF, "texte": "un deux", "langue": "ar"}
+        ],
+    }
+    resultat = etapes.voix(job)
+    assert journal == ["comfy POST /free", "ollama decharge (moteur lancé 0 fois)"]
+    assert len(appels_faux_silma(env)) == 1
+    assert [r["replique_id"] for r in resultat["repliques"]] == ["r1"]
 
 
 # Scénario: rendu en échec ou trop long (#245), via `lancer` et un faux ComfyUI

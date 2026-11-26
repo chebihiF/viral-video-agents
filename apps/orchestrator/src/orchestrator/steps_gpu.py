@@ -6,7 +6,8 @@ Durcissement de `steps_llm` : proxy ignoré, redirection refusée, délai global
 (lecture par blocs sous échéance), réponses bornées en taille. Les noms de fichiers rendus par
 ComfyUI ne servent qu'à `/view` (validés), jamais de chemin local : le clip est écrit sous
 `<out>/<run_id>/<job_id>.mp4`. VRAM 8 Go : `/free` à chaque changement de phase, modèles
-d'Ollama (`/api/ps`) déchargés avant chaque image. Graine dérivée du job_id (déterministe).
+d'Ollama (`/api/ps`) déchargés avant chaque image et avant la voix (SILMA, #249 : `avant_voix`).
+Graine dérivée du job_id (déterministe).
 Échec : `ErreurComfy`, message générique, sans prompt ni texte de ComfyUI, levée hors de tout
 bloc `except` (ni `__cause__` ni `__context__`).
 """
@@ -354,7 +355,7 @@ class _Workflow:
 
 @dataclass(eq=False)
 class EtapesGpu:
-    """Étapes `image` et `clip` du pipeline ; appelées sous le verrou GPU (une phase à la fois)."""
+    """Étapes `image`, `clip` et avant_voix ; sous le verrou GPU, une phase à la fois."""
 
     comfy: ClientComfy
     decharger_ollama: Callable[[], None]
@@ -369,6 +370,15 @@ class EtapesGpu:
         self._wan = _Workflow.charger(
             self.workflows / WAN, "SaveVideo", ("{{PROMPT}}", "{{IMAGE}}"), longueurs=1
         )
+
+    def avant_voix(self) -> None:
+        """Avant la voix (SILMA sur le GPU) : ComfyUI libéré (`/free`), Ollama déchargé.
+
+        La phase suivante (image) libère à nouveau ComfyUI ; panne : la voix n'est pas lancée.
+        """
+        self.comfy.liberer()
+        self.decharger_ollama()
+        self._phase = "voix"
 
     def image(self, job_id: str, image_prompt: str) -> str:
         """Image Flux déposée dans ComfyUI/input ; rend son chemin relatif `<job_id>.png`."""
