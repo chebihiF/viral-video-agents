@@ -1,8 +1,9 @@
 """Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
 
 Chaque étape est une fonction injectée, conforme aux contrats de `contracts/`. La sortie suit
-`contracts/pipeline-run.schema.json`. Étapes GPU (image, clip) sérialisées par un verrou commun à
-tous les runs. Aucun texte (dictée, texte adouci, message d'exception) dans l'état ni les logs.
+`contracts/pipeline-run.schema.json`. Étapes GPU (voix SILMA, image, clip) sérialisées par un verrou
+commun à tous les runs. Aucun texte (dictée, texte adouci, message d'exception) dans l'état ni les
+logs. Transition jusqu'à #250 : une réplique par plan, voix off provisoire (`voix_off_id`).
 """
 
 from __future__ import annotations
@@ -22,7 +23,8 @@ log = logging.getLogger(__name__)
 
 ETAPES = ("classification", "storyboard", "voix", "image", "clip", "montage")
 SCHEMA_VERSION = "1.0"
-GPU_LOCK = threading.Lock()  # une seule carte : un job ComfyUI à la fois, tous runs confondus
+GPU_LOCK = threading.Lock()  # une seule carte : un modèle lourd à la fois, tous runs confondus
+VOIX_OFF_ID = "voix-off"  # voix_id provisoire par défaut (mocks) ; réel : variable VOIX_OFF_ID
 FRAMES = 49  # 2 s à 24 i/s ; le montage boucle le clip sur la durée de la voix
 _RUN_ID = re.compile(r"[A-Za-z0-9_-]{1,48}")
 _IMAGE_PATH = re.compile(r"(?!.*\.\.)[A-Za-z0-9_][A-Za-z0-9_./-]{0,254}")  # gpu-job image_path
@@ -39,10 +41,11 @@ class Etapes:
 
     classifier: Callable[[str], Job]  # dictée -> classification.schema.json
     storyboard: Callable[[str], Job]  # texte autorisé -> storyboard.schema.json
-    voix: Callable[[Job], Job]  # tts-job.schema.json -> $defs/TtsResult
+    voix: Callable[[Job], Job]  # tts-job.schema.json v2.0 -> $defs/TtsResult (sous GPU_LOCK)
     image: Callable[[str, str], str]  # (job_id, image_prompt) -> image_path du gpu-job
     clip: Callable[[Job], str]  # gpu-job.schema.json -> chemin du clip
     montage: Callable[[Job], str]  # montage-job.schema.json -> MP4 final
+    voix_off_id: str = VOIX_OFF_ID  # voix de chaque réplique tant qu'il y en a une par plan (#250)
 
 
 class SortieNonConforme(Exception):
@@ -143,8 +146,10 @@ def _generer(
     run: Run, plans: list[Job], etapes: Etapes, dossier: str, gpu_lock: AbstractContextManager[Any]
 ) -> str:
     rid = run["run_id"]
-    wavs = _etape(run, "voix", lambda: _wavs(etapes.voix(_tts_job(plans, dossier)), len(plans)))
+    job_voix = _tts_job(plans, dossier, etapes.voix_off_id)
     with gpu_lock:  # une prise par phase : les plans d'un run ne sont pas entrelacés
+        wavs = _etape(run, "voix", lambda: _wavs(etapes.voix(job_voix), len(plans)))
+    with gpu_lock:
         images = _etape(run, "image", lambda: _images(etapes, rid, plans))
     with gpu_lock:
         clips = _etape(run, "clip", lambda: _clips(etapes, rid, plans, images))
@@ -170,30 +175,36 @@ def _plans(storyboard: Job) -> list[Job] | None:
     return plans
 
 
-def _tts_job(plans: list[Job], dossier: str) -> Job:
+def _tts_job(plans: list[Job], dossier: str, voix_id: str) -> Job:
+    """tts-job v2.0 de transition (#250) : une réplique par plan, même voix, langue inchangée."""
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "output_dir": f"{dossier}/voix",
-        "plans": [
-            {"plan_id": _plan_id(n), "texte": p["narration_fr"], "langue": "fr"}
+        "repliques": [
+            {
+                "replique_id": _replique_id(n),
+                "voix_id": voix_id,
+                "texte": p["narration_fr"],
+                "langue": "fr",
+            }
             for n, p in enumerate(plans, 1)
         ],
     }
 
 
-def _plan_id(n: int) -> str:
+def _replique_id(n: int) -> str:
     return f"plan-{n}"
 
 
 def _wavs(resultat: Job, attendus: int) -> list[str]:
-    """WAV associés aux plans par plan_id, dans l'ordre du storyboard."""
-    plans = resultat.get("plans")
-    if not isinstance(plans, list) or not all(isinstance(p, Mapping) for p in plans):
-        raise SortieNonConforme("voix : plans hors contrat")
-    wavs = {p.get("plan_id"): p.get("wav_path") for p in plans}
-    ids = [_plan_id(n) for n in range(1, attendus + 1)]
-    if len(plans) != attendus or sorted(wavs, key=str) != sorted(ids):
-        raise SortieNonConforme("voix : plan_id sans correspondance")
+    """WAV associés aux plans par replique_id, dans l'ordre du storyboard."""
+    repliques = resultat.get("repliques")
+    if not isinstance(repliques, list) or not all(isinstance(r, Mapping) for r in repliques):
+        raise SortieNonConforme("voix : repliques hors contrat")
+    wavs = {r.get("replique_id"): r.get("wav_path") for r in repliques}
+    ids = [_replique_id(n) for n in range(1, attendus + 1)]
+    if len(repliques) != attendus or sorted(wavs, key=str) != sorted(ids):
+        raise SortieNonConforme("voix : replique_id sans correspondance")
     return [_chemin(wavs[i], "voix") for i in ids]
 
 

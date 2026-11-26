@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import re
@@ -49,7 +50,8 @@ class Fakes:
         self.sortie_image: Any = None  # remplace la sortie de image si non None
         self.sortie_clip: Any = None
         self.ordre_wavs = 1  # -1 : WAV rendus dans l'ordre inverse
-        self.wav_ids: list[str] | None = None  # plan_id rendus par voix (sinon ceux du job)
+        self.wav_ids: list[str] | None = None  # replique_id rendus par voix (sinon ceux du job)
+        self.tts_job: Mapping[str, Any] = {}
         self.montage_job: Mapping[str, Any] = {}
         self.verdict_storyboard: Any = None  # remplace storyboard.classification si non None
         self.storyboard_sans_verdict = False  # True : storyboard sans champ classification
@@ -76,17 +78,20 @@ class Fakes:
     def voix(self, job: Mapping[str, Any]) -> Mapping[str, Any]:
         self._appel("voix")
         TTS_JOB.validate(job)
-        plans = [
+        self.tts_job = job
+        repliques = [
             {
-                "plan_id": p["plan_id"],
-                "wav_path": f"{job['output_dir']}/{p['plan_id']}.wav",
+                "replique_id": r["replique_id"],
+                "wav_path": f"{job['output_dir']}/{r['replique_id']}.wav",
                 "duree_s": 2.5,
             }
-            for p in job["plans"]
+            for r in job["repliques"]
         ]
         if self.wav_ids is not None:
-            plans = [dict(p, plan_id=i) for p, i in zip(plans, self.wav_ids, strict=True)]
-        return {"schema_version": "1.0", "plans": plans[:: self.ordre_wavs]}
+            repliques = [
+                dict(r, replique_id=i) for r, i in zip(repliques, self.wav_ids, strict=True)
+            ]
+        return {"schema_version": "2.0", "repliques": repliques[:: self.ordre_wavs]}
 
     def image(self, job_id: str, image_prompt: str) -> str:
         self._appel("image")
@@ -309,7 +314,11 @@ class DetecteurChevauchement:
             with self._gpu():
                 return fakes.clip(job)
 
-        return Etapes(fakes.classifier, fakes.storyboard, fakes.voix, image, clip, fakes.montage)
+        def voix(job: Mapping[str, Any]) -> Mapping[str, Any]:
+            with self._gpu():  # SILMA tourne sur le GPU (#249)
+                return fakes.voix(job)
+
+        return Etapes(fakes.classifier, fakes.storyboard, voix, image, clip, fakes.montage)
 
 
 def _deux_runs_concurrents(
@@ -362,7 +371,51 @@ def test_verrou_gpu_pris_une_fois_par_phase() -> None:
     verrou = VerrouCompteur()
     run = lancer(DICTEE, Fakes().etapes(), run_id="run-8", gpu_lock=verrou)
     assert run["etat"] == "ok"
-    assert verrou.prises == 2
+    assert verrou.prises == 3  # voix (#249), image, clip
+
+
+# Scénario (#249): un seul modèle lourd à la fois
+
+
+def test_voix_sous_le_verrou_gpu() -> None:
+    verrou = threading.Lock()
+    tenu: list[bool] = []
+    fakes = Fakes()
+    voix = fakes.voix
+
+    def voix_tracee(job: Mapping[str, Any]) -> Mapping[str, Any]:
+        tenu.append(verrou.locked())
+        return voix(job)
+
+    etapes = dataclasses.replace(fakes.etapes(), voix=voix_tracee)
+    assert lancer(DICTEE, etapes, run_id="run-12", gpu_lock=verrou)["etat"] == "ok"
+    assert tenu == [True]
+
+
+# Transition (#249, jusqu'à #250) : une réplique par plan, voix off provisoire, langue inchangée
+
+
+def test_une_replique_par_plan_avec_la_voix_off_provisoire() -> None:
+    fakes = Fakes()
+    etapes = dataclasses.replace(fakes.etapes(), voix_off_id="narratrice")
+    run = lancer(DICTEE, etapes, run_id="run-13", workdir="/w")
+    assert run["etat"] == "ok"
+    job = fakes.tts_job
+    assert job["schema_version"] == "2.0" and job["output_dir"] == "/w/run-13/voix"
+    plans = _load("examples/storyboard.valid.json")["plans"]
+    assert job["repliques"] == [
+        {
+            "replique_id": f"plan-{n}",
+            "voix_id": "narratrice",
+            "texte": p["narration_fr"],
+            "langue": "fr",
+        }
+        for n, p in enumerate(plans, 1)
+    ]
+
+
+def test_voix_off_par_defaut_des_etapes() -> None:
+    assert Fakes().etapes().voix_off_id == "voix-off"
 
 
 @pytest.mark.parametrize(
@@ -388,7 +441,7 @@ def test_sortie_gpu_hors_contrat_est_une_erreur(etape: str, sortie: Any) -> None
     assert "montage" not in fakes.appels
 
 
-def test_wavs_associes_par_plan_id() -> None:
+def test_wavs_associes_par_replique_id() -> None:
     fakes = Fakes()
     fakes.ordre_wavs = -1
     run = lancer(DICTEE, fakes.etapes(), run_id="run-10", workdir="/w")

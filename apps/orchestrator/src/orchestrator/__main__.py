@@ -1,8 +1,9 @@
 """CLI de l'orchestrateur (#138) : `python -m orchestrator run --mocks --dictee-file F --out DIR`.
 
 Codes de sortie : 0 ok, 1 erreur, 2 bloque, 64 usage/dictée invalide, 78 configuration absente
-(sans `--mocks` : OLLAMA_URL, PIPER_BIN, PIPER_MODEL, COMFY_URL en boucle locale ; échec fermé
-avant tout appel réseau).
+(sans `--mocks` : OLLAMA_URL ; SILMA_BIN, SILMA_MODEL_DIR, SILMA_VOIX et VOIX_OFF_ID pour la voix
+SILMA, #249 ; COMFY_URL en boucle locale ; échec fermé avant tout appel réseau ni lancement du
+moteur ; le message nomme la variable, jamais un chemin). Piper n'est plus pris en charge.
 Sous-commande `purge` (#152) : codes 0 ok, 1 suppression échouée, 2 usage.
 Sous-commande `galerie` (#151) : page HTML statique des runs ; codes 0 ok, 1 écriture, 2 usage.
 Image et clip réels via l'API ComfyUI (#245) : clips téléchargés sous `<out>/<run_id>/`.

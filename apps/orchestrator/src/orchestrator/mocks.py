@@ -50,9 +50,12 @@ def _storyboard(texte: str) -> Mapping[str, Any]:
 
 def _voix(job: Mapping[str, Any]) -> Mapping[str, Any]:
     return {
-        "plans": [
-            {"plan_id": p["plan_id"], "wav_path": f"{job['output_dir']}/{p['plan_id']}.wav"}
-            for p in job["plans"]
+        "repliques": [
+            {
+                "replique_id": r["replique_id"],
+                "wav_path": f"{job['output_dir']}/{r['replique_id']}.wav",
+            }
+            for r in job["repliques"]
         ]
     }
 

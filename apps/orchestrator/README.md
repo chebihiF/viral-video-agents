@@ -16,7 +16,7 @@ run["etat"], run.get("video_path")  # ok | bloque | erreur
 |---|---|---|
 | `classifier` | `(dictee) -> classification` | `classification.schema.json` |
 | `storyboard` | `(texte) -> storyboard` | `storyboard.schema.json` |
-| `voix` | `(tts_job) -> TtsResult` | `tts-job.schema.json` |
+| `voix` (GPU) | `(tts_job) -> TtsResult` | `tts-job.schema.json` v2.0 |
 | `image` (GPU) | `(job_id, image_prompt) -> image_path` | `image_path` du `gpu-job` |
 | `clip` (GPU) | `(gpu_job) -> clip_path` | `gpu-job.schema.json` |
 | `montage` | `(montage_job) -> video_path` | `montage-job.schema.json` |
@@ -25,9 +25,10 @@ run["etat"], run.get("video_path")  # ok | bloque | erreur
 - `libre` : le storyboard reçoit la dictée ; `adouci` : le `texte_adouci`, jamais la dictée ; `bloque` : aucune étape de génération, run « bloque ».
 - Second filtre (#244) : le champ `classification` du storyboard est relu. `bloque` : run « bloque » (étapes `classification` et `storyboard` en ok, ni voix, ni image, ni clip, ni montage, CLI code 2) ; absent ou hors `libre|adouci|bloque` : run « erreur » à l'étape `storyboard` (échec fermé).
 - Échec d'une étape (exception ou sortie hors contrat) : run « erreur », dernière étape en `statut: erreur`, suivantes non appelées ; seul le type de l'exception est journalisé.
-- GPU en série : verrou commun à tous les runs du processus (`GPU_LOCK`, injectable via `gpu_lock`), pris une fois pour toute la phase `image` (tous les plans), puis une fois pour la phase `clip` : un seul changement de modèle ComfyUI, plans d'un run non entrelacés avec un autre run.
+- GPU en série : verrou commun à tous les runs du processus (`GPU_LOCK`, injectable via `gpu_lock`), pris une fois pour la phase `voix` (SILMA, #249), une fois pour toute la phase `image` (tous les plans), puis une fois pour la phase `clip` : la voix ne chevauche aucune image ni aucun clip, plans d'un run non entrelacés avec un autre run.
+- Transition jusqu'à #250 : le storyboard est converti en une réplique par plan (`replique_id` `plan-<n>`, `texte` = `narration_fr`, `langue` `fr` inchangée), toutes avec la voix provisoire `Etapes.voix_off_id` (défaut `voix-off` ; réel : `VOIX_OFF_ID`). Cette limite reste dans le pipeline, pas dans le contrat ni dans l'adaptateur.
 - `job_id` GPU distincts par étape (clé d'idempotence du gpu-job) : `<run_id>-img-<n>`, `<run_id>-clip-<n>`.
-- Sorties vérifiées : `image` doit rendre un `image_path` conforme au gpu-job (relatif, sans `..`) ; `clip` et les WAV un chemin non vide sans NUL ni segment `..` ; WAV associés aux plans par `plan_id` (manquant ou doublon : erreur de l'étape `voix`).
+- Sorties vérifiées : `image` doit rendre un `image_path` conforme au gpu-job (relatif, sans `..`) ; `clip` et les WAV un chemin non vide sans NUL ni segment `..` ; WAV associés aux plans par `replique_id` (manquant ou doublon : erreur de l'étape `voix`).
 - Clips de 49 images (2 s à 24 i/s) ; le montage les boucle sur la durée de la voix.
 - Aucun texte de dictée, texte adouci ni message d'exception dans l'état ou les logs (`run=… etape=… statut=… duree_s=…`).
 - Les dossiers (`<workdir>/<run_id>/voix`, `final.mp4`) sont créés par les étapes, pas par l'orchestrateur.
@@ -41,7 +42,7 @@ make run-mock [DICTEE=F]                                        # sortie dans .v
 
 - Écrit `DIR/run.json` (`pipeline-run.schema.json`, sans dictée) ; `etat` ok : code 0, erreur : 1, bloque : 2.
 - Dictée vide, illisible ou de plus de 2000 caractères, ou arguments invalides : code 64, rien d'écrit.
-- Sans `--mocks` : étapes réelles (Ollama, Piper, ComfyUI, montage) ; `OLLAMA_URL`, `PIPER_BIN`, `PIPER_MODEL` ou `COMFY_URL` absente ou invalide : code 78, aucun appel réseau. Clips téléchargés sous `DIR/<run_id>/`.
+- Sans `--mocks` : étapes réelles (Ollama, SILMA TTS, ComfyUI, montage) ; `OLLAMA_URL`, `SILMA_BIN`, `SILMA_MODEL_DIR`, `SILMA_VOIX`, `VOIX_OFF_ID` (voix off provisoire, doit figurer dans `SILMA_VOIX`) ou `COMFY_URL` absente ou invalide : code 78, le message nomme la variable sans chemin, aucun appel réseau, aucun moteur lancé. `PIPER_BIN` / `PIPER_MODEL` ne sont plus lus (aucun repli sur Piper). Clips téléchargés sous `DIR/<run_id>/`.
 - `--mocks` (`mocks.py`) : étapes factices, sans GPU ni fichier ; le mot-clé `MOCK-BLOQUE` dans la dictée la fait classer « bloque ». `video_path` est fictif.
 - La dictée n'est ni écrite, ni affichée, ni journalisée (logs `run=… etape=…` sur stderr).
 
@@ -62,19 +63,19 @@ etapes = Etapes(classifier_ollama(client), storyboard_ollama(client), voix, imag
 - Ni dictée ni sortie du modèle dans les logs ou les exceptions (sans `__cause__` ni `__context__`).
 - Transport injectable `(url, corps, timeout) -> octets` : faux Ollama en test, aucun appel réseau.
 
-## Étapes média réelles (#136)
+## Étapes média réelles (#136, #249)
 
 ```python
-from orchestrator.steps_media import montage_reel, voix_piper
+from orchestrator.steps_media import montage_reel, voix_silma
 
-# PIPER_BIN / PIPER_MODEL lus dans os.environ
-etapes = Etapes(classifier, storyboard, voix_piper(), image, clip, montage_reel())
+# SILMA_BIN / SILMA_MODEL_DIR / SILMA_VOIX lus dans os.environ (voir media-service/README)
+etapes = Etapes(classifier, storyboard, voix_silma(), image, clip, montage_reel(), "narratrice")
 ```
 
 - Installation : extra `media` (`orchestrator[media]`, dépendance locale media-service) ; Python 3.12 requis pour ce module seul, le cœur reste stdlib / 3.9+.
-- `voix_piper(env=None)` : `tts-job` -> `TtsResult` via `media_service.tts.synthetiser` ; crée `output_dir` ; `PIPER_BIN` / `PIPER_MODEL` lus dans `env` (sinon l'environnement). Piper ou modèle absent : `ErreurConfiguration` claire avant toute synthèse, le pipeline range le run en « erreur » sur l'étape `voix`.
+- `voix_silma(env=None)` : `tts-job` v2.0 -> `TtsResult` via `media_service.tts.synthetiser` (un WAV par réplique, avec la référence de son `voix_id`) ; crée `output_dir` ; `SILMA_BIN` / `SILMA_MODEL_DIR` / `SILMA_VOIX` lus dans `env` (sinon l'environnement). Configuration absente : `ErreurConfiguration` avant toute synthèse ; `voix_id` inconnu : `ErreurVoix` sans lancer le moteur ; le pipeline range le run en « erreur » sur l'étape `voix`. Dans `etapes_reelles`, la voix est précédée de `EtapesGpu.avant_voix()`.
 - `montage_reel()` : durées des WAV (ffprobe) -> `subtitles.write_ass` (`<sortie>.ass` à côté du MP4) -> `run_montage` avec `subtitles_path` -> chemin du MP4 (1080x1920). L'ASS est supprimé si le montage échoue.
-- Pas de fuite : erreurs du montage réécrites en `ErreurMontage` (type seul, sans le message de FFmpeg), ni cause ni contexte ; les messages de voix nomment le plan, jamais son texte.
+- Pas de fuite : erreurs du montage réécrites en `ErreurMontage` (type seul, sans le message de FFmpeg), ni cause ni contexte ; les messages de voix nomment la réplique ou la voix, jamais son texte.
 
 ## Étapes GPU réelles via ComfyUI (#245)
 
@@ -88,7 +89,7 @@ etapes = Etapes(classifier, storyboard, voix, gpu.image, gpu.clip, montage)
 - `COMFY_URL` : boucle locale seulement (`http://127.0.0.1:8188`, `http://localhost:8188`, `http://[::1]:8188`), par exemple l'extrémité d'un tunnel ouvert à la main. Absente, autre hôte, identifiants, chemin ou requête dans l'URL : `ErreurConfiguration` (CLI : code 78), aucun appel réseau.
 - `image(job_id, prompt)` : `comfyui/workflows/flux_schnell_t2i_api.json` (`{{PROMPT}}` remplacé dans la structure JSON) → `/prompt`, `/history/{id}`, `/view` (PNG vérifié) → `/upload/image` (`overwrite`) ; rend `<job_id>.png`, relatif à `ComfyUI/input`. Nom rendu différent : échec.
 - `clip(gpu_job)` : gpu-job vérifié (`job_id` `<run_id>-clip-<n>`, `image_path`, `frames` 4n+1) → `wan22_5b_i2v_api.json` (`{{PROMPT}}` = `motion_prompt`, `{{IMAGE}}` = `image_path`, `length` = `frames`) ; MP4 (`ftyp` vérifié) écrit sous `<out>/<run_id>/<job_id>.mp4` (création exclusive, sans suivre de lien symbolique).
-- VRAM 8 Go : `POST /free` (`unload_models`, `free_memory`) à chaque changement de phase (entrée en phase clip, et en phase image si la précédente ne l'était pas : Wan ne reste pas chargé) ; avant chaque image, tous les modèles listés par `GET <OLLAMA_URL>/api/ps` (réponse bornée, 16 noms validés au plus) sont déchargés (`POST /api/generate`, `keep_alive: 0`). Appels faits sous le verrou GPU du pipeline.
+- VRAM 8 Go : `POST /free` (`unload_models`, `free_memory`) à chaque changement de phase (entrée en phase clip, et en phase image si la précédente ne l'était pas : Wan ne reste pas chargé) ; avant chaque image, tous les modèles listés par `GET <OLLAMA_URL>/api/ps` (réponse bornée, 16 noms validés au plus) sont déchargés (`POST /api/generate`, `keep_alive: 0`). Avant la voix (`avant_voix`, #249) : `/free` puis déchargement d'Ollama, la phase image suivante libère à nouveau ComfyUI ; le moteur SILMA est arrêté (groupe de processus compris) avant le retour de l'étape. Appels faits sous le verrou GPU du pipeline.
 - Graine (`seed` du KSampler) dérivée du `job_id` (SHA-256, 32 bits) : même job, même rendu ; plans distincts, graines distinctes.
 - Durcissement (comme `steps_llm`) : proxy d'environnement ignoré, redirection refusée, 30 s par requête, en-têtes et lecture compris (blocs de 64 Kio sous échéance `time.monotonic()`, socket coupée à l'échéance), corps plus court que `Content-Length` refusé, `/view` borné par le reste du délai de l'étape, rendu borné (image 600 s, clip 1800 s, `/history` lu chaque seconde), réponses bornées (JSON 1 Mo, PNG 50 Mo, MP4 200 Mo). Les noms de fichiers rendus par ComfyUI ne servent qu'à `/view` (validés : ni `..`, ni `/`) ; jamais de chemin local.
 - Échec (`ErreurComfy`, `OllamaInjoignable`) : message générique, type seul journalisé, ni prompt ni texte de ComfyUI ; le run est « erreur » sur l'étape, sans MP4 final.
@@ -100,8 +101,8 @@ etapes = Etapes(classifier, storyboard, voix, gpu.image, gpu.clip, montage)
 make e2e-mock   # pytest -m e2e : dictée -> MP4, ffmpeg local requis, sans GPU ni réseau
 ```
 
-- `tests/test_e2e_mock.py` pilote le CLI (`orchestrator.__main__.main`) avec des étapes injectées (`tests/fakes.py`) : classification et storyboard factices, **faux Piper** (script écrit en dossier temporaire, 0,25 s par mot), image et clip factices (clips `lavfi`, GPU tracé), montage FFmpeg **réel** avec ASS incrusté.
-- Scénarios : MP4 H.264 + AAC 1080x1920 de durée = somme des WAV (±0,2 s) ; un `.ass` à côté du MP4 avec un événement par mot ; dictée « bloque » : aucun MP4, run « bloque » ; Piper absent : run « erreur » sur `voix`, aucun MP4 ni ASS ; étapes image/clip de deux runs concurrents sans chevauchement.
+- `tests/test_e2e_mock.py` pilote le CLI (`orchestrator.__main__.main`) avec des étapes injectées (`tests/fakes.py`) : classification et storyboard factices, **faux SILMA** (`env_faux_silma` : script en dossier temporaire, 0,25 s par mot, voix de référence WAV générée à la volée), image et clip factices (clips `lavfi`, GPU tracé), montage FFmpeg **réel** avec ASS incrusté.
+- Scénarios : MP4 H.264 + AAC 1080x1920 de durée = somme des WAV (±0,2 s) ; un `.ass` à côté du MP4 avec un événement par mot ; dictée « bloque » : aucun MP4, run « bloque » ; SILMA non configuré : run « erreur » sur `voix`, aucun MP4 ni ASS ; voix, image et clip de deux runs concurrents sans chevauchement.
 - Marqueur `e2e` ; test sauté si `ffmpeg` / `ffprobe` sont absents. Sorties en dossier temporaire pytest, dictée de test fixe et neutre, aucune dictée dans les logs ni `run.json`.
 - Aussi exécuté par `make test` / `make check`.
 

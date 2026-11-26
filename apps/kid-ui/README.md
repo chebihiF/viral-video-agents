@@ -30,7 +30,7 @@ uv run --with ctranslate2 --with transformers --with torch ct2-transformers-conv
 ```
 
 Vérifier la licence affichée sur la page du modèle avant usage, puis lancer avec `--asr faster-whisper`. Les fichiers du modèle restent hors dépôt.
-Pour l'API jobs (#162), lancer avec l'environnement du dépôt (`uv run python apps/kid-ui/server.py …`) : le serveur appelle `python -m orchestrator run --dictee-file - --out <runs>/<job_id>` (sans `--mocks`, configuration `OLLAMA_URL`, `PIPER_BIN`, `PIPER_MODEL` requise, sinon job `error`). Runs dans `--runs-dir` (défaut `~/.cache/vva/kid-ui-runs`).
+Pour l'API jobs (#162), lancer avec l'environnement du dépôt (`uv run python apps/kid-ui/server.py …`) : le serveur appelle `python -m orchestrator run --dictee-file - --out <runs>/<job_id>` (sans `--mocks`, configuration `OLLAMA_URL`, `SILMA_BIN`, `SILMA_MODEL_DIR`, `SILMA_VOIX`, `VOIX_OFF_ID` et `COMFY_URL` requise, sinon job `error` ; voir `apps/orchestrator/README.md`). Runs dans `--runs-dir` (défaut `~/.cache/vva/kid-ui-runs`).
 
 Écoute `127.0.0.1` par défaut ; `--host` pour l'IP LAN. Sans certificat, le serveur refuse de démarrer (HTTP) sauf `--insecure-dev`. Génération du certificat et installation sur le téléphone : `infra/kid-ui/README.md` (#160).
 

@@ -1,41 +1,29 @@
-"""Étapes voix (Piper) et montage réelles (#136) : faux Piper, lavfi, sans fuite de texte."""
+"""Étapes voix (SILMA, #249) et montage réelles (#136) : faux moteur, lavfi, sans fuite de texte."""
 
 from __future__ import annotations
 
 import ast
+import dataclasses
 import json
 import logging
 import shutil
-import stat
 import subprocess
-import sys
 import wave
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fakes import FAUX_SILMA, VOIX_OFF, appels_faux_silma, env_faux_silma
 from jsonschema import Draft202012Validator
 
 from orchestrator.pipeline import Etapes, lancer
 from orchestrator.steps_llm import ErreurConfiguration
-from orchestrator.steps_media import montage_reel, voix_piper
+from orchestrator.steps_media import ErreurVoix, montage_reel, voix_silma
 
 RACINE = Path(__file__).resolve().parents[3]
 CONTRACTS = RACINE / "contracts"
 SECRET = "Secret-Prenom-Enfant"  # noqa: S105 - marqueur de fuite
-
-FAKE_PIPER = f"""#!{sys.executable}
-import sys, wave
-out = sys.argv[sys.argv.index("--output_file") + 1]
-text = sys.stdin.read()
-rate = 24000
-with wave.open(out, "wb") as w:
-    w.setnchannels(1)
-    w.setsampwidth(2)
-    w.setframerate(rate)
-    w.writeframes(b"\\0\\0" * (rate // 4) * len(text.split()))
-"""
 
 needs_ffmpeg = pytest.mark.skipif(
     shutil.which("ffmpeg") is None or shutil.which("ffprobe") is None,
@@ -47,54 +35,63 @@ def _schema(nom: str) -> Any:
     return json.loads((CONTRACTS / nom).read_text(encoding="utf-8"))
 
 
-def _tts_job(out: Path) -> dict[str, Any]:
+def _tts_job(out: Path, voix_id: str = VOIX_OFF) -> dict[str, Any]:
     return {
-        "schema_version": "1.0",
+        "schema_version": "2.0",
         "output_dir": str(out),
-        "plans": [
-            {"plan_id": "plan-1", "texte": f"{SECRET} dit un deux trois", "langue": "fr"},
-            {"plan_id": "plan-2", "texte": "quatre cinq six sept", "langue": "fr"},
+        "repliques": [
+            {
+                "replique_id": "r1",
+                "voix_id": voix_id,
+                "texte": f"{SECRET} dit un deux trois",
+                "langue": "ar",
+            },
+            {
+                "replique_id": "r2",
+                "voix_id": VOIX_OFF,
+                "texte": "quatre cinq six sept",
+                "langue": "ar",
+            },
         ],
     }
 
 
 @pytest.fixture
 def env(tmp_path: Path) -> dict[str, str]:
-    binary = tmp_path / "piper"
-    binary.write_text(FAKE_PIPER, encoding="utf-8")
-    binary.chmod(binary.stat().st_mode | stat.S_IXUSR)
-    model = tmp_path / "voix.onnx"
-    model.write_bytes(b"model")
-    return {"PIPER_BIN": str(binary), "PIPER_MODEL": str(model)}
+    return env_faux_silma(tmp_path / "silma")
 
 
-def test_voix_reelle_avec_faux_piper(env: dict[str, str], tmp_path: Path) -> None:
+def test_voix_reelle_avec_faux_silma(env: dict[str, str], tmp_path: Path) -> None:
     out = tmp_path / "run" / "voix"  # le dossier est créé par l'étape
-    resultat = voix_piper(env)(_tts_job(out))
+    resultat = voix_silma(env)(_tts_job(out))
 
-    resolver = Draft202012Validator(_schema("tts-job.schema.json"))
-    schema = {"$ref": "#/$defs/TtsResult", "$defs": resolver.schema["$defs"]}
+    schema = {"$ref": "#/$defs/TtsResult", "$defs": _schema("tts-job.schema.json")["$defs"]}
     Draft202012Validator(schema).validate(resultat)
-    assert [p["plan_id"] for p in resultat["plans"]] == ["plan-1", "plan-2"]
-    assert sorted(p.name for p in out.glob("*.wav")) == ["plan-1.wav", "plan-2.wav"]
-    for p in resultat["plans"]:
-        assert Path(p["wav_path"]).is_file()
-        assert p["duree_s"] > 0
+    assert [r["replique_id"] for r in resultat["repliques"]] == ["r1", "r2"]
+    assert sorted(p.name for p in out.glob("*.wav")) == ["r1.wav", "r2.wav"]
+    assert [r["duree_s"] for r in resultat["repliques"]] == [
+        pytest.approx(1.25),
+        pytest.approx(1.0),
+    ]
+    assert len(appels_faux_silma(env)) == 2
 
 
-@pytest.mark.parametrize("env_vide", [{}, {"PIPER_BIN": "piper-inexistant-xyz"}])
-def test_piper_absent_erreur_de_configuration(env_vide: dict[str, str], tmp_path: Path) -> None:
-    with pytest.raises(ErreurConfiguration, match="PIPER_BIN"):
-        voix_piper(env_vide)(_tts_job(tmp_path / "voix"))
+@pytest.mark.parametrize("variable", ["SILMA_BIN", "SILMA_MODEL_DIR", "SILMA_VOIX"])
+def test_configuration_absente_erreur_de_configuration(
+    env: dict[str, str], tmp_path: Path, variable: str
+) -> None:
+    del env[variable]
+    with pytest.raises(ErreurConfiguration, match=variable) as err:
+        voix_silma(env)(_tts_job(tmp_path / "voix"))
+    assert err.value.__cause__ is None and err.value.__context__ is None
 
 
-def test_modele_absent_erreur_de_configuration(env: dict[str, str], tmp_path: Path) -> None:
-    del env["PIPER_MODEL"]
-    with pytest.raises(ErreurConfiguration, match="PIPER_MODEL"):
-        voix_piper(env)(_tts_job(tmp_path / "voix"))
+def test_piper_seul_ne_suffit_plus(tmp_path: Path) -> None:
+    with pytest.raises(ErreurConfiguration, match="SILMA_BIN"):
+        voix_silma({"PIPER_BIN": "piper", "PIPER_MODEL": "voix.onnx"})(_tts_job(tmp_path))
 
 
-def test_piper_absent_range_le_run_en_erreur_sur_voix(
+def test_configuration_absente_range_le_run_en_erreur_sur_voix(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
     from orchestrator.mocks import etapes_factices
@@ -103,7 +100,7 @@ def test_piper_absent_range_le_run_en_erreur_sur_voix(
     etapes = Etapes(
         base.classifier,
         base.storyboard,
-        voix_piper({}),
+        voix_silma({}),
         base.image,
         base.clip,
         base.montage,
@@ -115,13 +112,112 @@ def test_piper_absent_range_le_run_en_erreur_sur_voix(
     assert "ErreurConfiguration" in caplog.text
 
 
+def test_voix_inconnue_aucun_moteur_lance(env: dict[str, str], tmp_path: Path) -> None:
+    out = tmp_path / "voix"
+    with pytest.raises(ErreurVoix, match="renard"):
+        voix_silma(env)(_tts_job(out, voix_id="renard"))
+    assert appels_faux_silma(env) == []
+    assert list(out.glob("*.wav")) == []
+
+
 def test_tts_job_hors_contrat_sans_fuite(env: dict[str, str], tmp_path: Path) -> None:
     job = _tts_job(tmp_path / "voix")
-    job["plans"][0]["texte"] = SECRET + "\0"
-    with pytest.raises(Exception) as err:  # noqa: B017, PT011
-        voix_piper(env)(job)
+    job["repliques"][0]["texte"] = SECRET + "\0"
+    with pytest.raises(ErreurVoix) as err:
+        voix_silma(env)(job)
     assert SECRET not in str(err.value)
     assert err.value.__cause__ is None and err.value.__context__ is None
+
+
+def test_job_1_0_refuse(env: dict[str, str], tmp_path: Path) -> None:
+    job = {"schema_version": "1.0", "output_dir": str(tmp_path), "plans": []}
+    with pytest.raises(ErreurVoix, match="tts-job"):
+        voix_silma(env)(job)
+
+
+def test_moteur_bavard_en_echec_sans_fuite(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    bavard = (
+        FAUX_SILMA
+        + "sys.stdout.write(entree['texte'])\nsys.stderr.write(entree['texte'])\nsys.exit(4)\n"
+    )
+    env = env_faux_silma(tmp_path / "silma", bavard)
+    with caplog.at_level(logging.DEBUG), pytest.raises(ErreurVoix, match="r1") as err:
+        voix_silma(env)(_tts_job(tmp_path / "voix"))
+    assert SECRET not in str(err.value) and SECRET not in caplog.text
+    assert err.value.__cause__ is None and err.value.__context__ is None
+    assert not [a for a in appels_faux_silma(env) if SECRET in json.dumps(a)]
+    assert list((tmp_path / "voix").glob("*.wav")) == []
+
+
+# Scénarios (#249): texte jamais exposé, échec au milieu des répliques (run complet)
+
+
+MOTEUR_BAVARD_A_LA_2E = FAUX_SILMA + (
+    "c = Path(sys.argv[0]).with_suffix('.n')\n"
+    "n = int(c.read_text()) if c.exists() else 0\n"
+    "c.write_text(str(n + 1))\n"
+    "if n >= 1:\n"
+    "    sys.stdout.write(entree['texte'])\n"
+    "    sys.stderr.write(entree['texte'])\n"
+    "    sys.exit(3)\n"
+)
+
+
+def test_run_en_erreur_sur_voix_sans_wav_ni_mp4_ni_texte(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    from orchestrator.mocks import etapes_factices
+
+    env = env_faux_silma(tmp_path / "silma", MOTEUR_BAVARD_A_LA_2E)
+    base = etapes_factices()
+    etapes = Etapes(
+        base.classifier,
+        base.storyboard,
+        voix_silma(env),
+        base.image,
+        base.clip,
+        base.montage,
+        env["VOIX_OFF_ID"],
+    )
+    narrations = [p["narration_fr"] for p in base.storyboard("x")["plans"]]
+    with caplog.at_level(logging.DEBUG):
+        run = lancer("Dictée de test", etapes, run_id="r249", workdir=str(tmp_path / "w"))
+    assert run["etat"] == "erreur"
+    assert (run["etapes"][-1]["nom"], run["etapes"][-1]["statut"]) == ("voix", "erreur")
+    assert "video_path" not in run
+    assert list((tmp_path / "w").rglob("*.wav")) == []
+    assert list((tmp_path / "w").rglob("*.mp4")) == []
+    assert len(appels_faux_silma(env)) == 2
+    for texte in (json.dumps(run), caplog.text, json.dumps(appels_faux_silma(env))):
+        assert not [n for n in narrations if n in texte]
+    fichiers = [p for p in tmp_path.rglob("*") if p.is_file()]
+    assert not [p for p in fichiers for n in narrations if n.encode() in p.read_bytes()]
+
+
+def test_run_en_erreur_sur_voix_si_delai_depasse_a_la_deuxieme_replique(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from media_service import tts
+    from orchestrator.mocks import etapes_factices
+
+    lent = FAUX_SILMA + (
+        "import time\n"
+        "if len(Path(sys.argv[0]).with_suffix('.log').read_text().splitlines()) >= 2:\n"
+        "    time.sleep(60)\n"
+    )
+    env = env_faux_silma(tmp_path / "silma", lent)
+    monkeypatch.setattr(tts, "DELAI_S", 1.5)
+    base = etapes_factices()
+    etapes = dataclasses.replace(base, voix=voix_silma(env), voix_off_id=env["VOIX_OFF_ID"])
+    run = lancer("Dictée de test", etapes, run_id="r249d", workdir=str(tmp_path / "w"))
+    assert run["etat"] == "erreur"
+    assert (run["etapes"][-1]["nom"], run["etapes"][-1]["statut"]) == ("voix", "erreur")
+    assert "video_path" not in run
+    assert len(appels_faux_silma(env)) == 2
+    assert list((tmp_path / "w").rglob("*.wav")) == []
+    assert list((tmp_path / "w").rglob("*.mp4")) == []
 
 
 # --- montage -----------------------------------------------------------------------------------

@@ -333,7 +333,7 @@ def test_echec_ferme_code_ex_config_du_cli(
 
 
 def test_echec_ferme_configuration_absente(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    for var in ("OLLAMA_URL", "PIPER_BIN", "PIPER_MODEL"):
+    for var in ("OLLAMA_URL", "SILMA_BIN", "SILMA_MODEL_DIR", "SILMA_VOIX", "VOIX_OFF_ID"):
         monkeypatch.delenv(var, raising=False)
     store = jobs.JobStore(tmp_path / "runs")  # vrai CLI orchestrateur, sans --mocks
     job_id = store.submit(DICTEE)
