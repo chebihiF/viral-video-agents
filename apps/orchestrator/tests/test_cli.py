@@ -384,6 +384,41 @@ def test_reel_rendu_en_echec_sans_mp4_ni_fuite(
         assert not [p for p in prompts if p in texte]
 
 
+@pytest.mark.parametrize(("cible", "etape"), [("SaveImage", "image"), ("SaveVideo", "clip")])
+@pytest.mark.parametrize("mode", ["refus", "jamais"])
+def test_reel_rendu_refuse_ou_trop_long_run_en_erreur(
+    tmp_path: Path,
+    reel: Callable[..., _Reel],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    mode: str,
+    cible: str,
+    etape: str,
+) -> None:
+    from orchestrator import etapes
+
+    depuis_env = etapes.comfy_depuis_env
+    monkeypatch.setattr(etapes, "EtapesGpu", _gpu_delais_courts(etapes.EtapesGpu))
+    monkeypatch.setattr(
+        etapes,
+        "comfy_depuis_env",
+        lambda env: dataclasses.replace(depuis_env(env), intervalle_s=0.01),
+    )
+    r = reel(mode, cible)
+    code, run = _run_reel(tmp_path, r)
+    sortie = capsys.readouterr()
+    assert (code, run["etat"], run["etapes"][-1]["nom"]) == (1, "erreur", etape)
+    assert r.montages == []
+    assert not list(r.out.rglob("final.mp4"))
+    prompts = [p[c] for p in STORYBOARD["plans"] for c in ("image_prompt", "motion_prompt")]
+    for texte in (run_texte(r.out), sortie.out, sortie.err):
+        assert not [p for p in prompts if p in texte]
+
+
+def _gpu_delais_courts(classe: type) -> Callable[..., Any]:
+    return lambda *args: classe(*args, delai_image_s=0.5, delai_clip_s=0.5)
+
+
 def test_reel_nom_de_fichier_hostile_rien_hors_du_run(
     tmp_path: Path, reel: Callable[..., _Reel]
 ) -> None:

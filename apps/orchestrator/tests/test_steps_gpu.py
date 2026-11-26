@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+import contextlib
 import http.server
 import json
 import logging
 import re
+import socket
 import threading
 import time
 from collections.abc import Callable, Iterator
@@ -545,3 +547,88 @@ def test_http_view_au_compte_gouttes_borne_par_le_delai_de_l_etape(
     with pytest.raises(ErreurComfy):
         gpu.image("r245-img-1", PROMPT)
     assert time.monotonic() - debut < 1.5
+
+
+# QA #245 : cas limites du correctif f827efe (reprise après panne, /api/ps vide, darija)
+
+
+def test_ps_sans_modele_charge_aucun_dechargement() -> None:
+    ollama = FauxOllama([], b'{"models": []}')
+    decharger_ollama(OLLAMA, ollama)()
+    assert ollama.corps == []
+
+
+def test_free_en_panne_aucun_rendu_puis_free_rejoue(tmp_path: Path) -> None:
+    gpu, faux, journal = _gpu(tmp_path)
+    original = faux.repondre
+    pannes = [True]
+
+    def repondre(methode: str, chemin: str, corps: bytes | None) -> tuple[int, bytes]:
+        if chemin == "/free" and pannes:
+            pannes.pop()
+            return 500, b""
+        return original(methode, chemin, corps)
+
+    faux.repondre = repondre  # type: ignore[method-assign]
+    with pytest.raises(ErreurComfy):
+        gpu.clip(_job())
+    assert "comfy POST /prompt" not in journal
+    assert Path(gpu.clip(_job())).read_bytes() == MP4
+    assert journal.index("comfy POST /free") < journal.index("comfy POST /prompt")
+
+
+def test_prompt_en_darija_transmis_intact_et_sans_fuite(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    darija = "البومة كتلعب بالطبل فوق القمر"
+    gpu, faux, _ = _gpu(tmp_path)
+    gpu.image("r245-img-1", darija)
+    assert darija in _textes(faux.workflows[0])
+    faux.mode = "echec"
+    with caplog.at_level(logging.DEBUG), pytest.raises(ErreurComfy) as exc:
+        gpu.image("r245-img-2", darija)
+    for texte in (str(exc.value), caplog.text):
+        assert "البومة" not in texte
+        assert "\\u0627" not in texte
+
+
+# QA #245 : défauts constatés sur le transport réel (xfail strict : retirer la marque au correctif)
+
+
+def _serveur_brut(envoyer: Callable[[socket.socket], None]) -> str:
+    """Serveur d'une seule connexion qui écrit des octets HTTP arbitraires."""
+    ecoute = socket.create_server(("127.0.0.1", 0))
+
+    def servir() -> None:
+        with ecoute:
+            connexion, _ = ecoute.accept()
+        with connexion, contextlib.suppress(OSError):
+            connexion.recv(65_536)
+            envoyer(connexion)
+
+    threading.Thread(target=servir, daemon=True).start()
+    return f"http://127.0.0.1:{ecoute.getsockname()[1]}"
+
+
+@pytest.mark.xfail(strict=True, reason="#245 : corps plus court que Content-Length accepté")
+def test_http_reponse_tronquee_refusee() -> None:
+    def tronquer(connexion: socket.socket) -> None:
+        connexion.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + MP4)
+
+    comfy = ClientComfy(_serveur_brut(tronquer), timeout_s=1.0)
+    with pytest.raises(ErreurComfy):
+        comfy.envoyer(Requete("/view", limite=10_000))
+
+
+@pytest.mark.xfail(strict=True, reason="#245 : l'échéance globale ne couvre pas les en-têtes")
+def test_http_en_tetes_au_compte_gouttes_bornes() -> None:
+    def goutter(connexion: socket.socket) -> None:
+        for octet in b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n":
+            connexion.sendall(bytes([octet]))
+            time.sleep(0.04)  # ~1,5 s au total, chaque lecture sous le délai
+
+    comfy = ClientComfy(_serveur_brut(goutter), timeout_s=0.2)
+    debut = time.monotonic()
+    with contextlib.suppress(ErreurComfy):
+        comfy.envoyer(Requete("/history/x"))
+    assert time.monotonic() - debut < 0.8
