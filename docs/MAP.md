@@ -85,20 +85,22 @@
 - `apps/orchestrator/pyproject.toml`
 - `apps/orchestrator/src/orchestrator/__init__.py` — Orchestrateur du pipeline vidéo (#53).
 - `apps/orchestrator/src/orchestrator/__main__.py` — CLI de l'orchestrateur (#138) : `python -m orchestrator run --mocks --dictee-file F --out 
-- `apps/orchestrator/src/orchestrator/etapes.py` — Assemblage des étapes réelles (#150) : Ollama, Piper, montage ; image et clip injectables.
+- `apps/orchestrator/src/orchestrator/etapes.py` — Assemblage des étapes réelles (#150, #245) : Ollama, Piper, ComfyUI (image, clip), montage
 - `apps/orchestrator/src/orchestrator/galerie.py` — Galerie locale des vidéos produites (#151) : une page HTML statique, autonome, sans réseau
 - `apps/orchestrator/src/orchestrator/mocks.py` — Étapes factices valides (#138) : aucune génération réelle, aucun fichier écrit, pas de GPU
 - `apps/orchestrator/src/orchestrator/pipeline.py` — Pipeline d'une dictée : classification, storyboard, voix, image, clip, montage (#53).
 - `apps/orchestrator/src/orchestrator/purge.py` — Purge des runs anciens (#152) : supprime les dossiers de run plus vieux que N jours.
+- `apps/orchestrator/src/orchestrator/steps_gpu.py` — Étapes GPU réelles : image (Flux schnell) et clip (Wan 2.2 5B) via l'API ComfyUI (#245).
 - `apps/orchestrator/src/orchestrator/steps_llm.py` — Étapes LLM réelles : classification et storyboard via Ollama, échec fermé (#137).
 - `apps/orchestrator/src/orchestrator/steps_media.py` — Étapes média réelles : voix (Piper) et montage (ASS + FFmpeg), sans GPU (#136).
 - `apps/orchestrator/tests/fakes.py` — Doublures pour le parcours de bout en bout (#139) : faux Piper, clips lavfi, GPU tracé.
 - `apps/orchestrator/tests/test_cli.py` — CLI orchestrateur (#138) : 4 scénarios Gherkin, mode mocks, run.json validé par le contrat
 - `apps/orchestrator/tests/test_e2e_mock.py` — Parcours de bout en bout dictée -> MP4 avec mocks (#139) : `make e2e-mock`.
-- `apps/orchestrator/tests/test_etapes.py` — Étapes réelles assemblées (#150) : faux Ollama et faux Piper, aucun réseau, aucun GPU.
+- `apps/orchestrator/tests/test_etapes.py` — Étapes réelles assemblées (#150, #245) : faux Ollama, Piper et ComfyUI ; aucun réseau ni G
 - `apps/orchestrator/tests/test_galerie.py` — Galerie locale (#151) : liste, sans texte d'enfant, état vide, hors ligne. Runs synthétiqu
 - `apps/orchestrator/tests/test_pipeline.py` — Orchestrateur (#53) : 5 scénarios Gherkin avec étapes factices, sortie validée par le cont
 - `apps/orchestrator/tests/test_purge.py` — Purge des runs anciens (#152) : dry-run, suppression, sécurité, usage. Dossiers synthétiqu
+- `apps/orchestrator/tests/test_steps_gpu.py` — Étapes GPU (#245) : image (Flux) et clip (Wan 2.2) via un faux ComfyUI, sans GPU ni PC dis
 - `apps/orchestrator/tests/test_steps_llm.py` — Étapes LLM (#137) : classification et storyboard via un faux Ollama, échec fermé, sans fui
 - `apps/orchestrator/tests/test_steps_media.py` — Étapes voix (Piper) et montage réelles (#136) : faux Piper, lavfi, sans fuite de texte.
 - `comfyui/workflows/flux_schnell_t2i_api.json` — données JSON
