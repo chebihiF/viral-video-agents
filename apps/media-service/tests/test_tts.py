@@ -652,3 +652,42 @@ def test_enveloppe_entree_invalide(
     fini = subprocess.run(cmd, input=entree, capture_output=True, env=env, timeout=60, check=False)  # noqa: S603
     assert fini.returncode == 2
     assert not (tmp_path / "j").exists()
+
+
+# --- Adaptateur + vraie enveloppe, par le lanceur SILMA_BIN documenté (#249) --------------------
+
+
+def test_adaptateur_et_enveloppe_avec_darija_en_lettres_arabes_en_locale_c(
+    env: dict[str, str],
+    out: Path,
+    tmp_path: Path,
+    bibliotheque: Path,
+    modeles: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import shlex
+
+    journal = tmp_path / "journal.jsonl"
+    lanceur = (
+        "#!/bin/sh\n"
+        f"export PYTHONPATH={shlex.quote(str(bibliotheque))}\n"
+        f"export FAUX_JOURNAL={shlex.quote(str(journal))}\n"
+        f'exec {shlex.quote(sys.executable)} {shlex.quote(str(ENVELOPPE))} "$@"\n'
+    )
+    env["SILMA_BIN"] = str(_executable(tmp_path / "silma-lanceur", lanceur))
+    env["SILMA_MODEL_DIR"] = str(modeles)
+    transcription = "السلام عليكم، لاباس عليك؟"
+    (Path(env["SILMA_VOIX"]).parent / "chat.txt").write_text(transcription, encoding="utf-8")
+    monkeypatch.setenv("LC_ALL", "C")
+    replique = {
+        "replique_id": "r1",
+        "voix_id": "chat",
+        "texte": "المشّ كيجري فالجردة 🐈",
+        "langue": "ar",
+    }
+    [resultat] = synthetiser([replique], out, env=env)
+    _, infer = [json.loads(ligne) for ligne in journal.read_text("utf-8").splitlines()]
+    assert infer["ref_text"] == transcription
+    assert infer["mots"] == 4
+    assert resultat.duree_s == pytest.approx(1.0)
+    assert list(out.iterdir()) == [out / "r1.wav"]

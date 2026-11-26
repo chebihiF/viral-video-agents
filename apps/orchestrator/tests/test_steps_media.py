@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import dataclasses
 import json
 import logging
 import shutil
@@ -193,6 +194,30 @@ def test_run_en_erreur_sur_voix_sans_wav_ni_mp4_ni_texte(
         assert not [n for n in narrations if n in texte]
     fichiers = [p for p in tmp_path.rglob("*") if p.is_file()]
     assert not [p for p in fichiers for n in narrations if n.encode() in p.read_bytes()]
+
+
+def test_run_en_erreur_sur_voix_si_delai_depasse_a_la_deuxieme_replique(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from media_service import tts
+    from orchestrator.mocks import etapes_factices
+
+    lent = FAUX_SILMA + (
+        "import time\n"
+        "if len(Path(sys.argv[0]).with_suffix('.log').read_text().splitlines()) >= 2:\n"
+        "    time.sleep(60)\n"
+    )
+    env = env_faux_silma(tmp_path / "silma", lent)
+    monkeypatch.setattr(tts, "DELAI_S", 1.5)
+    base = etapes_factices()
+    etapes = dataclasses.replace(base, voix=voix_silma(env), voix_off_id=env["VOIX_OFF_ID"])
+    run = lancer("Dictée de test", etapes, run_id="r249d", workdir=str(tmp_path / "w"))
+    assert run["etat"] == "erreur"
+    assert (run["etapes"][-1]["nom"], run["etapes"][-1]["statut"]) == ("voix", "erreur")
+    assert "video_path" not in run
+    assert len(appels_faux_silma(env)) == 2
+    assert list((tmp_path / "w").rglob("*.wav")) == []
+    assert list((tmp_path / "w").rglob("*.mp4")) == []
 
 
 # --- montage -----------------------------------------------------------------------------------
