@@ -2,79 +2,86 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/chebihiF/viral-video-agents/contracts/tts-job.schema.json",
   "title": "TtsJob",
-  "description": "Entrée du TTS du media-service (Piper, CPU) : un texte de voix off par plan. La sortie (TtsResult, $defs/TtsResult) donne un WAV et sa durée par plan. Contrat local au media-service.",
+  "description": "Entrée du TTS du media-service (SILMA TTS, ADR-006) : un texte et une voix logique par réplique (réplique de personnage ou voix off). La sortie (TtsResult, $defs/TtsResult) donne un WAV et sa durée par réplique. Aucun chemin de voix de référence : la configuration (SILMA_VOIX) associe chaque voix_id à sa référence. v2.0 incompatible avec v1.0 (plans[] devient repliques[]).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "output_dir", "plans"],
+  "required": ["schema_version", "output_dir", "repliques"],
   "properties": {
     "schema_version": {
-      "description": "Version du contrat ; changement incompatible = nouvelle version.",
+      "description": "Version du contrat ; changement incompatible = nouvelle version. Un job 1.0 est refusé.",
       "type": "string",
-      "const": "1.0"
+      "const": "2.0"
     },
     "output_dir": {
-      "description": "Dossier existant où écrire un WAV par plan (<plan_id>.wav).",
+      "description": "Dossier existant où écrire un WAV par réplique (<replique_id>.wav).",
       "type": "string",
       "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000]+$"
     },
-    "plans": {
-      "description": "Plans à synthétiser, dans l'ordre du storyboard (champ voix off).",
+    "repliques": {
+      "description": "Répliques à synthétiser, dans l'ordre de la vidéo.",
       "type": "array",
       "minItems": 1,
-      "items": { "$ref": "#/$defs/Plan" }
+      "items": { "$ref": "#/$defs/Replique" }
     }
   },
   "$defs": {
-    "PlanId": {
-      "description": "Identifiant de plan, sûr comme nom de fichier ; unique dans le job.",
+    "Identifiant": {
+      "description": "Identifiant sûr comme nom de fichier.",
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]{1,64}$"
     },
-    "Plan": {
+    "Replique": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["plan_id", "texte", "langue"],
+      "required": ["replique_id", "voix_id", "texte", "langue"],
       "properties": {
-        "plan_id": { "$ref": "#/$defs/PlanId" },
+        "replique_id": {
+          "description": "Identifiant de la réplique, unique dans le job.",
+          "$ref": "#/$defs/Identifiant"
+        },
+        "voix_id": {
+          "description": "Identifiant logique de la voix ; doit être configuré dans SILMA_VOIX, sans repli sur une autre voix.",
+          "$ref": "#/$defs/Identifiant"
+        },
         "texte": {
-          "description": "Texte de la voix off du plan : non vide. Jamais journalisé.",
+          "description": "Texte à dire : non vide. Jamais journalisé ni passé en argument d'un processus.",
           "type": "string",
           "pattern": "^(?=[\\s\\S]*\\S)[^\\u0000]+$"
         },
         "langue": {
-          "description": "Code de langue (ex. fr) ; la voix réelle est fixée par PIPER_MODEL.",
+          "description": "Code de langue de la réplique (ex. ar, ary, fr).",
           "type": "string",
           "pattern": "^[a-z]{2,3}$"
         }
       }
     },
     "TtsResult": {
-      "description": "Sortie de synthetiser : un élément par plan, dans l'ordre de l'entrée.",
+      "description": "Sortie de synthetiser : un élément par réplique, dans l'ordre de l'entrée.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_version", "plans"],
+      "required": ["schema_version", "repliques"],
       "properties": {
-        "schema_version": { "type": "string", "const": "1.0" },
-        "plans": {
+        "schema_version": { "type": "string", "const": "2.0" },
+        "repliques": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/PlanResult" }
+          "items": { "$ref": "#/$defs/RepliqueResult" }
         }
       }
     },
-    "PlanResult": {
+    "RepliqueResult": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["plan_id", "wav_path", "duree_s"],
+      "required": ["replique_id", "wav_path", "duree_s"],
       "properties": {
-        "plan_id": { "$ref": "#/$defs/PlanId" },
+        "replique_id": { "$ref": "#/$defs/Identifiant" },
         "wav_path": {
-          "description": "WAV de la voix off du plan.",
+          "description": "WAV de la réplique.",
           "type": "string",
           "pattern": "^[^\\u0000]+\\.wav$"
         },
         "duree_s": {
-          "description": "Durée du WAV en secondes, donc du plan.",
+          "description": "Durée du WAV en secondes.",
           "type": "number",
           "exclusiveMinimum": 0
         }

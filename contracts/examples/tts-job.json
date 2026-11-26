@@ -1,16 +1,24 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "output_dir": "/data/jobs/42/voix",
-  "plans": [
+  "repliques": [
     {
-      "plan_id": "plan-1",
-      "texte": "Le petit chat s'envole sur son tapis magique !",
-      "langue": "fr"
+      "replique_id": "r1",
+      "voix_id": "chat",
+      "texte": "مرحبا، أنا القط الصغير!",
+      "langue": "ar"
     },
     {
-      "plan_id": "plan-2",
-      "texte": "Bonjour les oiseaux, crie-t-il en riant.",
-      "langue": "fr"
+      "replique_id": "r2",
+      "voix_id": "hibou",
+      "texte": "أهلا يا صديقي القط.",
+      "langue": "ar"
+    },
+    {
+      "replique_id": "r3",
+      "voix_id": "chat",
+      "texte": "هيا نطير معا!",
+      "langue": "ar"
     }
   ]
 }
