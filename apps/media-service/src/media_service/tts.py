@@ -28,6 +28,10 @@ DELAI_S: float = 600  # par réplique, chargement du modèle compris (un process
 TAILLE_VOIX = 1_000_000  # octets lus au plus dans SILMA_VOIX
 TAILLE_TRANSCRIPTION = 65_536
 HORS_LIGNE = {"HF_HUB_OFFLINE": "1", "TRANSFORMERS_OFFLINE": "1", "HF_DATASETS_OFFLINE": "1"}
+# Environnement du moteur en liste blanche : rien d'autre n'est hérité (jetons, configuration).
+ENV_TRANSMIS = frozenset({"PATH", "HOME", "LANG", "LC_ALL", "LC_CTYPE", "TMPDIR"})
+PREFIXES_TRANSMIS = ("CUDA_",)
+SUFFIXES_TRANSMIS = ("_OFFLINE",)
 _ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
 _LANGUE = re.compile(r"[a-z]{2,3}")
 _CLES = {"replique_id", "voix_id", "texte", "langue"}
@@ -218,7 +222,7 @@ def _lancer(cmd: list[str], entree: bytes, quoi: str) -> int:
             stdin=subprocess.PIPE,
             stdout=subprocess.DEVNULL,  # sorties jamais relayées : elles peuvent citer le texte
             stderr=subprocess.DEVNULL,
-            env={**os.environ, **HORS_LIGNE},
+            env=environnement_moteur(),
             start_new_session=True,
         )
     except OSError as exc:
@@ -234,6 +238,18 @@ def _lancer(cmd: list[str], entree: bytes, quoi: str) -> int:
     if depasse:
         raise TtsError(f"{quoi} : délai de {DELAI_S:g} s dépassé")
     return proc.returncode
+
+
+def environnement_moteur() -> dict[str, str]:
+    """Variables transmises au moteur : liste blanche, puis mode hors ligne forcé."""
+    garde = {
+        nom: valeur
+        for nom, valeur in os.environ.items()
+        if nom in ENV_TRANSMIS
+        or nom.startswith(PREFIXES_TRANSMIS)
+        or nom.endswith(SUFFIXES_TRANSMIS)
+    }
+    return {**garde, **HORS_LIGNE}
 
 
 def _arreter(proc: subprocess.Popen[bytes]) -> None:

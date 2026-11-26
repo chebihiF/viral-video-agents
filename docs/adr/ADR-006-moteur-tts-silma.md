@@ -12,7 +12,7 @@ Les personnages parlent, chacun avec sa voix ; la voix off est occasionnelle. Le
 1. **SILMA TTS v1** remplace Piper. Le moteur reçoit un texte et une voix de référence, il rend un WAV. Une réplique de personnage et une voix off passent par la même interface.
 2. **Contrat `tts-job` 2.0** (incompatible) : `repliques[]` (`replique_id`, `voix_id` logique, `texte`, `langue`), `TtsResult` 2.0 avec `repliques[]`. Le contrat ne contient aucun chemin de voix de référence.
 3. **Configuration hors dépôt** :
-   - `SILMA_BIN` : l'enveloppe `apps/media-service/scripts/silma_cli.py`, lancée avec le Python du venv SILMA.
+   - `SILMA_BIN` : un lanceur hors dépôt, `exec <venv SILMA>/bin/python <dépôt>/apps/media-service/scripts/silma_cli.py "$@"`. Le shebang de l'enveloppe prendrait le `python3` du PATH, pas celui du venv.
    - `SILMA_MODEL_DIR` : les poids locaux, annexes compris.
    - `SILMA_VOIX` : un fichier JSON qui associe à chaque `voix_id` son audio de référence et sa transcription.
 
@@ -46,9 +46,9 @@ Composants nécessaires à l'exécution. La résolution complète (158 paquets, 
 | transformers, huggingface-hub, cached-path, gradio | 5.24 / 1.33 / 1.8 / 6.32 | Apache-2.0 | PyPI |
 | `onnxruntime-gpu` | 1.32 | MIT | PyPI |
 | `unidecode` (exigé par silma-tts ; non importé par les fichiers relus de `silma_tts`) | 1.4.0 | **GPL-2.0+** : **exception acceptée par le parent le 26/11, limitée à ce paquet** | https://pypi.org/project/Unidecode/1.4.0/ |
-| `frozendict` (via einx), `soxr` (via librosa) | 2.5.1 / 1.1.0 | LGPL-3.0, LGPL-2.1+ (copyleft faible, bibliothèques non modifiées) | PyPI |
-| certifi, tqdm, orjson | – | MPL-2.0 (en partie) ; certifi et tqdm sont déjà dans `uv.lock` | PyPI |
-| Bibliothèques CUDA NVIDIA (`nvidia-*`, `cuda-toolkit`) | 13.x | licence NVIDIA propriétaire, gratuite et redistribuable ; déjà utilisée par ComfyUI sur le PC | PyPI |
+| `frozendict` (via einx), `soxr` (via librosa) | 2.5.1 / 1.1.0 | LGPL-3.0, LGPL-2.1+ : **non tranché, attend l'utilisateur** | PyPI |
+| certifi, tqdm, orjson | – | MPL-2.0 (en partie) : **non tranché, attend l'utilisateur** (certifi et tqdm sont déjà dans `uv.lock`, sans décision explicite) | PyPI |
+| Bibliothèques CUDA NVIDIA (`nvidia-*`, `cuda-toolkit`) | 13.x | licence NVIDIA propriétaire (gratuite) : **non tranché, attend l'utilisateur** (aussi utilisées par ComfyUI sur le PC) | PyPI |
 | Transcription automatique `openai/whisper-large-v3-turbo` | – | **non utilisée** : transcription toujours fournie | – |
 | Voix d'exemple du paquet (`ar.ref.24k.wav`, `silma-ref-voice-commercial.wav`) | – | aucune licence propre : **non utilisées** | – |
 
@@ -68,4 +68,4 @@ Restent à vérifier au ticket d'installation, sans affirmation ici :
 - Un processus par réplique : le modèle et les grammaires NeMo sont rechargés à chaque fois. Le délai est de 600 s par réplique. Si c'est trop lent, un mode par lot de l'enveloppe fera l'objet d'un ticket distinct.
 - La garde réseau de l'enveloppe agit au niveau Python. Une extension native pourrait la contourner : au ticket d'installation, ajouter une isolation réseau du processus sur le PC (pare-feu ou espace de noms réseau).
 - Voix de référence : attend le parent (une par personnage, une pour la voix off ; adultes consentants ; jamais la voix de l'enfant sans décision expresse), et toujours hors dépôt.
-- Licences : la ligne directrice « Apache 2.0, MIT » d'ARCHITECTURE.md compte deux écarts connus et acceptés : l'exception unidecode (GPL-2.0+), et les copyleft faibles (LGPL, MPL) déjà présents.
+- Licences : le parent a accepté seulement deux écarts à la ligne directrice « Apache 2.0, MIT » d'ARCHITECTURE.md : l'exception unidecode (GPL-2.0+), et encodec pris depuis le code passé en MIT. **Attend l'utilisateur : accepter les copyleft faibles LGPL (frozendict, soxr) et MPL (certifi, tqdm, orjson), et les bibliothèques CUDA NVIDIA propriétaires ?** Tant que ce n'est pas tranché, pas d'installation de SILMA.

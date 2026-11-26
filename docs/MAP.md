@@ -71,6 +71,7 @@
 - `apps/kid-ui/video.py` — Service de la vidéo terminée (#163) : MP4 du job, avec `Range` et téléchargement optionnel
 - `apps/media-service/README.md` — media-service
 - `apps/media-service/pyproject.toml`
+- `apps/media-service/scripts/silma_cli.py` — Enveloppe côté moteur de SILMA TTS (#249, ADR-006) : une réplique, texte sur stdin, WAV.
 - `apps/media-service/src/media_service/__init__.py` — media-service : montage FFmpeg des vidéos générées.
 - `apps/media-service/src/media_service/montage.py` — Montage FFmpeg minimal : concat des clips, voix off AAC, sous-titres ASS ou SRT incrustés.
 - `apps/media-service/src/media_service/subtitles.py` — Sous-titres ASS mot par mot : calcul pur à partir du texte et de la durée de chaque plan.
@@ -135,6 +136,7 @@
 - `docs/adr/ADR-003-memoire-agents.md` — ADR-003 — Mémoire des agents : mémoire locale vs ADR
 - `docs/adr/ADR-004-separation-usine-produit.md` — ADR-004 — Séparer l'usine d'agents (A) et l'application vidéo (B)
 - `docs/adr/ADR-005-reveil-vpn.md` — ADR-005 — Réveil du PC GPU hors du réseau local (VPN)
+- `docs/adr/ADR-006-moteur-tts-silma.md` — ADR-006 : moteur de synthèse vocale SILMA TTS, une voix par réplique
 - `docs/agents-memory.md` — Mémoire des agents — conventions
 - `docs/design/README.md` — Design system du dashboard
 - `docs/design/galerie.md` — Spec galerie parent (ticket #151)
@@ -175,3 +177,4 @@
 - `pyproject.toml` — ASR local de la dictée (#217) : `uv sync --extra asr` ; absent de la CI (tests avec faux m
 - `tests/contracts/test_contracts_kid_job.py` — Contrat contracts/kid-job.schema.json : API jobs de l'appli enfant (#162).
 - `tests/contracts/test_contracts_storyboard.py` — Contrat contracts/storyboard.schema.json : sortie du conteur, entrée du pipeline (#31).
+- `tests/contracts/test_contracts_tts_job.py` — Contrat contracts/tts-job.schema.json v2.0 (#249) : une réplique = un texte et une voix.

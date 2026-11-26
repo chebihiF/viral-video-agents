@@ -4,8 +4,11 @@
     silma_cli.py --modeles DIR --reference AUDIO --sortie OUT.wav
     stdin : {"texte": "...", "transcription": "..."} (UTF-8)
 
-À lancer avec le Python de l'environnement où `silma-tts` est installé (`SILMA_BIN` du
-media-service) ; `silma_tts` n'est importé qu'à l'exécution. Hors ligne strict : variables
+À lancer avec le Python du venv où `silma-tts` est installé : le shebang prendrait le `python3`
+du PATH. `SILMA_BIN` désigne donc un lanceur hors dépôt, par exemple :
+    #!/bin/sh
+    exec /chemin/venv-silma/bin/python /chemin/depot/apps/media-service/scripts/silma_cli.py "$@"
+`silma_tts` n'est importé qu'à l'exécution. Hors ligne strict : variables
 `*_OFFLINE`, connexions IPv4/IPv6 et résolution DNS refusées dans le processus, fichiers locaux
 vérifiés avant l'import (un fichier manquant donne une erreur, jamais un téléchargement).
 Le texte n'est jamais dans les arguments ni les messages : stdout et stderr de la bibliothèque

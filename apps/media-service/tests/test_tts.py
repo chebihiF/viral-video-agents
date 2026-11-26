@@ -41,6 +41,7 @@ ligne = {{
     "mots": len(entree["texte"].split()),
     "transcription": entree["transcription"],
     "hors_ligne": os.environ.get("HF_HUB_OFFLINE"),
+    "env": sorted(os.environ),
 }}
 with open(Path(sys.argv[0]).with_suffix(".log"), "a", encoding="utf-8") as f:
     f.write(json.dumps(ligne) + "\\n")
@@ -172,6 +173,21 @@ def test_sortie_conforme_a_tts_result(env: dict[str, str], out: Path) -> None:
 def test_mode_hors_ligne_force_pour_le_moteur(env: dict[str, str], out: Path) -> None:
     synthetiser(_repliques()[:1], out, env=env)
     assert [a["hors_ligne"] for a in _journal(env)] == ["1"]
+
+
+def test_environnement_du_moteur_en_liste_blanche(
+    env: dict[str, str], out: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("OLLAMA_TOKEN", "jeton-secret")
+    monkeypatch.setenv("SILMA_VOIX", env["SILMA_VOIX"])
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
+    monkeypatch.setenv("LC_ALL", "C.UTF-8")
+    synthetiser(_repliques()[:1], out, env=env)
+    [appel] = _journal(env)
+    vues = set(appel["env"])
+    assert {"PATH", "CUDA_VISIBLE_DEVICES", "LC_ALL", *tts.HORS_LIGNE} <= vues
+    assert not vues & {"OLLAMA_TOKEN", "SILMA_VOIX"}
+    assert not [nom for nom in vues if nom.startswith(("SILMA_", "OLLAMA_", "COMFY_"))]
 
 
 # Scénario: voix inconnue

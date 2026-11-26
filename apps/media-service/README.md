@@ -45,10 +45,16 @@ voix[0].wav_path, voix[0].duree_s  # <replique_id>.wav et sa durée en secondes
 - Contrat : [`contracts/tts-job.schema.json`](../../contracts/tts-job.schema.json) v2.0 (`parse_job` valide un job complet et refuse un job 1.0 ; sortie `$defs/TtsResult`, un élément par réplique dans l'ordre d'entrée). Une réplique de personnage et une voix off passent par la même interface.
 - `verifier_configuration(env)` rend désormais une `Configuration` (`binaire`, `modeles`, `voix` : `voix_id` -> `Voix(audio, transcription)`) au lieu du couple Piper `(binaire, modèle)`.
 - Configuration (variables d'environnement) ; absente ou introuvable : `TtsError` qui nomme la variable (et la voix), jamais un chemin :
-  - `SILMA_BIN` : exécutable de l'enveloppe [`scripts/silma_cli.py`](scripts/silma_cli.py), lancé avec le Python de l'environnement où `silma-tts` est installé (PC GPU, hors CI).
+  - `SILMA_BIN` : lanceur exécutable **hors dépôt** de l'enveloppe [`scripts/silma_cli.py`](scripts/silma_cli.py), qui fixe le Python du venv où `silma-tts` est installé (PC GPU, hors CI). Le shebang de l'enveloppe prendrait le `python3` du PATH, pas celui du venv :
+
+    ```sh
+    #!/bin/sh
+    exec /chemin/venv-silma/bin/python /chemin/depot/apps/media-service/scripts/silma_cli.py "$@"
+    ```
   - `SILMA_MODEL_DIR` : poids locaux, annexes compris : `silma-tts/model.pt`, `silma-tts/vocab.txt`, `vocos-mel-24khz/{config.yaml,pytorch_model.bin}`, `catt/{encoder,decoder}.onnx` (vérifiés par l'enveloppe avant l'import).
   - `SILMA_VOIX` : fichier JSON hors dépôt, `{"<voix_id>": {"audio": "ref.wav", "transcription": "ref.txt"}}` (chemins relatifs au fichier ; audio de moins de 8 s ; transcription obligatoire, pas de transcription automatique). Aucune voix par défaut ; plusieurs voix admises.
 - `voix_id` inconnu, transcription vide ou référence introuvable : échec avant tout lancement du moteur, sans repli sur une autre voix. `PIPER_BIN` et `PIPER_MODEL` ne sont plus lus.
+- Environnement du moteur en liste blanche (`environnement_moteur`) : `PATH`, `HOME`, `LANG`, `LC_ALL`, `LC_CTYPE`, `TMPDIR`, `CUDA_*`, `*_OFFLINE`, puis les variables hors ligne forcées ; rien d'autre n'est hérité (ni jetons, ni `SILMA_*`, ni `OLLAMA_*`).
 - Le texte et la transcription passent en JSON sur stdin de l'enveloppe : jamais dans les arguments, les logs, les erreurs ni un fichier temporaire. Sorties du moteur jamais relayées. Délai borné (`DELAI_S`, 600 s par réplique, chargement du modèle compris) ; le moteur est arrêté avec son groupe de processus avant le retour. Tout ou rien : un échec supprime les WAV déjà écrits.
 - Hors ligne : `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE`, `HF_DATASETS_OFFLINE` forcés ; l'enveloppe refuse en plus toute connexion IPv4/IPv6 et résolution DNS dans son processus (code 4) et vérifie les fichiers locaux avant d'importer `silma_tts` (code 3). Codes de l'enveloppe : 0 ok, 2 entrée invalide, 3 fichier manquant, 4 réseau refusé, 5 échec du moteur.
 - **Non validé sur le vrai moteur** : enveloppe testée avec une fausse bibliothèque ; qualité en darija non testée (la fiche SILMA annonce arabe standard et anglais). Installation et essai réel : ticket distinct (ADR-006).
