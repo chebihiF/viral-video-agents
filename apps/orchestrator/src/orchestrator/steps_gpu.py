@@ -13,12 +13,16 @@ bloc `except` (ni `__cause__` ni `__context__`).
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import http.client
 import ipaddress
 import json
 import logging
 import os
 import re
+import socket
+import threading
 import time
 import urllib.parse
 import urllib.request
@@ -71,27 +75,88 @@ class Requete:
 
 Transport = Callable[[Requete, float], bytes]
 
+
+class _Echeance:
+    """Minuteries d'une requête : à l'échéance, la socket est coupée (en-têtes et corps compris)."""
+
+    def __init__(self, fin: float) -> None:
+        self.fin = fin
+        self.minuteries: list[threading.Timer] = []
+
+    def armer(self, sock: socket.socket) -> None:
+        minuterie = threading.Timer(max(0.0, self.fin - time.monotonic()), _couper, (sock,))
+        minuterie.daemon = True
+        self.minuteries.append(minuterie)
+        minuterie.start()
+
+    def desarmer(self) -> None:
+        for minuterie in self.minuteries:
+            minuterie.cancel()
+
+
+def _couper(sock: socket.socket) -> None:
+    with contextlib.suppress(OSError):  # socket déjà fermée : rien à couper
+        sock.shutdown(socket.SHUT_RDWR)
+
+
+class _Connexion(http.client.HTTPConnection):
+    """Connexion HTTP dont la socket est coupée à l'échéance globale de la requête."""
+
+    echeance: _Echeance
+
+    def connect(self) -> None:
+        super().connect()
+        self.echeance.armer(self.sock)
+
+
+class _HttpBorne(urllib.request.HTTPHandler):
+    def http_open(self, req: urllib.request.Request) -> http.client.HTTPResponse:
+        echeance: _Echeance = getattr(req, "echeance", None) or _Echeance(time.monotonic())
+
+        def fabrique(hote: str, /, **kwargs: Any) -> _Connexion:
+            connexion = _Connexion(hote, **kwargs)
+            connexion.echeance = echeance
+            return connexion
+
+        return self.do_open(fabrique, req)
+
+
 # Ni proxy d'environnement ni redirection : la requête ne va qu'à COMFY_URL.
-_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}), _SansRedirection())
+_OPENER = urllib.request.build_opener(
+    urllib.request.ProxyHandler({}), _SansRedirection(), _HttpBorne()
+)
 
 
 def _http(requete: Requete, timeout: float) -> bytes:
-    """Réponse lue par blocs ; `timeout` borne la requête entière (pas seulement chaque lecture)."""
-    echeance = time.monotonic() + timeout
+    """Réponse lue par blocs ; `timeout` borne la requête entière, en-têtes compris (http).
+
+    Corps plus court que `Content-Length` (connexion coupée, tronquée) : `IncompleteRead`.
+    """
+    echeance = _Echeance(time.monotonic() + timeout)
     entetes = {} if requete.corps is None else {"Content-Type": requete.type_contenu}
     # S310 : schéma http(s) imposé par ClientComfy.__post_init__ et ClientOllama (OLLAMA_URL).
     req = urllib.request.Request(requete.url, requete.corps, entetes)  # noqa: S310
+    req.echeance = echeance  # type: ignore[attr-defined]
+    try:
+        with _OPENER.open(req, timeout=timeout) as reponse:
+            return _lire(reponse, requete.limite, echeance.fin)
+    finally:
+        echeance.desarmer()
+
+
+def _lire(reponse: Any, limite: int, fin: float) -> bytes:
     blocs: list[bytes] = []
     lus = 0
-    with _OPENER.open(req, timeout=timeout) as reponse:
-        while lus <= requete.limite:
-            if time.monotonic() > echeance:
-                raise TimeoutError("requête trop longue")
-            bloc: bytes = reponse.read1(BLOC)
-            if not bloc:
-                break
-            blocs.append(bloc)
-            lus += len(bloc)
+    while lus <= limite:
+        if time.monotonic() > fin:
+            raise TimeoutError("requête trop longue")
+        bloc: bytes = reponse.read1(BLOC)
+        if not bloc:
+            if getattr(reponse, "length", None):  # octets annoncés manquants
+                raise http.client.IncompleteRead(b"".join(blocs))
+            break
+        blocs.append(bloc)
+        lus += len(bloc)
     return b"".join(blocs)
 
 

@@ -592,7 +592,7 @@ def test_prompt_en_darija_transmis_intact_et_sans_fuite(
         assert "\\u0627" not in texte
 
 
-# QA #245 : défauts constatés sur le transport réel (xfail strict : retirer la marque au correctif)
+# QA #245 : transport réel, corps tronqué refusé et en-têtes au compte-gouttes bornés
 
 
 def _serveur_brut(envoyer: Callable[[socket.socket], None]) -> str:
@@ -610,7 +610,6 @@ def _serveur_brut(envoyer: Callable[[socket.socket], None]) -> str:
     return f"http://127.0.0.1:{ecoute.getsockname()[1]}"
 
 
-@pytest.mark.xfail(strict=True, reason="#245 : corps plus court que Content-Length accepté")
 def test_http_reponse_tronquee_refusee() -> None:
     def tronquer(connexion: socket.socket) -> None:
         connexion.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 1000\r\n\r\n" + MP4)
@@ -620,7 +619,6 @@ def test_http_reponse_tronquee_refusee() -> None:
         comfy.envoyer(Requete("/view", limite=10_000))
 
 
-@pytest.mark.xfail(strict=True, reason="#245 : l'échéance globale ne couvre pas les en-têtes")
 def test_http_en_tetes_au_compte_gouttes_bornes() -> None:
     def goutter(connexion: socket.socket) -> None:
         for octet in b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n":
